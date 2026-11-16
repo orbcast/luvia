@@ -18,6 +18,13 @@
 - `*_test.go` 与被测代码就近放置，夹具按需放对应包的 `testdata/`。不把测试专用辅助逻辑塞进生产代码。
 - `mygo.json`、`resources/`、`AppIcon.icon/` 放本端配置与资源，不放业务逻辑。共享素材遵循 [assets/README.md](../../assets/README.md)，已确认复用的能力遵循 [packages/README.md](../../packages/README.md)。
 
+## 多语言与组件复用
+
+- 用户可见文案、导航提示、无障碍名称和自定义菜单标签必须接入 MyGo 内置多语言功能，不在界面或动作代码中写死中文或英文。当前目标语言为简体中文（`zh-Hans`）和英文（`en`）。
+- 通过 `mygo.json` 的 `i18n` 配置与 JSON catalogs 管理翻译，使用固定版本 CLI 生成的 Go 文案函数；生成代码与 catalogs 一起维护，不自行实现平行的语言字典或语言持久化机制。语言选择与持久化复用 MyGo 提供的 API，切换后同步自定义菜单等一次性设置的标签。
+- 优先复用当前 MyGo 版本提供的控件、布局、输入、焦点和无障碍能力，减少自绘制组件。液态玻璃效果优先使用官方 `plugins/glass` 材质或适用的窗口材质，不自行绘制一套玻璃效果；根据原生 UI 的实际承载方式选择 API。
+- UI 命名复用 [UI 术语表](../../docs/terminology.md)；新增术语按根目录规则与用户确认并简短记录。
+
 ## 设计 Token 与界面图标
 
 - 配色遵循根目录 [DESIGN.md](../../DESIGN.md)。当前示例在 `main.go` 使用 `c.Theme()`，尚未定义播放器主题 Token；实际接入时集中定义 Go Token，在本应用文档记录路径，再由组件引用，不在各个 `view` 里散写色值。
