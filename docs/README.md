@@ -8,7 +8,7 @@
 
 根目录 [README.md](../README.md) 保持项目入口与导航，[AGENTS.md](../AGENTS.md) 维护 Agent 的项目级规则，[DESIGN.md](../DESIGN.md) 维护跨应用设计与深浅主题 Token，[CONTEXT.md](../CONTEXT.md) 记录背景及既有决策。应用/模块独有的构建、测试、技术栈与使用方式优先留在所属目录的 README / `AGENTS.md`。`docs/` 可链接这些权威来源，不复制一套相互漂移的规则。
 
-当前尚未增加独立的架构或功能专题文档。新增正式文档时，在本 README 增补带用途说明的相对链接；文件名表达主题，避免 `temp`、`final-v2` 等临时命名。
+[UI 术语表](terminology.md) 记录已约定的中英文 UI 名称及简短定义。新增正式文档时，在本 README 增补带用途说明的相对链接；文件名表达主题，避免 `temp`、`final-v2` 等临时命名。
 
 ## 查阅与维护
 
