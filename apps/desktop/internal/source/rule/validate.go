@@ -44,7 +44,8 @@ const (
 	outEpisodes outputKind = "episodes"
 )
 
-var cardFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "posterUrl", "backdropUrl")
+var cardFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "overview",
+	"posterUrl", "backdropUrl")
 var detailFields = fieldSet("id", "title", "kind", "year", "area", "tags", "overview", "posterUrl",
 	"backdropUrl", "remarks", "actors", "directors", "episodeCount")
 var episodeFields = fieldSet("id", "number", "title", "payload")

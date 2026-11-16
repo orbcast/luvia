@@ -69,6 +69,7 @@ type Card struct {
 	Area        string
 	Tags        []string
 	Remarks     string
+	Overview    string
 	PosterURL   string
 	BackdropURL string
 }

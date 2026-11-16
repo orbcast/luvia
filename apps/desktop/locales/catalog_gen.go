@@ -243,3 +243,353 @@ func SettingsMenu() string { return In(i18n.Locale()).SettingsMenu() }
 func (msgs Messages) SettingsMenu() string {
 	return Catalog.Format(msgs.locale, "settingsMenu", nil)
 }
+
+// HomeLoading says "Loading this source…"
+// in the language the app shows.
+//
+// Discover page while the source answers
+func HomeLoading() string { return In(i18n.Locale()).HomeLoading() }
+
+// HomeLoading says "Loading this source…"
+// in the language of msgs.
+//
+// Discover page while the source answers
+func (msgs Messages) HomeLoading() string {
+	return Catalog.Format(msgs.locale, "homeLoading", nil)
+}
+
+// HomeError says "This source could not load"
+// in the language the app shows.
+//
+// Discover page when the source failed
+func HomeError() string { return In(i18n.Locale()).HomeError() }
+
+// HomeError says "This source could not load"
+// in the language of msgs.
+//
+// Discover page when the source failed
+func (msgs Messages) HomeError() string {
+	return Catalog.Format(msgs.locale, "homeError", nil)
+}
+
+// Retry says "Retry"
+// in the language the app shows.
+//
+// Button that loads the source again
+func Retry() string { return In(i18n.Locale()).Retry() }
+
+// Retry says "Retry"
+// in the language of msgs.
+//
+// Button that loads the source again
+func (msgs Messages) Retry() string {
+	return Catalog.Format(msgs.locale, "retry", nil)
+}
+
+// ContinueWatching says "Continue Watching"
+// in the language the app shows.
+//
+// Discover section listing unfinished playback
+func ContinueWatching() string { return In(i18n.Locale()).ContinueWatching() }
+
+// ContinueWatching says "Continue Watching"
+// in the language of msgs.
+//
+// Discover section listing unfinished playback
+func (msgs Messages) ContinueWatching() string {
+	return Catalog.Format(msgs.locale, "continueWatching", nil)
+}
+
+// ViewAll says "View all"
+// in the language the app shows.
+//
+// Link to the full list of a Discover section
+func ViewAll() string { return In(i18n.Locale()).ViewAll() }
+
+// ViewAll says "View all"
+// in the language of msgs.
+//
+// Link to the full list of a Discover section
+func (msgs Messages) ViewAll() string {
+	return Catalog.Format(msgs.locale, "viewAll", nil)
+}
+
+// ThisWeek says "This Week"
+// in the language the app shows.
+//
+// Discover section listing this week's followed updates
+func ThisWeek() string { return In(i18n.Locale()).ThisWeek() }
+
+// ThisWeek says "This Week"
+// in the language of msgs.
+//
+// Discover section listing this week's followed updates
+func (msgs Messages) ThisWeek() string {
+	return Catalog.Format(msgs.locale, "thisWeek", nil)
+}
+
+// Today says "Today"
+// in the language the app shows.
+//
+// Label of the current day in the week strip
+func Today() string { return In(i18n.Locale()).Today() }
+
+// Today says "Today"
+// in the language of msgs.
+//
+// Label of the current day in the week strip
+func (msgs Messages) Today() string {
+	return Catalog.Format(msgs.locale, "today", nil)
+}
+
+// Updates says "{count, plural, one {# update} other {# updates}}"
+// in the language the app shows.
+//
+// Number of episodes a day brings
+func Updates(count int) string { return In(i18n.Locale()).Updates(count) }
+
+// Updates says "{count, plural, one {# update} other {# updates}}"
+// in the language of msgs.
+//
+// Number of episodes a day brings
+func (msgs Messages) Updates(count int) string {
+	return Catalog.Format(msgs.locale, "updates", map[string]any{"count": count})
+}
+
+// EmptyContinue says "Nothing watched yet"
+// in the language the app shows.
+//
+// Shown when no playback progress is stored
+func EmptyContinue() string { return In(i18n.Locale()).EmptyContinue() }
+
+// EmptyContinue says "Nothing watched yet"
+// in the language of msgs.
+//
+// Shown when no playback progress is stored
+func (msgs Messages) EmptyContinue() string {
+	return Catalog.Format(msgs.locale, "emptyContinue", nil)
+}
+
+// EmptyContinueHint says "Your progress waits here once playback starts."
+// in the language the app shows.
+//
+// Explains the empty continue watching section
+func EmptyContinueHint() string { return In(i18n.Locale()).EmptyContinueHint() }
+
+// EmptyContinueHint says "Your progress waits here once playback starts."
+// in the language of msgs.
+//
+// Explains the empty continue watching section
+func (msgs Messages) EmptyContinueHint() string {
+	return Catalog.Format(msgs.locale, "emptyContinueHint", nil)
+}
+
+// EmptyWeek says "Follow a series to see its weekly updates here."
+// in the language the app shows.
+//
+// Explains the empty weekly section
+func EmptyWeek() string { return In(i18n.Locale()).EmptyWeek() }
+
+// EmptyWeek says "Follow a series to see its weekly updates here."
+// in the language of msgs.
+//
+// Explains the empty weekly section
+func (msgs Messages) EmptyWeek() string {
+	return Catalog.Format(msgs.locale, "emptyWeek", nil)
+}
+
+// Follow says "Follow"
+// in the language the app shows.
+//
+// Button that adds a media to the followed list
+func Follow() string { return In(i18n.Locale()).Follow() }
+
+// Follow says "Follow"
+// in the language of msgs.
+//
+// Button that adds a media to the followed list
+func (msgs Messages) Follow() string {
+	return Catalog.Format(msgs.locale, "follow", nil)
+}
+
+// FollowingShow says "Following"
+// in the language the app shows.
+//
+// Button state once a media is followed
+func FollowingShow() string { return In(i18n.Locale()).FollowingShow() }
+
+// FollowingShow says "Following"
+// in the language of msgs.
+//
+// Button state once a media is followed
+func (msgs Messages) FollowingShow() string {
+	return Catalog.Format(msgs.locale, "followingShow", nil)
+}
+
+// PlayerSoon says "The player is not connected yet."
+// in the language the app shows.
+//
+// Notice after asking to play what has no player
+func PlayerSoon() string { return In(i18n.Locale()).PlayerSoon() }
+
+// PlayerSoon says "The player is not connected yet."
+// in the language of msgs.
+//
+// Notice after asking to play what has no player
+func (msgs Messages) PlayerSoon() string {
+	return Catalog.Format(msgs.locale, "playerSoon", nil)
+}
+
+// DetailSoon says "The detail page is not connected yet."
+// in the language the app shows.
+//
+// Notice after asking for details that no page shows
+func DetailSoon() string { return In(i18n.Locale()).DetailSoon() }
+
+// DetailSoon says "The detail page is not connected yet."
+// in the language of msgs.
+//
+// Notice after asking for details that no page shows
+func (msgs Messages) DetailSoon() string {
+	return Catalog.Format(msgs.locale, "detailSoon", nil)
+}
+
+// FollowedFlash says "Added to your following"
+// in the language the app shows.
+//
+// Notice after following the featured media
+func FollowedFlash() string { return In(i18n.Locale()).FollowedFlash() }
+
+// FollowedFlash says "Added to your following"
+// in the language of msgs.
+//
+// Notice after following the featured media
+func (msgs Messages) FollowedFlash() string {
+	return Catalog.Format(msgs.locale, "followedFlash", nil)
+}
+
+// UnfollowedFlash says "Removed from your following"
+// in the language the app shows.
+//
+// Notice after unfollowing the featured media
+func UnfollowedFlash() string { return In(i18n.Locale()).UnfollowedFlash() }
+
+// UnfollowedFlash says "Removed from your following"
+// in the language of msgs.
+//
+// Notice after unfollowing the featured media
+func (msgs Messages) UnfollowedFlash() string {
+	return Catalog.Format(msgs.locale, "unfollowedFlash", nil)
+}
+
+// HoursShort says "h"
+// in the language the app shows.
+//
+// Hours unit in a remaining time
+func HoursShort() string { return In(i18n.Locale()).HoursShort() }
+
+// HoursShort says "h"
+// in the language of msgs.
+//
+// Hours unit in a remaining time
+func (msgs Messages) HoursShort() string {
+	return Catalog.Format(msgs.locale, "hoursShort", nil)
+}
+
+// MinutesShort says "min"
+// in the language the app shows.
+//
+// Minutes unit in a remaining time
+func MinutesShort() string { return In(i18n.Locale()).MinutesShort() }
+
+// MinutesShort says "min"
+// in the language of msgs.
+//
+// Minutes unit in a remaining time
+func (msgs Messages) MinutesShort() string {
+	return Catalog.Format(msgs.locale, "minutesShort", nil)
+}
+
+// TimeLeft says "{left} left"
+// in the language the app shows.
+//
+// Remaining playback time
+func TimeLeft(left string) string { return In(i18n.Locale()).TimeLeft(left) }
+
+// TimeLeft says "{left} left"
+// in the language of msgs.
+//
+// Remaining playback time
+func (msgs Messages) TimeLeft(left string) string {
+	return Catalog.Format(msgs.locale, "timeLeft", map[string]any{"left": left})
+}
+
+// SourcesLabel says "Source"
+// in the language the app shows.
+//
+// Name of the source that answered
+func SourcesLabel() string { return In(i18n.Locale()).SourcesLabel() }
+
+// SourcesLabel says "Source"
+// in the language of msgs.
+//
+// Name of the source that answered
+func (msgs Messages) SourcesLabel() string {
+	return Catalog.Format(msgs.locale, "sourcesLabel", nil)
+}
+
+// PlayAction says "Continue Playing"
+// in the language the app shows.
+//
+// Primary button that would start playback
+func PlayAction() string { return In(i18n.Locale()).PlayAction() }
+
+// PlayAction says "Continue Playing"
+// in the language of msgs.
+//
+// Primary button that would start playback
+func (msgs Messages) PlayAction() string {
+	return Catalog.Format(msgs.locale, "playAction", nil)
+}
+
+// Details says "Details"
+// in the language the app shows.
+//
+// Button opening the media detail page
+func Details() string { return In(i18n.Locale()).Details() }
+
+// Details says "Details"
+// in the language of msgs.
+//
+// Button opening the media detail page
+func (msgs Messages) Details() string {
+	return Catalog.Format(msgs.locale, "details", nil)
+}
+
+// PageComing says "This section is not wired yet"
+// in the language the app shows.
+//
+// Placeholder shown on navigation pages that have no content yet
+func PageComing() string { return In(i18n.Locale()).PageComing() }
+
+// PageComing says "This section is not wired yet"
+// in the language of msgs.
+//
+// Placeholder shown on navigation pages that have no content yet
+func (msgs Messages) PageComing() string {
+	return Catalog.Format(msgs.locale, "pageComing", nil)
+}
+
+// WeekRange says "{start} – {end}"
+// in the language the app shows.
+//
+// Week heading range; start is a month and day, end is a day
+func WeekRange(start string, end string) string { return In(i18n.Locale()).WeekRange(start, end) }
+
+// WeekRange says "{start} – {end}"
+// in the language of msgs.
+//
+// Week heading range; start is a month and day, end is a day
+func (msgs Messages) WeekRange(start string, end string) string {
+	return Catalog.Format(msgs.locale, "weekRange", map[string]any{"start": start, "end": end})
+}

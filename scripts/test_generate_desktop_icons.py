@@ -15,19 +15,20 @@ class IconGenerationTests(unittest.TestCase):
     def test_embeds_every_master_without_modification(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory)
-            for name in generator.ICONS:
-                (source / f"solar--{name}-linear.svg").write_text(
-                    f'<svg data-name="{name}" color="currentColor">\n</svg>\n',
+            for name, style in generator.ICONS:
+                (source / f"solar--{name}-{style}.svg").write_text(
+                    f'<svg data-name="{name}" data-style="{style}" color="currentColor">\n</svg>\n',
                     encoding="utf-8")
             rendered = generator.render(source)
             self.assertEqual(rendered, generator.render(source))
-            import json
-            literals = rendered.split("var solarSources = [...]string{\n", 1)[1]
-            values = [json.loads(line.strip().removesuffix(","))
-                      for line in literals.splitlines() if line.startswith("\t")]
-            self.assertEqual(len(values), 5)
-            for name, value in zip(generator.ICONS, values):
-                self.assertEqual(value, (source / f"solar--{name}-linear.svg").read_text())
+            literal = rendered.split("var Sources = map[string]string{\n", 1)[1]
+            rows = [line.strip() for line in literal.splitlines() if line.startswith("\t")]
+            self.assertEqual(len(rows), len(generator.ICONS))
+            for (name, style), row in zip(generator.ICONS, rows):
+                self.assertTrue(row.startswith(f'"{name}-{style}": '), row)
+                embedded = row.split(": ", 1)[1].removesuffix(",")
+                self.assertEqual(embedded, __import__("json").dumps(
+                    (source / f"solar--{name}-{style}.svg").read_text(encoding="utf-8")))
 
     def test_missing_master_fails(self):
         with tempfile.TemporaryDirectory() as directory:

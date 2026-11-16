@@ -17,9 +17,15 @@ help:
 doctor:
 	@cd $(APP) && $(MYGO) doctor
 
-## dev: 启动开发版应用，改 Go 代码后自动重建
+## dev: 启动开发版应用，自动注入仓库内源规则，改 Go 代码后自动重建
 dev:
-	@cd $(APP) && $(MYGO) dev
+	@rules="$${LUVIA_RULES_DIR:-$(CURDIR)/apps/luvia-rules}"; \
+	if [ ! -f "$$rules/kanju/rule.json" ]; then \
+		echo "dev: 警告：$$rules 下没有可用的规则目录，界面会显示“没有可用数据源”"; \
+	else \
+		echo "dev: 源规则目录 $$rules（覆盖方式：LUVIA_RULES_DIR=... make dev）"; \
+	fi; \
+	cd $(APP) && LUVIA_RULES_DIR="$$rules" $(MYGO) dev
 
 ## test: 运行全部测试（无需窗口）
 test:

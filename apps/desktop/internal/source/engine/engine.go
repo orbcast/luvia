@@ -339,6 +339,7 @@ func (s *sourceImpl) mapCards(shape *rule.Shape, root any, vars map[string]any) 
 			Area:        s.evalString(field(shape.Fields, "area"), sc),
 			Tags:        s.evalList(field(shape.Fields, "tags"), sc),
 			Remarks:     s.evalString(field(shape.Fields, "remarks"), sc),
+			Overview:    s.evalString(field(shape.Fields, "overview"), sc),
 			PosterURL:   s.evalString(field(shape.Fields, "posterUrl"), sc),
 			BackdropURL: s.evalString(field(shape.Fields, "backdropUrl"), sc),
 		}

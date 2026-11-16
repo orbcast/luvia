@@ -13,7 +13,7 @@
 
 ## 代码归属与依赖
 
-- `main.go` 只负责入口、平台 API 与依赖组装。`internal/appshell/` 放导航、菜单和主题，`internal/appwindow/` 放主窗口生命周期，`internal/preferences/` 放主题偏好读写；不把实现持续堆进入口。
+- `main.go` 只负责入口、平台 API 与依赖组装。`internal/appshell/` 放导航与菜单，`internal/appwindow/` 放主窗口生命周期，`internal/preferences/` 放主题偏好读写，`internal/design/` 放设计 Token；不把实现持续堆进入口。
 - 复杂功能按需放入 `internal/<feature>/`；目前不预建目录、空接口或通用框架。业务规则、用例与 I/O 适配按实际需要拆分，业务核心不依赖 `ui.Context`、`ui.Element` 或窗口。
 - 源规则解析层固定为 `internal/source`（契约与错误分类）、`internal/source/rule`（规则解码与校验）、`internal/source/engine`（解释器与 HTTP）、`internal/source/loader`（目录扫描与诊断），依赖单向；上游名称、密钥与端点只出现在 `apps/luvia-rules` 的规则数据里，不写进 desktop 源码。规则格式见 [docs/rule-dsl.md](../../docs/rule-dsl.md)。
 - 行为测试集中在 `tests/`，通过生产包的公开接口验证；不在生产目录混放测试。夹具按需放 `tests/testdata/`，不把测试专用辅助逻辑塞进生产代码。
@@ -30,9 +30,9 @@
 
 ## 设计 Token 与界面图标
 
-- 配色遵循根目录 [DESIGN.md](../../DESIGN.md)，集中在 `internal/appshell/theme.go`；尺寸集中在 `internal/appshell/design_tokens.go`。组件引用集中 Token，不在各个 `view` 里散写色值。
+- 配色、尺寸与图像叠加 Token 遵循根目录 [DESIGN.md](../../DESIGN.md)，集中在 `internal/design/design.go`，AppShell 与各页面共用。组件引用集中 Token，不在 `view` 里散写色值。
 - 用户调整设计时，同步根目录设计规范和本应用已实现的硬编码 Token、派生值与引用，并检查深浅主题。尚未接入的部分如实说明，不创建无消费者的常量文件。
-- 界面操作图标使用根目录规则指定的 Solar SVG，通过 [use-iconify-skill](../../.agents/skills/use-iconify-skill/SKILL.md) 的脚本获取与校验，母版放根目录 `assets/ui-icons/solar/`；`go generate ./...` 从母版更新 `internal/appshell/icons_gen.go`。
+- 界面操作图标使用根目录规则指定的 Solar SVG，通过 [use-iconify-skill](../../.agents/skills/use-iconify-skill/SKILL.md) 的脚本获取与校验，母版放根目录 `assets/ui-icons/solar/`；`go generate ./...` 从母版更新 `internal/icons/icons_gen.go`，图标名在 `internal/icons/icons.go` 解析并缓存。
 - SVG 通过固定 MyGo 版本的 `ui.ParseSVG` / `ui.MustParseSVG`、`ui.Icon` 等原生 API 接入，先核对源码用法；`currentColor` 由语义前景色驱动。资源应本地封装，不在每帧解析或联网下载，也不使用 WebView。品牌应用图标仍走 `make icons`。
 
 ## MyGo UI 生命周期与线程
