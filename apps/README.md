@@ -6,7 +6,7 @@ Luvia 是一个视频播放器。`apps/` 主要按可独立运行、构建与发
 
 | 目录 | 技术栈 | 当前功能与入口 |
 | --- | --- | --- |
-| [desktop/](desktop/README.md) | Go + MyGo 原生 UI | 当前仍为待办清单示例，尚未实现视频播放；开发与验证见应用 README，编码约束见 [AGENTS.md](desktop/AGENTS.md) |
+| [desktop/](desktop/README.md) | Go + MyGo 原生 UI | 已实现导航、系统菜单和空业务区的应用框架，尚未实现视频播放；开发与验证见应用 README，编码约束见 [AGENTS.md](desktop/AGENTS.md) |
 | [luvia-rules/](luvia-rules/README.md) | 源规则与资源源 | 维护播放器所用的源规则与资源源；目前仅有说明，未来随时可能迁移到独立仓库，不是可运行应用 |
 
 Swift / SwiftUI 等是未来可选技术栈，目前没有对应工程。只有明确需求后才新建应用，不预建空项目。

@@ -1,10 +1,18 @@
 {
   "@@locale": "zh-Hans",
-  "newTaskLabel": "新任务",
-  "newTaskPlaceholder": "写点什么，按 Enter 添加",
-  "add": "添加",
-  "clearDone": "清除已完成",
-  "summary": "共 {total} 项 · 未完成 {open}",
-  "empty": "还没有任务。",
-  "delete": "删除"
+  "discover": "发现",
+  "library": "资源库",
+  "following": "追剧",
+  "search": "搜索",
+  "settings": "设置",
+  "navigation": "主导航",
+  "viewMenu": "显示",
+  "appearance": "外观",
+  "language": "语言",
+  "followSystem": "跟随系统",
+  "light": "浅色",
+  "dark": "深色",
+  "english": "English",
+  "simplifiedChinese": "简体中文",
+  "settingsMenu": "设置…"
 }

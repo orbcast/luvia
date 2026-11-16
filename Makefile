@@ -5,7 +5,7 @@ MYGO ?= go tool mygo
 COVER_MIN ?= 80
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor dev test build vet fmt check rules i18n cover race check-gen hooks icons icons-check skills
+.PHONY: help doctor dev test test-native build vet fmt check rules i18n cover race check-gen hooks icons icons-check skills
 
 ## help: 列出可用命令
 help:
@@ -24,6 +24,11 @@ dev:
 ## test: 运行全部测试（无需窗口）
 test:
 	@cd $(APP) && CGO_ENABLED=0 go test ./...
+	@python3 -B -m unittest discover -s scripts -p 'test_*.py'
+
+## test-native: 通过匹配版本的 mygo-automation 验证已启动的隔离原生测试应用
+test-native:
+	@cd $(APP) && CGO_ENABLED=0 go test -tags e2e ./tests -run '^TestNativeShell$$' -count=1 -v
 
 ## build: 打包当前平台的生产应用到 apps/desktop/build/
 build:
@@ -41,8 +46,8 @@ vet:
 fmt:
 	@gofmt -w $(APP)
 
-## check: 提交前检查（格式、静态检查、测试、仓库规则、catalogs）
-check: vet test rules i18n
+## check: 提交前检查（格式、静态检查、测试、仓库规则、catalogs、Solar 图标）
+check: vet test rules i18n icons-check
 	@unformatted="$$(gofmt -l $(APP))"; \
 	if [ -n "$$unformatted" ]; then echo "需要 gofmt: $$unformatted"; exit 1; fi
 
@@ -57,22 +62,23 @@ i18n:
 ## cover: 统计手写代码的语句覆盖率（生成代码不计），低于门槛就失败
 cover:
 	@dir="$$(mktemp -d)"; trap 'rm -rf "$$dir"' EXIT; \
-	cd $(APP) && CGO_ENABLED=0 go test -coverprofile="$$dir/cover.out" ./... > /dev/null && \
+	cd $(APP) && CGO_ENABLED=0 go test -coverpkg=./... -coverprofile="$$dir/cover.out" ./... > /dev/null && \
 	python3 -B $(CURDIR)/scripts/check-coverage.py --profile "$$dir/cover.out" --min $(COVER_MIN)
 
 ## race: 用竞态检测器跑测试（较慢，CI 执行，不能设 CGO_ENABLED=0）
 race:
 	@cd $(APP) && CGO_ENABLED=1 go test -race ./...
 
-## check-gen: 确认生成代码与 catalogs 一致（会重新生成，只在干净检出上执行）
+## check-gen: 确认生成代码与 catalogs、Solar 母版一致（会重新生成，只在干净检出上执行）
 check-gen:
+	@python3 -B scripts/generate-desktop-icons.py
 	@cd $(APP) && $(MYGO) generate > /dev/null
 	@if ! git -C $(CURDIR) diff --quiet -- $(APP); then \
-		echo "生成物与 catalogs 不同步：本地跑 go tool mygo generate 后提交"; \
+		echo "生成物与 catalogs、Solar 母版不同步：本地跑 go generate ./... 与 go tool mygo generate 后提交"; \
 		git -C $(CURDIR) --no-pager diff --stat -- $(APP); \
 		exit 1; \
 	fi
-	@echo "生成物与 catalogs 一致"
+	@echo "生成物与 catalogs、Solar 母版一致"
 
 ## hooks: 把仓库的 .githooks 设为 Git 钩子目录（每个克隆执行一次）
 hooks:

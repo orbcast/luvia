@@ -4,7 +4,7 @@
 
 ## 项目主体与分层治理
 
-Luvia 是视频播放器项目，按独立应用和共享能力组织，允许未来采用 Swift / SwiftUI 等不同技术栈。当前 `apps/desktop` 仍是 Go + MyGo 待办示例，尚未实现视频播放；`apps/luvia-rules` 暂存源规则与资源源，未来随时可能迁移至独立仓库。
+Luvia 是视频播放器项目，按独立应用和共享能力组织，允许未来采用 Swift / SwiftUI 等不同技术栈。当前 `apps/desktop` 是 Go + MyGo 导航与菜单框架，业务内容留空，尚未实现视频播放；`apps/luvia-rules` 暂存源规则与资源源，未来随时可能迁移至独立仓库。
 
 - 仓库层：本文件约束目录职责、依赖方向、UI 设计、风险分级测试与交付；根目录 `README.md` 提供导航，`CONTEXT.md` 记录背景、决策与限制。历史验证记录不等于本轮已验证。界面设计与深浅主题 Token 以 [DESIGN.md](DESIGN.md) 为准，涉及 UI 的工作必须先读。
 - 应用层：`apps/<name>/AGENTS.md` 规定该应用的语言、框架、源码结构、线程模型、构建、测试和平台限制；当前 MyGo 专属规则见 [apps/desktop/AGENTS.md](apps/desktop/AGENTS.md)，不套用于其他应用。

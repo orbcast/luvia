@@ -1,35 +1,33 @@
 {
   "@@locale": "en",
-  "newTaskLabel": "New task",
-  "@newTaskLabel": {
-    "description": "Label of the input that adds a task."
-  },
-  "newTaskPlaceholder": "Type something, then press Enter",
-  "@newTaskPlaceholder": {
-    "description": "Placeholder of the input that adds a task."
-  },
-  "add": "Add",
-  "@add": {
-    "description": "Button that adds the task typed in the input."
-  },
-  "clearDone": "Clear done",
-  "@clearDone": {
-    "description": "Button that removes every task already checked off."
-  },
-  "summary": "{total, plural, one {# task} other {# tasks}} · {open} open",
-  "@summary": {
-    "description": "Count of tasks above the list: how many there are and how many are still open.",
-    "placeholders": {
-      "total": { "type": "int", "example": "3" },
-      "open": { "type": "int", "example": "2" }
-    }
-  },
-  "empty": "No tasks yet.",
-  "@empty": {
-    "description": "Shown in place of the list when there is no task."
-  },
-  "delete": "Delete",
-  "@delete": {
-    "description": "Button of a row that removes that task."
-  }
+  "discover": "Discover",
+  "@discover": {"description": "Discovery navigation destination"},
+  "library": "Library",
+  "@library": {"description": "Media library navigation destination"},
+  "following": "Following",
+  "@following": {"description": "Followed shows navigation destination"},
+  "search": "Search",
+  "@search": {"description": "Search navigation destination"},
+  "settings": "Settings",
+  "@settings": {"description": "Settings navigation destination"},
+  "navigation": "Main navigation",
+  "@navigation": {"description": "Accessible name for the app navigation region"},
+  "viewMenu": "View",
+  "@viewMenu": {"description": "System menu containing navigation and display preferences"},
+  "appearance": "Appearance",
+  "@appearance": {"description": "Theme preference submenu"},
+  "language": "Language",
+  "@language": {"description": "Application language submenu"},
+  "followSystem": "Follow System",
+  "@followSystem": {"description": "Use the operating system theme or language preference"},
+  "light": "Light",
+  "@light": {"description": "Light theme preference"},
+  "dark": "Dark",
+  "@dark": {"description": "Dark theme preference"},
+  "english": "English",
+  "@english": {"description": "English language preference"},
+  "simplifiedChinese": "Simplified Chinese",
+  "@simplifiedChinese": {"description": "Simplified Chinese language preference"},
+  "settingsMenu": "Settings…",
+  "@settingsMenu": {"description": "Application menu command opening the settings destination"}
 }
