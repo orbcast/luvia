@@ -1,0 +1,10 @@
+{
+  "@@locale": "zh-Hans",
+  "newTaskLabel": "新任务",
+  "newTaskPlaceholder": "写点什么，按 Enter 添加",
+  "add": "添加",
+  "clearDone": "清除已完成",
+  "summary": "共 {total} 项 · 未完成 {open}",
+  "empty": "还没有任务。",
+  "delete": "删除"
+}
