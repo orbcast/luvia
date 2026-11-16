@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">AssTV · 光晕</title>
+  <desc id="desc">柔润的不对称光环，冰蓝、珍珠白与深蓝弥散融合。中央为不对称的有机播放镂空，三边微鼓、圆角舒展，全轮廓以连续曲线连接。无字母，背景透明。</desc>
+  <defs>
+    <radialGradient id="pearl" cx="0" cy="0" r="1" gradientTransform="translate(178 154) rotate(57) scale(260 228)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F0F7FF"/>
+      <stop offset="0.38" stop-color="#B7DBF8"/>
+      <stop offset="0.72" stop-color="#619CE8"/>
+      <stop offset="1" stop-color="#294EAF"/>
+    </radialGradient>
+    <radialGradient id="azure" cx="0" cy="0" r="1" gradientTransform="translate(156 334) rotate(-34) scale(228 186)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#47BBF4"/>
+      <stop offset="0.46" stop-color="#3C95EF" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#3C95EF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="depth" cx="0" cy="0" r="1" gradientTransform="translate(325 319) rotate(-110) scale(163 141)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#163E9B" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#163E9B" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="halo">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M245 109C325 93 388 137 399 210C411 290 368 372 294 396C219 420 141 389 116 321C89 249 118 169 180 130C201 117 223 113 245 109ZM237 208C221 205 212 217 211 237C210 258 213 281 222 294C229 305 240 306 253 300C272 292 290 280 300 266C310 253 307 241 292 231C275 220 252 211 237 208Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#halo)">
+    <path fill="url(#pearl)" d="M88 88H424V424H88Z"/>
+    <path fill="url(#azure)" d="M88 88H424V424H88Z"/>
+    <path fill="url(#depth)" d="M88 88H424V424H88Z"/>
+  </g>
+</svg>

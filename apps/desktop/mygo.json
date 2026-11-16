@@ -1,0 +1,10 @@
+{
+  "name": "Luvia",
+  "identifier": "com.example.luvia",
+  "version": "0.1.0",
+  "out": "build",
+  "icon": "resources/icon.png",
+  "macos": {
+    "icon": "AppIcon.icon"
+  }
+}
