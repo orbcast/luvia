@@ -1,0 +1,8 @@
+{
+  "line": {
+    "url": "https://cdn.example/ep-1.mp4?sign=mp4",
+    "url_kind": "mp4",
+    "label": "线路二",
+    "provider_id": "provider-mp4"
+  }
+}

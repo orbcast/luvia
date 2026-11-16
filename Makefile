@@ -5,7 +5,7 @@ MYGO ?= go tool mygo
 COVER_MIN ?= 80
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor dev test test-native build vet fmt check rules i18n cover race check-gen hooks icons icons-check skills
+.PHONY: help doctor dev test test-native build vet fmt check rules rules-verify i18n cover race check-gen hooks icons icons-check skills
 
 ## help: 列出可用命令
 help:
@@ -54,6 +54,10 @@ check: vet test rules i18n icons-check
 ## rules: 检查仓库规则（临时产物、文档、命令、依赖方向、密钥、文案与配色字面量）
 rules:
 	@python3 -B scripts/check-rules.py
+
+## rules-verify: 用规则自带 fixtures 离线验证 luvia-rules 的每个源（不访问真实上游）
+rules-verify:
+	@cd $(APP) && CGO_ENABLED=0 go test ./tests -run '^(TestKanju|TestFakeUpstream|TestLoaderLoadsCheckedInRules|TestRule|TestSelector|TestTemplate)' -count=1 -v
 
 ## i18n: 校验多语言 catalogs 的占位符与复数形式（译文完整性由 make rules 检查）
 i18n:

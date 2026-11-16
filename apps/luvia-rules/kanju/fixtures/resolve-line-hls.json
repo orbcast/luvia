@@ -1,0 +1,8 @@
+{
+  "line": {
+    "url": "https://cdn.example/ep-1.m3u8?sign=hls",
+    "url_kind": "hls",
+    "label": "线路一",
+    "provider_id": "provider-hls"
+  }
+}

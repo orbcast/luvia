@@ -1,0 +1,49 @@
+{
+  "sections": [
+    {
+      "id": "featured",
+      "title": "精选推荐",
+      "subtitle": "本周热播",
+      "cards": [
+        {
+          "id": "sample-movie",
+          "title": "示例电影",
+          "content_kind": "movie",
+          "year": 2024,
+          "area": "内地",
+          "genres": ["剧情", "家庭"],
+          "poster_url": "https://cdn.example/poster-movie.jpg",
+          "backdrop_url": "https://cdn.example/backdrop-movie.jpg",
+          "remarks": "HD"
+        },
+        {
+          "id": "sample-series",
+          "title": "示例剧集",
+          "content_kind": "tv",
+          "year": 2023,
+          "area": "内地",
+          "genres": ["悬疑"],
+          "poster_url": "https://cdn.example/poster-series.jpg",
+          "backdrop_url": "https://cdn.example/backdrop-series.jpg",
+          "remarks": "更新至 12 集"
+        }
+      ]
+    },
+    {
+      "id": "anime",
+      "title": "动漫",
+      "cards": [
+        {
+          "id": "sample-anime",
+          "title": "示例番剧",
+          "content_kind": "anime",
+          "year": 2022,
+          "area": "日本",
+          "genres": ["动画"],
+          "poster_url": "https://cdn.example/poster-anime.jpg",
+          "remarks": "全 24 集"
+        }
+      ]
+    }
+  ]
+}

@@ -18,6 +18,16 @@ Luvia 的 Go / MyGo 桌面应用。目前实现应用框架，尚无视频播放
 
 Solar Linear 图标母版及来源清单位于 [assets/ui-icons/solar](../../assets/ui-icons/solar/README.md)。在本目录执行 `go generate ./...` 从母版生成 `internal/appshell/icons_gen.go`；只修改母版，不手改生成物。图标随应用嵌入，不依赖运行时网络，`currentColor` 跟随语义前景色。
 
+## 源规则解析层
+
+播放器不直接实现任何站点。`apps/luvia-rules/<source-id>/rule.json` 用声明式 JSON 描述上游，本应应用通过 `internal/source` 的五个操作（首页、列表、详情、选集、解析）读取，规则格式与字段见 [docs/rule-dsl.md](../../docs/rule-dsl.md)。
+
+解析层分四个包：`internal/source` 定义契约、`Ref` 与错误分类，不依赖 HTTP；`internal/source/rule` 严格解码并校验规则；`internal/source/engine` 执行请求、签名、翻页、字段映射和线路兑换；`internal/source/loader` 扫描目录、跳过坏规则并收集诊断，支持热重载。引擎不缓存、不聚合，也不自动续期直链。
+
+规则目录按 `LUVIA_RULES_DIR`、用户数据目录的 `rules/`、应用包内 `Resources/rules/` 的顺序解析；开发态指向仓库里的 `apps/luvia-rules`。规则来自运行时文件，不编译进二进制，因此拆仓后无需改代码。
+
+`make rules-verify` 用规则自带的 `fixtures/` 离线跑通每个源，不访问真实上游；这条通路同时用一份 `maccms` 形状的假上游证明 DSL 不是为单一站点定制的。
+
 ## 原生 UI 测试
 
 优先使用 MyGo 自带套件：无窗口状态与交互用 `ui.NewTester`，运行中应用的菜单、快捷键、语言、主题和截图用 `mygo-automation`。版本必须匹配本应用的 `go.mod`；在应用 module 内构建工具，不依赖全局已安装版本。先读取该版本的 `plugins/automation/cmd/mygo-automation/SKILL.md` 与 `docs/plugins/automation.md`，CLI 的 `skills` 也提供同版指南。

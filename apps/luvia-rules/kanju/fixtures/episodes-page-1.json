@@ -1,0 +1,13 @@
+{
+  "episodes": [
+    { "id": "ep-1", "token": "token-1", "number": 1, "title": "开端" }
+  ],
+  "episode_count": 3,
+  "episode_pagination": {
+    "has_more": true,
+    "limit": 200,
+    "offset": 0,
+    "returned_count": 1,
+    "total_count": 3
+  }
+}

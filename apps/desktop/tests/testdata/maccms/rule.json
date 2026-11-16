@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "id": "maccms",
+  "name": "Fake JSON upstream",
+  "baseURL": "http://upstream.test",
+  "http": {
+    "timeoutMs": 5000
+  },
+  "home": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/api.php/provide/vod/",
+        "query": [
+          { "key": "ac", "value": "list" },
+          { "key": "pg", "value": "1" }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res.sections[*]",
+      "fields": {
+        "id": { "literal": "latest" },
+        "title": "type_name"
+      },
+      "cards": {
+        "from": "videos[*]",
+        "fields": {
+          "id": "vod_id",
+          "title": "vod_name",
+          "kind": { "fn": "kind", "args": ["type_name"] },
+          "year": { "fn": "int", "args": ["vod_year"] },
+          "remarks": "vod_remarks",
+          "posterUrl": "vod_pic"
+        }
+      }
+    }
+  },
+  "list": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/api.php/provide/vod/",
+        "query": [
+          { "key": "ac", "value": "list" },
+          { "key": "wd", "value": "{keyword}" },
+          { "key": "pg", "value": "{page}" }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res",
+      "page": { "fn": "int", "args": ["res.page"] },
+      "hasMore": "res.has_more",
+      "cards": {
+        "from": "res.list[*]",
+        "fields": {
+          "id": "vod_id",
+          "title": "vod_name",
+          "kind": { "fn": "kind", "args": ["type_name"] },
+          "year": { "fn": "int", "args": ["vod_year"] },
+          "posterUrl": "vod_pic"
+        }
+      }
+    }
+  },
+  "detail": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/api.php/provide/vod/",
+        "query": [
+          { "key": "ac", "value": "detail" },
+          { "key": "ids", "value": "{id}" }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res.list[0]",
+      "fields": {
+        "id": "vod_id",
+        "title": "vod_name",
+        "kind": { "fn": "kind", "args": ["type_name"] },
+        "year": { "fn": "int", "args": ["vod_year"] },
+        "area": "vod_area",
+        "overview": "vod_content",
+        "posterUrl": "vod_pic",
+        "actors": "vod_actor",
+        "directors": "vod_director"
+      }
+    }
+  },
+  "episodes": {
+    "steps": [
+      {
+        "op": "paginate",
+        "as": "pages",
+        "mode": "page",
+        "size": 50,
+        "maxPages": 3,
+        "path": "/api.php/provide/vod/",
+        "query": [
+          { "key": "ac", "value": "detail" },
+          { "key": "ids", "value": "{id}" },
+          { "key": "pg", "value": "{page}" }
+        ],
+        "items": "list[*]",
+        "hasMore": "has_more"
+      }
+    ],
+    "output": {
+      "from": "pages[*]",
+      "fields": {
+        "id": "nid",
+        "number": "number",
+        "title": "name",
+        "payload": "nid"
+      }
+    }
+  },
+  "resolve": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/api.php/provide/vod/",
+        "query": [
+          { "key": "ac", "value": "play" },
+          { "key": "nid", "value": "{payload}" }
+        ]
+      }
+    ],
+    "lines": {
+      "from": "res.lines[*]",
+      "fields": {
+        "id": "id",
+        "label": "label",
+        "url": "url",
+        "urlKind": { "fn": "urlKind", "args": ["url"] }
+      },
+      "maxAttempts": 3,
+      "preferUrlKind": "hls"
+    }
+  }
+}
