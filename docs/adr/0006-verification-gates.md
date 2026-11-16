@@ -11,7 +11,7 @@
 
 把检查做成一条可重复执行的入口，三处共用：`make check`（`vet`、`test`、`rules`、`i18n`、`gofmt`）、`.githooks/pre-commit`（`make -s check`，用 `make hooks` 设为 `core.hooksPath`）、`.github/workflows/ci.yml`（文档规则在 Linux 上跑，应用检查在 macOS 上跑）。
 
-`scripts/check-rules.py` 承担那些没有专用工具的判断：版本库不含构建产物、日志与临时目录；Markdown 相对链接可达；`docs/README.md` 与 `docs/adr/README.md` 覆盖目录内文档；ADR 文件名与编号合规；`AGENTS.md` 体量在预算内；`apps/` 下非测试 Go 代码没有中日韩文字面量；除集中 Token 文件外没有十六进制颜色。图标另走 `make icons-check`，只在 `assets/ui-icons/solar/` 存在时校验。
+`scripts/check-rules.py` 承担那些没有专用工具的判断：版本库不含构建产物、日志与临时目录；Markdown 相对链接可达；`docs/README.md` 与 `docs/adr/README.md` 覆盖目录内文档；ADR 文件名与编号合规；`AGENTS.md` 体量在预算内；`apps/` 下非测试 Go 代码没有中日韩文字面量；除集中 Token 文件外没有十六进制颜色；各语言 catalogs 覆盖源语言的每个键。图标另走 `make icons-check`，只在 `assets/ui-icons/solar/` 存在时校验。
 
 ## 后果
 

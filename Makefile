@@ -49,7 +49,7 @@ check: vet test rules i18n
 rules:
 	@python3 -B scripts/check-rules.py
 
-## i18n: 校验多语言 catalogs（占位符、译文完整性与已生成代码）
+## i18n: 校验多语言 catalogs 的占位符与复数形式（译文完整性由 make rules 检查）
 i18n:
 	@cd $(APP) && $(MYGO) i18n check
 
