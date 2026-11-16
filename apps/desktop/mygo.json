@@ -10,5 +10,8 @@
   "icon": "resources/icon.png",
   "macos": {
     "icon": "AppIcon.icon"
-  }
+  },
+  "resources": [
+    "../luvia-rules"
+  ]
 }

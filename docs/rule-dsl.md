@@ -38,7 +38,7 @@ apps/luvia-rules/
     README.md      # 来源、授权、覆盖范围、已知限制
 ```
 
-规则目录在运行时的解析顺序：环境变量 `LUVIA_RULES_DIR` → 用户数据目录下的 `rules/`（存在规则时）→ 应用包内 `Resources/rules/`。desktop 源码不出现任何上游名称；开发态用环境变量指向 `apps/luvia-rules`。
+规则目录在运行时的解析顺序：环境变量 `LUVIA_RULES_DIR` → 用户数据目录下的 `rules/`（存在规则时）→ 应用包内 `Resources/luvia-rules/`（`mygo.json` 的 `resources` 在打包时从 `apps/luvia-rules` 复制）。desktop 源码不出现任何上游名称；开发态用环境变量指向 `apps/luvia-rules`。
 
 ## rule.json 结构
 

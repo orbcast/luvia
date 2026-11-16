@@ -36,8 +36,13 @@ test:
 test-native:
 	@cd $(APP) && CGO_ENABLED=0 go test -tags e2e ./tests -run '^TestNativeShell$$' -count=1 -v
 
-## build: 打包当前平台的生产应用到 apps/desktop/build/
+## build: 打包当前平台的生产应用并内置仓库内源规则，产物在 apps/desktop/build/
 build:
+	@if [ ! -f "$(CURDIR)/apps/luvia-rules/kanju/rule.json" ]; then \
+		echo "build: 警告：apps/luvia-rules 下没有可用的规则目录，打包后的应用会显示“没有可用数据源”"; \
+	else \
+		echo "build: 把 apps/luvia-rules 内置为 luvia-rules 资源；运行时 LUVIA_RULES_DIR 或用户数据目录 rules/ 优先"; \
+	fi
 	@cd $(APP) && $(MYGO) build
 
 ## icons: 从 assets/icons 的共享母版重新生成各应用的 PNG 图标

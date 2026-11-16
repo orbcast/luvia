@@ -15,7 +15,7 @@
 
 代码分四个依赖单向的包：`internal/source`（契约、`Ref`、错误分类）、`internal/source/rule`（解码与校验）、`internal/source/engine`（解释器与 HTTP）、`internal/source/loader`（目录扫描、坏规则隔离、诊断、热重载）。引擎不缓存、不聚合、不自动续期直链；这些属于调用方。
 
-规则目录路径只从配置读取，默认解析顺序为环境变量 `LUVIA_RULES_DIR`、用户数据目录的 `rules/`、应用包内 `Resources/rules/`。desktop 源码不出现上游名称，也不编译期嵌入规则。
+规则目录路径只从配置读取，默认解析顺序为环境变量 `LUVIA_RULES_DIR`、用户数据目录的 `rules/`、应用包内 `Resources/luvia-rules/`（打包时由 `mygo.json` 的 `resources` 从 `apps/luvia-rules` 复制）。desktop 源码不出现上游名称，也不编译期嵌入规则。
 
 ## 后果
 
