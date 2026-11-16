@@ -1,33 +1,173 @@
 {
   "@@locale": "en",
   "discover": "Discover",
-  "@discover": {"description": "Discovery navigation destination"},
+  "@discover": {
+    "description": "Discovery navigation destination"
+  },
   "library": "Library",
-  "@library": {"description": "Media library navigation destination"},
+  "@library": {
+    "description": "Media library navigation destination"
+  },
   "following": "Following",
-  "@following": {"description": "Followed shows navigation destination"},
+  "@following": {
+    "description": "Followed shows navigation destination"
+  },
   "search": "Search",
-  "@search": {"description": "Search navigation destination"},
+  "@search": {
+    "description": "Search navigation destination"
+  },
   "settings": "Settings",
-  "@settings": {"description": "Settings navigation destination"},
+  "@settings": {
+    "description": "Settings navigation destination"
+  },
   "navigation": "Main navigation",
-  "@navigation": {"description": "Accessible name for the app navigation region"},
+  "@navigation": {
+    "description": "Accessible name for the app navigation region"
+  },
   "viewMenu": "View",
-  "@viewMenu": {"description": "System menu containing navigation and display preferences"},
+  "@viewMenu": {
+    "description": "System menu containing navigation and display preferences"
+  },
   "appearance": "Appearance",
-  "@appearance": {"description": "Theme preference submenu"},
+  "@appearance": {
+    "description": "Theme preference submenu"
+  },
   "language": "Language",
-  "@language": {"description": "Application language submenu"},
+  "@language": {
+    "description": "Application language submenu"
+  },
   "followSystem": "Follow System",
-  "@followSystem": {"description": "Use the operating system theme or language preference"},
+  "@followSystem": {
+    "description": "Use the operating system theme or language preference"
+  },
   "light": "Light",
-  "@light": {"description": "Light theme preference"},
+  "@light": {
+    "description": "Light theme preference"
+  },
   "dark": "Dark",
-  "@dark": {"description": "Dark theme preference"},
+  "@dark": {
+    "description": "Dark theme preference"
+  },
   "english": "English",
-  "@english": {"description": "English language preference"},
+  "@english": {
+    "description": "English language preference"
+  },
   "simplifiedChinese": "Simplified Chinese",
-  "@simplifiedChinese": {"description": "Simplified Chinese language preference"},
+  "@simplifiedChinese": {
+    "description": "Simplified Chinese language preference"
+  },
   "settingsMenu": "Settings…",
-  "@settingsMenu": {"description": "Application menu command opening the settings destination"}
+  "@settingsMenu": {
+    "description": "Application menu command opening the settings destination"
+  },
+  "homeLoading": "Loading this source…",
+  "@homeLoading": {
+    "description": "Discover page while the source answers"
+  },
+  "homeError": "This source could not load",
+  "@homeError": {
+    "description": "Discover page when the source failed"
+  },
+  "retry": "Retry",
+  "@retry": {
+    "description": "Button that loads the source again"
+  },
+  "continueWatching": "Continue Watching",
+  "@continueWatching": {
+    "description": "Discover section listing unfinished playback"
+  },
+  "viewAll": "View all",
+  "@viewAll": {
+    "description": "Link to the full list of a Discover section"
+  },
+  "thisWeek": "This Week",
+  "@thisWeek": {
+    "description": "Discover section listing this week's followed updates"
+  },
+  "today": "Today",
+  "@today": {
+    "description": "Label of the current day in the week strip"
+  },
+  "updates": "{count, plural, one {# update} other {# updates}}",
+  "@updates": {
+    "description": "Number of episodes a day brings",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "emptyContinue": "Nothing watched yet",
+  "@emptyContinue": {
+    "description": "Shown when no playback progress is stored"
+  },
+  "emptyContinueHint": "Your progress waits here once playback starts.",
+  "@emptyContinueHint": {
+    "description": "Explains the empty continue watching section"
+  },
+  "emptyWeek": "Follow a series to see its weekly updates here.",
+  "@emptyWeek": {
+    "description": "Explains the empty weekly section"
+  },
+  "follow": "Follow",
+  "@follow": {
+    "description": "Button that adds a media to the followed list"
+  },
+  "followingShow": "Following",
+  "@followingShow": {
+    "description": "Button state once a media is followed"
+  },
+  "playerSoon": "The player is not connected yet.",
+  "@playerSoon": {
+    "description": "Notice after asking to play what has no player"
+  },
+  "detailSoon": "The detail page is not connected yet.",
+  "@detailSoon": {
+    "description": "Notice after asking for details that no page shows"
+  },
+  "followedFlash": "Added to your following",
+  "@followedFlash": {
+    "description": "Notice after following the featured media"
+  },
+  "unfollowedFlash": "Removed from your following",
+  "@unfollowedFlash": {
+    "description": "Notice after unfollowing the featured media"
+  },
+  "hoursShort": "h",
+  "@hoursShort": {
+    "description": "Hours unit in a remaining time"
+  },
+  "minutesShort": "min",
+  "@minutesShort": {
+    "description": "Minutes unit in a remaining time"
+  },
+  "timeLeft": "{left} left",
+  "@timeLeft": {
+    "description": "Remaining playback time",
+    "placeholders": {
+      "left": {
+        "type": "String"
+      }
+    }
+  },
+  "sourcesLabel": "Source",
+  "@sourcesLabel": {
+    "description": "Name of the source that answered"
+  },
+  "playAction": "Continue Playing",
+  "@playAction": {
+    "description": "Primary button that would start playback"
+  },
+  "details": "Details",
+  "@details": {
+    "description": "Button opening the media detail page"
+  },
+  "pageComing": "This section is not wired yet",
+  "@pageComing": {
+    "description": "Placeholder shown on navigation pages that have no content yet"
+  },
+  "weekRange": "{start} – {end}",
+  "@weekRange": {
+    "description": "Week heading range; start is a month and day, end is a day"
+  }
 }

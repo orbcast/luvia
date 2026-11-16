@@ -1,10 +1,12 @@
 # Desktop
 
-Luvia 的 Go / MyGo 桌面应用。目前实现应用框架，尚无视频播放或媒体业务内容。
+Luvia 的 Go / MyGo 桌面应用。目前实现应用框架与发现页（Home），视频播放与详情页尚未接入。
 
 ## 界面与交互
 
-主窗口保留系统红黄绿按钮与顶部拖动区域。[AppShell / 应用Tabbar](../../docs/terminology.md) 是左侧居中的圆角玻璃导航，依次提供发现、资源库、追剧、搜索、设置。每次启动默认发现，点击、系统菜单和 `⌘1`～`⌘5` 同步切换选中项；`⌘,` 进入设置。五个入口的业务内容当前均留空。
+主窗口保留系统红黄绿按钮与顶部拖动区域，最小 400 × 400。[AppShell / 应用Tabbar](../../docs/terminology.md) 是顶部对齐的圆角玻璃导航，依次提供发现、资源库、追剧、搜索、设置；窗口宽度小于 720 逻辑单位时同一块玻璃改为底部 Dock，两种布局之间用 MyGo 转场（260ms 弹簧）连续移动，按钮与图标跨布局保持同一 `Key`。每次启动默认发现，点击、系统菜单和 `⌘1`～`⌘5` 同步切换选中项；`⌘,` 进入设置。切换页面使用 MyGo 转场（淡入 220ms、上移 10 个单位），不自绘动画；选中导航项为透明灰色玻璃底、图标换成 Solar Bold 实心版本并取当前主题前景色。
+
+发现页由三块组成：沉浸式 Hero 轮播（取首页分区里横幅最多的分区，最多 4 项，6 秒自动切换、悬停暂停、右侧缩略图手动切换）、继续观看与本周追剧。Hero 图像用线性蒙版淡出并叠一层终点等于页面底色的渐变，白色标题带柔和投影，亮色海报也能读清。继续观看与本周追剧只读本地库，没有记录时显示空态，不填演示数据；周历按本地日期汇总追剧记录。主播放、影片详情与收藏按钮分别触发回调或写入本地库，播放器和详情页尚未实现时用短暂提示如实说明。资源库、追剧、搜索与设置仍为占位页。
 
 系统菜单包含 Luvia、编辑、显示、窗口；标准行为交由 MyGo role 处理，显示菜单提供导航、外观、语言及全屏。外观支持跟随系统、浅色、深色；语言支持跟随系统、简体中文、English。语言与窗口位置由 MyGo 持久化，主题保存在 `mygo.App.Path(mygo.PathUserData)` 下的 `theme.json`。偏好读取失败回退跟随系统，写入失败只影响下次启动，本次切换仍生效并记录日志。
 
@@ -12,11 +14,13 @@ Luvia 的 Go / MyGo 桌面应用。目前实现应用框架，尚无视频播放
 
 ## 代码与资源
 
-`main.go` 只组装窗口、生命周期和平台 API。`internal/appshell/` 管理导航、系统菜单与主题，`internal/appwindow/` 管理窗口关闭和重新激活，`internal/preferences/` 处理主题偏好读写；行为测试集中于 `tests/`，通过公开接口调用生产实现。配色集中在 `internal/appshell/theme.go`，尺寸集中在 `internal/appshell/design_tokens.go`，遵循 [DESIGN.md](../../DESIGN.md)。使用 MyGo `ButtonBase`、`Icon`、原生窗口顶栏及官方 `plugins/glass` 材质，不自绘玻璃或窗口按钮。
+`main.go` 只组装窗口、生命周期和平台 API。`internal/appshell/` 管理导航与系统菜单，`internal/appwindow/` 管理窗口关闭和重新激活，`internal/preferences/` 处理主题偏好读写，`internal/design/` 集中配色、尺寸与图像叠加 Token；行为测试集中于 `tests/`，通过公开接口调用生产实现。配色与尺寸遵循 [DESIGN.md](../../DESIGN.md)。
+
+发现页与本地数据分成三块：`internal/home/` 是页面状态机与视图（拉取首页、轮播、周历聚合、空态与提示），只依赖 `source.Source`、本地库与图片加载器；`internal/library/` 保存观看进度与追剧，以 `source.Ref` 为键原子写入用户数据目录的 `library.json`；`internal/media/` 负责下载远程图片、在主线程解码，并用 `sha256(url)` 命名做内存与磁盘缓存（单张上限 12 MB、并发 4）。使用 MyGo `ButtonBase`、`Icon`、原生窗口顶栏及官方 `plugins/glass` 材质，不自绘玻璃或窗口按钮。
 
 中英文文案位于 `locales/en.json`、`locales/zh-Hans.json`，执行 `go tool mygo generate` 更新 `locales/catalog_gen.go`。自定义菜单在语言变化后重建，标准 role 标签由框架翻译。
 
-Solar Linear 图标母版及来源清单位于 [assets/ui-icons/solar](../../assets/ui-icons/solar/README.md)。在本目录执行 `go generate ./...` 从母版生成 `internal/appshell/icons_gen.go`；只修改母版，不手改生成物。图标随应用嵌入，不依赖运行时网络，`currentColor` 跟随语义前景色。
+Solar 图标母版及来源清单位于 [assets/ui-icons/solar](../../assets/ui-icons/solar/README.md)。在本目录执行 `go generate ./...` 从母版生成 `internal/icons/icons_gen.go`，`internal/icons` 负责按名称解析并缓存；只修改母版，不手改生成物。图标随应用嵌入，不依赖运行时网络，`currentColor` 跟随语义前景色。
 
 ## 源规则解析层
 
@@ -52,6 +56,6 @@ trap 'kill "$app_pid" 2>/dev/null || true; rm -rf "$run_dir"' EXIT
 
 ## 开发与验证
 
-从仓库根目录运行 `make dev` 启动，`make check` 执行静态检查、无窗口行为测试、图标生成器及覆盖率脚本测试及仓库规则，`make cover` 检查手写 Go 覆盖率，`make race` 检查竞态，`make icons-check` 校验 Solar 来源与 SVG。`make check-gen` 在干净检出上确认 catalogs 和图标生成物同步；提交前执行 `make hooks` 安装钩子。
+从仓库根目录运行 `make dev` 启动：它会把 `LUVIA_RULES_DIR` 指向仓库内的 `apps/luvia-rules` 并打印实际目录，因此开发版开箱即可读到 kanju 源；用 `LUVIA_RULES_DIR=... make dev` 可以换成别的规则目录。`make check` 执行静态检查、无窗口行为测试、图标生成器及覆盖率脚本测试及仓库规则，`make cover` 检查手写 Go 覆盖率，`make race` 检查竞态，`make icons-check` 校验 Solar 来源与 SVG。`make check-gen` 在干净检出上确认 catalogs 和图标生成物同步；提交前执行 `make hooks` 安装钩子。
 
 `make build` 打包当前平台，产物在 `build/`。无窗口测试不证明 GPU 材质、系统菜单或其他平台渲染正确，涉及这些边界的变化需做对应原生验证。技术规则见 [AGENTS.md](AGENTS.md)，设计取舍见 [ADR 0007](../../docs/adr/0007-desktop-shell.md)。

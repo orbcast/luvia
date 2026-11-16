@@ -146,7 +146,7 @@ apps/luvia-rules/
 
 | 位置 | 允许的字段 |
 | --- | --- |
-| 卡片 / 列表项 | `id`、`title`、`kind`、`year`、`area`、`tags`、`remarks`、`posterUrl`、`backdropUrl` |
+| 卡片 / 列表项 | `id`、`title`、`kind`、`year`、`area`、`tags`、`remarks`、`overview`、`posterUrl`、`backdropUrl` |
 | 详情 | 卡片字段 + `overview`、`actors`、`directors`、`episodeCount` |
 | 选集 | `id`、`number`、`title`、`payload` |
 | 首页分区 | `id`、`title`、`subtitle`（分区必须另有 `cards`） |
