@@ -1,0 +1,35 @@
+{
+  "@@locale": "en",
+  "newTaskLabel": "New task",
+  "@newTaskLabel": {
+    "description": "Label of the input that adds a task."
+  },
+  "newTaskPlaceholder": "Type something, then press Enter",
+  "@newTaskPlaceholder": {
+    "description": "Placeholder of the input that adds a task."
+  },
+  "add": "Add",
+  "@add": {
+    "description": "Button that adds the task typed in the input."
+  },
+  "clearDone": "Clear done",
+  "@clearDone": {
+    "description": "Button that removes every task already checked off."
+  },
+  "summary": "{total, plural, one {# task} other {# tasks}} · {open} open",
+  "@summary": {
+    "description": "Count of tasks above the list: how many there are and how many are still open.",
+    "placeholders": {
+      "total": { "type": "int", "example": "3" },
+      "open": { "type": "int", "example": "2" }
+    }
+  },
+  "empty": "No tasks yet.",
+  "@empty": {
+    "description": "Shown in place of the list when there is no task."
+  },
+  "delete": "Delete",
+  "@delete": {
+    "description": "Button of a row that removes that task."
+  }
+}

@@ -6,6 +6,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"luvia/apps/desktop/locales"
 )
 
 // item 是一条待办。界面状态全部放在 app 上，view 每次只负责把它画出来。
@@ -66,20 +68,20 @@ func (a *app) view(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Fill().Padding(24).Gap(12).Children(func() {
 		ui.Text(c, "Luvia").FontSize(24).Bold()
-		ui.Textf(c, "共 %d 项 · 未完成 %d", len(a.items), a.open()).
+		ui.Text(c, locales.Summary(len(a.items), a.open())).
 			FontSize(13).TextColor(t.TextMuted)
 
 		ui.TextInput(c, &a.draft).
-			Placeholder("写点什么，按 Enter 添加").
-			Label("新任务").
+			Placeholder(locales.NewTaskPlaceholder()).
+			Label(locales.NewTaskLabel()).
 			Bind(&a.input).
 			OnSubmit(a.add)
 
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			if ui.PrimaryButton(c, "添加").Clicked() {
+			if ui.PrimaryButton(c, locales.Add()).Clicked() {
 				a.add()
 			}
-			if ui.Button(c, "清除已完成").Clicked() {
+			if ui.Button(c, locales.ClearDone()).Clicked() {
 				a.clearDone()
 			}
 		})
@@ -87,7 +89,7 @@ func (a *app) view(c *ui.Context) {
 		ui.Divider(c)
 
 		if len(a.items) == 0 {
-			ui.Text(c, "还没有任务。").
+			ui.Text(c, locales.Empty()).
 				FontSize(13).
 				TextColor(t.TextMuted)
 			return
@@ -99,7 +101,7 @@ func (a *app) view(c *ui.Context) {
 			ui.Row(c).Key(it.id).Gap(10).AlignItems(ui.Center).Children(func() {
 				ui.Checkbox(c, &it.done, it.title)
 				ui.Spacer(c)
-				if ui.Button(c, "删除").Clicked() {
+				if ui.Button(c, locales.Delete()).Clicked() {
 					toRemove = i
 				}
 			})

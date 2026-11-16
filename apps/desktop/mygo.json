@@ -3,6 +3,10 @@
   "identifier": "com.example.luvia",
   "version": "0.1.0",
   "out": "build",
+  "i18n": {
+    "dir": "locales",
+    "source": "en"
+  },
   "icon": "resources/icon.png",
   "macos": {
     "icon": "AppIcon.icon"
