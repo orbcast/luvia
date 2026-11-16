@@ -117,7 +117,7 @@ python3 .agents/skills/use-iconify-skill/scripts/iconify.py check \
 
 ## 验证闸门
 
-统一入口是 `make check`（MyGo vet、Go vet、测试、gofmt、仓库规则、catalogs），`.githooks/pre-commit` 与 CI 调用同一组命令，首次克隆后执行一次 `make hooks` 启用。被拦下的问题修代码或修脚本，不用 `--no-verify`、删除断言或放宽检查绕过；自动修复不能替代判断。这些检查不代替原生渲染、平台行为与人工评审，详见下一节的风险分级。
+统一入口是 `make check`（MyGo vet、Go vet、测试、gofmt、仓库规则、catalogs），`.githooks/pre-commit` 与 CI 调用同一组命令，首次克隆后执行一次 `make hooks` 启用；提交标题由 `.githooks/commit-msg` 按 `type(scope): 简述` 校验。覆盖率、竞态与生成物同步在 CI 执行（`make cover`、`make race`、`make check-gen`），涉及并发或生成代码的改动本地也应主动跑。被拦下的问题修代码或修脚本，不用 `--no-verify`、删除断言或放宽检查绕过；自动修复不能替代判断。这些检查不代替原生渲染、平台行为与人工评审，详见下一节的风险分级。
 
 ## 测试优先，按风险验证
 

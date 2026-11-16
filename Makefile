@@ -2,9 +2,10 @@ SHELL := /bin/bash
 
 APP ?= apps/desktop
 MYGO ?= go tool mygo
+COVER_MIN ?= 80
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor dev test build vet fmt check rules i18n hooks icons icons-check skills
+.PHONY: help doctor dev test build vet fmt check rules i18n cover race check-gen hooks icons icons-check skills
 
 ## help: 列出可用命令
 help:
@@ -45,7 +46,7 @@ check: vet test rules i18n
 	@unformatted="$$(gofmt -l $(APP))"; \
 	if [ -n "$$unformatted" ]; then echo "需要 gofmt: $$unformatted"; exit 1; fi
 
-## rules: 检查仓库规则（临时产物、文档链接与索引、AGENTS 预算、文案与配色字面量）
+## rules: 检查仓库规则（临时产物、文档、命令、依赖方向、密钥、文案与配色字面量）
 rules:
 	@python3 -B scripts/check-rules.py
 
@@ -53,10 +54,30 @@ rules:
 i18n:
 	@cd $(APP) && $(MYGO) i18n check
 
+## cover: 统计手写代码的语句覆盖率（生成代码不计），低于门槛就失败
+cover:
+	@dir="$$(mktemp -d)"; trap 'rm -rf "$$dir"' EXIT; \
+	cd $(APP) && CGO_ENABLED=0 go test -coverprofile="$$dir/cover.out" ./... > /dev/null && \
+	python3 -B $(CURDIR)/scripts/check-coverage.py --profile "$$dir/cover.out" --min $(COVER_MIN)
+
+## race: 用竞态检测器跑测试（较慢，CI 执行，不能设 CGO_ENABLED=0）
+race:
+	@cd $(APP) && CGO_ENABLED=1 go test -race ./...
+
+## check-gen: 确认生成代码与 catalogs 一致（会重新生成，只在干净检出上执行）
+check-gen:
+	@cd $(APP) && $(MYGO) generate > /dev/null
+	@if ! git -C $(CURDIR) diff --quiet -- $(APP); then \
+		echo "生成物与 catalogs 不同步：本地跑 go tool mygo generate 后提交"; \
+		git -C $(CURDIR) --no-pager diff --stat -- $(APP); \
+		exit 1; \
+	fi
+	@echo "生成物与 catalogs 一致"
+
 ## hooks: 把仓库的 .githooks 设为 Git 钩子目录（每个克隆执行一次）
 hooks:
 	@git config core.hooksPath .githooks
-	@echo "pre-commit 已启用：make check"
+	@echo "pre-commit（make check）与 commit-msg（提交信息规范）已启用"
 
 ## icons-check: 校验 assets/ui-icons 下 Solar 图标的来源、风格与 currentColor（尚无图标时跳过）
 icons-check:

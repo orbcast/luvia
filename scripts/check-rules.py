@@ -13,7 +13,15 @@
   5. AGENTS.md 不超过体量预算（根 9000 字符，应用/模块 6000 字符）；
   6. apps/ 下非测试 Go 文件的字符串字面量不含中日韩文字（文案走 catalogs）；
   7. apps/ 下集中 Token 文件之外不出现十六进制颜色（配色走 DESIGN 语义 Token）；
-  8. 各语言 catalogs 的键与源语言一致（MyGo 对缺失译文只告警，这里要拦住）。
+  8. 各语言 catalogs 的键与源语言一致（MyGo 对缺失译文只告警，这里要拦住）；
+  9. 文档代码块里的 make 目标与 go tool mygo 子命令真实存在；
+ 10. apps/ 之间不互相导入，packages/ 不反向依赖 apps/；
+ 11. apps/ 下没有前端工程文件与 WebView 桥接（本项目用 Go 写原生界面）；
+ 12. 版本库没有私钥、访问令牌与 .env；
+ 13. 文档与脚本不写死本机路径；
+ 14. 单个文件不超过 1 MB（素材除外）；
+ 15. 应用入口 main.go 不超过 300 行；
+ 16. 文本文件统一 LF 且以换行结尾。
 """
 
 from __future__ import annotations
@@ -49,6 +57,53 @@ HEX_COLOR = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)#\s]+)(#[^)]*)?\)")
 ADR_NAME = re.compile(r"^\d{4}-[a-z0-9]+(-[a-z0-9]+)*\.md$")
 
+# 文档里出现的命令必须真的能用：make 目标从 Makefile 读，mygo 子命令在这里列全。
+MAKE_TARGET = re.compile(r"^([a-zA-Z0-9][\w-]*):", re.M)
+MAKE_CALL = re.compile(r"(?:^|[\s;&|(`])make\s+(?:-[a-zA-Z-]+\s+)*([a-zA-Z0-9][\w-]*)")
+MYGO_CALL = re.compile(r"go\s+tool\s+mygo\s+([a-z][a-z0-9-]*)")
+MYGO_COMMANDS = {
+    "build",
+    "dev",
+    "doctor",
+    "generate",
+    "i18n",
+    "init",
+    "install-skills",
+    "keygen",
+    "migrate-ui",
+    "native",
+    "version",
+    "vet",
+}
+COMMAND_BLOCK = re.compile(r"```(?:bash|sh|shell|console)\n(.*?)```", re.S)
+LOCAL_SCRIPT = re.compile(r"((?:\.agents|scripts|assets)/[\w./-]+\.[a-z]{2,4})")
+
+FRONTEND_FILES = {
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lockb",
+    "tsconfig.json",
+    "mygo.config.ts",
+    "vite.config.ts",
+}
+FRONTEND_EXT = (".ts", ".tsx", ".js", ".jsx", ".html", ".css")
+WEBVIEW_TOKENS = ("github.com/webview/", "mygo.Bind(", "mygo.NewEvent(", ".WebView(")
+
+SECRETS = [
+    (r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "私钥内容"),
+    (r"ghp_[A-Za-z0-9]{20,}", "GitHub 访问令牌"),
+    (r"github_pat_[A-Za-z0-9_]{20,}", "GitHub 访问令牌"),
+    (r"sk-[A-Za-z0-9]{20,}", "API 密钥"),
+    (r"AKIA[0-9A-Z]{16}", "AWS 访问密钥"),
+]
+SECRET_FILES = (r"(^|/)\.env(\..+)?$", r"\.(pem|p12|keystore)$")
+
+LOCAL_PATH = re.compile(r"(/Users/|/var/folders/|[A-Za-z]:\\Users\\|/home/[a-z0-9_-]+/)")
+MAX_FILE_BYTES = 1024 * 1024
+MAX_ENTRY_LINES = 300
+
 
 def git(*args: str) -> list[str]:
     out = subprocess.run(
@@ -82,6 +137,13 @@ def failures() -> list[str]:
     problems.extend(check_agents_budget(files))
     problems.extend(check_go_sources(files))
     problems.extend(check_catalogs(files))
+    problems.extend(check_commands(files))
+    problems.extend(check_dependency_direction(files))
+    problems.extend(check_frontend_files(files))
+    problems.extend(check_secrets(files))
+    problems.extend(check_local_paths(files))
+    problems.extend(check_sizes(files))
+    problems.extend(check_text_hygiene(files))
     return problems
 
 
@@ -259,6 +321,148 @@ def check_catalogs(files: list[str]) -> list[str]:
                 problems.append(f"{path}: 缺少译文 {key}")
             for key in sorted(translated - keys):
                 problems.append(f"{path}: 源语言没有 {key}，多余的键会一直无人使用")
+    return problems
+
+
+def check_commands(files: list[str]) -> list[str]:
+    """文档里的命令必须能跑：目标存在、子命令存在、脚本存在。"""
+    problems = []
+    makefile = open(os.path.join(ROOT, "Makefile"), encoding="utf-8").read()
+    targets = set(MAKE_TARGET.findall(makefile))
+    for path in files:
+        if not path.endswith(".md") or path.startswith(".agents/skills/"):
+            continue
+        text = open(os.path.join(ROOT, path), encoding="utf-8").read()
+        for block in COMMAND_BLOCK.findall(text):
+            for target in MAKE_CALL.findall(block):
+                if target not in targets:
+                    problems.append(f"{path}: make {target} 不在 Makefile 里")
+            for command in MYGO_CALL.findall(block):
+                if command not in MYGO_COMMANDS:
+                    problems.append(
+                        f"{path}: go tool mygo {command} 不是已知子命令；"
+                        "若 MyGo 新增了命令，先更新 MYGO_COMMANDS"
+                    )
+            for script in LOCAL_SCRIPT.findall(block):
+                if not os.path.exists(os.path.join(ROOT, script)):
+                    problems.append(f"{path}: 命令引用的文件不存在: {script}")
+    return problems
+
+
+def check_dependency_direction(files: list[str]) -> list[str]:
+    """apps/ 之间互不导入，packages/ 不反向依赖 apps/。"""
+    problems = []
+    for path in files:
+        if not path.endswith(".go"):
+            continue
+        parts = path.split("/")
+        if len(parts) < 3 or parts[0] not in {"apps", "packages"}:
+            continue
+        source = open(os.path.join(ROOT, path), encoding="utf-8").read()
+        for line_no, line in enumerate(source.splitlines(), 1):
+            for imported in re.findall(r'"(luvia/[^"]+)"', line):
+                if parts[0] == "apps":
+                    segments = imported.split("/")
+                    if len(segments) > 2 and segments[1] == "apps" and segments[2] != parts[1]:
+                        problems.append(
+                            f"{path}:{line_no}: 导入 {imported}，应用之间不互相依赖"
+                        )
+                elif imported.startswith("luvia/apps/"):
+                    problems.append(
+                        f"{path}:{line_no}: 导入 {imported}，共享模块不得反向依赖应用"
+                    )
+    return problems
+
+
+def check_frontend_files(files: list[str]) -> list[str]:
+    """这个项目的界面是 Go + 原生控件，不引入前端工程链或 WebView。"""
+    problems = []
+    for path in files:
+        if not path.startswith("apps/"):
+            continue
+        name = os.path.basename(path)
+        if name in FRONTEND_FILES or path.endswith(FRONTEND_EXT):
+            problems.append(f"{path}: 前端工程文件；界面用 MyGo 的原生控件实现")
+            continue
+        if not path.endswith(".go"):
+            continue
+        for line_no, line in enumerate(open(os.path.join(ROOT, path), encoding="utf-8"), 1):
+            code = line.split("//", 1)[0]
+            for token in WEBVIEW_TOKENS:
+                if token in code:
+                    problems.append(f"{path}:{line_no}: 出现 {token}，不允许 WebView 与前端绑定")
+    return problems
+
+
+def check_secrets(files: list[str]) -> list[str]:
+    problems = []
+    for path in files:
+        for pattern in SECRET_FILES:
+            if re.search(pattern, path):
+                problems.append(f"{path}: 密钥文件不进版本库")
+        if path.endswith((".png", ".webp", ".icns", ".car", ".zip", ".dmg")):
+            continue
+        try:
+            text = open(os.path.join(ROOT, path), encoding="utf-8").read()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for pattern, why in SECRETS:
+            if re.search(pattern, text):
+                problems.append(f"{path}: 疑似{why}，凭证不进版本库")
+    return problems
+
+
+def check_local_paths(files: list[str]) -> list[str]:
+    """文档与脚本里写死本机路径，换一台机器就失效。"""
+    problems = []
+    for path in files:
+        if path.startswith(".agents/skills/") or path == "scripts/check-rules.py":
+            continue
+        if not path.endswith((".md", ".py", ".sh", ".yml", ".yaml", ".json", ".go", ".toml")):
+            continue
+        for line_no, line in enumerate(open(os.path.join(ROOT, path), encoding="utf-8"), 1):
+            match = LOCAL_PATH.search(line)
+            if match:
+                problems.append(
+                    f"{path}:{line_no}: 写死了本机路径 {match.group(1)}，改用仓库相对路径或临时目录"
+                )
+    return problems
+
+
+def check_sizes(files: list[str]) -> list[str]:
+    problems = []
+    for path in files:
+        full = os.path.join(ROOT, path)
+        size = os.path.getsize(full)
+        if size > MAX_FILE_BYTES and not path.startswith("assets/"):
+            problems.append(f"{path}: {size // 1024} KB，大文件应放 assets/ 或仓库之外")
+        if re.match(r"^apps/[^/]+/main\.go$", path):
+            lines = open(full, encoding="utf-8").read().count("\n")
+            if lines > MAX_ENTRY_LINES:
+                problems.append(
+                    f"{path}: {lines} 行，入口只负责组装；把功能拆到独立文件"
+                )
+    return problems
+
+
+def check_text_hygiene(files: list[str]) -> list[str]:
+    problems = []
+    for path in files:
+        try:
+            raw = open(os.path.join(ROOT, path), "rb").read()
+        except OSError:
+            continue
+        if b"\x00" in raw:
+            continue
+        if b"\r\n" in raw:
+            problems.append(f"{path}: 使用 CRLF，统一为 LF")
+        if raw and not raw.endswith(b"\n"):
+            problems.append(f"{path}: 缺少结尾换行")
+        if path.endswith((".md", ".png", ".webp")):
+            continue
+        for line_no, line in enumerate(raw.split(b"\n"), 1):
+            if line != line.rstrip(b" \t"):
+                problems.append(f"{path}:{line_no}: 行尾有多余空白")
     return problems
 
 

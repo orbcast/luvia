@@ -10,7 +10,7 @@ Luvia 是一个视频播放器项目。仓库按独立应用组织，允许 Go /
 - `apps/luvia-rules` 暂存视频播放器的源规则与资源源，目前仅有 README，尚无规则格式或加载实现，未来随时可能迁移至独立仓库。
 - `apps/README.md` 导航应用与规则目录，`packages/` 仅有复用模块说明，尚无共享代码模块。Swift 等技术栈是未来选项，未创建工程。
 - `docs/` 现有 [文档索引](docs/README.md)、[UI 术语表](docs/terminology.md) 与 [架构决策记录](docs/adr/README.md)；`DESIGN.md` 记录深浅主题配色与 Token，桌面示例尚未接入。
-- 验证入口统一为 `make check`（MyGo vet、Go vet、测试、gofmt、仓库规则、catalogs）；`.githooks/pre-commit` 调用同一入口，CI 按同一组命令分 Linux/macOS 两个作业；`scripts/check-rules.py` 承担可判定的文档与字面量检查。
+- 验证入口统一为 `make check`（MyGo vet、Go vet、测试、gofmt、仓库规则、catalogs）；`.githooks/pre-commit` 调用同一入口，`.githooks/commit-msg` 校验提交标题，CI 分三个作业（Linux 仓库规则、Linux 交叉 vet、macOS 应用检查/覆盖率/竞态/生成物/打包）；`scripts/check-rules.py` 承担 16 项可判定检查，`scripts/check-coverage.py` 统计手写代码覆盖率。
 - 测试：`apps/desktop/main_test.go` 用 `ui.NewTester` 覆盖添加、空白输入、勾选与清理、删除后的顺序，以及界面文案跟随语言。
 - 历史验证记录（不代表本轮重新执行）：`CGO_ENABLED=0 go test ./...`、`go tool mygo vet .`、`go tool mygo build -skip-dmg`（darwin/arm64，产出 `Luvia.app` 约 12 MB，含 `Assets.car`）。
 - 仓库已完成首次 `git init`，尚未配置 remote；后续变更按根目录 `AGENTS.md` 的原子提交约定维护。
@@ -33,7 +33,7 @@ Luvia 是一个视频播放器项目。仓库按独立应用组织，允许 Go /
 ## 已知限制
 
 - 只在 macOS arm64 上验证过构建与测试；Windows/Linux 的打包、签名未验证。
-- CI 定义已入库，但仓库没有 remote，尚未在远端真正运行过；pre-commit 需要每台机器执行一次 `make hooks`。
+- CI 定义已入库，但仓库没有 remote，尚未在远端真正运行过（包括交叉编译、覆盖率门槛与真实打包）；本地证书与公证同样未验证。pre-commit 与 commit-msg 需要每台机器执行一次 `make hooks`。
 - 规则仍有一部分只能靠人判断（职责归属、设计语义、文案是否清晰），`scripts/check-rules.py` 只覆盖可判定的部分，不能当作全部合规的证明。
 - `make icons` 依赖 `dwebp`（`brew install webp`）或带 Pillow 的 `python3`；生成物已入库，日常构建不需要这两个工具。
 - 示例只覆盖基础控件；`ui.List`、`ui.Table`、多窗口、`mygo.WatchFiles` 等尚未出现在示例里。
