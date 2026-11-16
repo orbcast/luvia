@@ -1,0 +1,65 @@
+# 忽略规则只防止误提交，不授权 Agent 在项目中存放工作垃圾。
+# 任务文件、一次性脚手架、下载样本和报告必须使用 OS 临时目录，见 AGENTS.md。
+
+# 当前应用的构建产物（正式资源和图标母版仍需版本管理）
+/apps/*/build/
+/apps/*/.mygo/
+mygo_windows_*.syso
+
+# Swift / Xcode 的本地生成物；保留工程、共享 schemes 与 Package.resolved
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+
+# Python 技能脚本的本地缓存与环境；运行验证应优先使用 python3 -B
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Go 的测试二进制、性能分析和覆盖率输出
+*.test
+*.prof
+coverage.out
+coverage-*.out
+
+# 本地 Agent 状态；正式 .agents/skills/ 和各级 AGENTS.md 必须保留
+/.pi/
+
+# 本机配置与密钥变量；允许提交不含秘密的示例模板
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+!.env.*.example
+!.env.*.template
+!.env.*.sample
+*.local.env
+
+# 编辑器个人状态与临时文件
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统杂项
+.DS_Store
+.AppleDouble/
+._*
+Thumbs.db
+Desktop.ini
+
+# 日志与误建的临时目录（仍须按 AGENTS.md 清理，不是允许放置的位置）
+*.log
+/tmp/
+/.tmp/
