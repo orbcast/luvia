@@ -67,9 +67,12 @@ make dev      # 启动开发版，改 Go 代码后自动重建
 make test     # 跑当前桌面应用的全部测试（不需要窗口）
 make build    # 打包当前平台到 apps/desktop/build/
 make check    # 提交前检查：vet + test + 格式 + 仓库规则 + catalogs
-make rules    # 只跑仓库规则检查（文档、临时产物、AGENTS 预算、字面量）
-make i18n     # 校验多语言 catalogs 与生成结果是否同步
-make hooks    # 启用 .githooks/pre-commit（每个克隆一次）
+make rules    # 只跑仓库规则检查（文档、命令、依赖方向、密钥、字面量）
+make i18n     # 校验 catalogs 的占位符与复数形式（译文完整性由 make rules 拦）
+make cover    # 语句覆盖率门槛，生成代码不计（CI 执行）
+make race     # 竞态检测（CI 执行）
+make check-gen # 确认生成代码与 catalogs 一致（CI 执行）
+make hooks    # 启用 pre-commit 与 commit-msg（每个克隆一次）
 make icons-check  # 校验 assets/ui-icons 的 Solar 图标（尚无图标时跳过）
 make icons    # 改了图标母版后同步到应用
 make doctor   # 检查环境
@@ -93,7 +96,7 @@ make skills   # 更新 .agents/skills
 
 ## 检查与提交
 
-`make check` 是提交前唯一需要记住的入口：MyGo vet、Go vet、测试、gofmt、仓库规则（`scripts/check-rules.py`）与 catalogs 校验。`.githooks/pre-commit` 调用它，首次克隆后执行一次 `make hooks` 启用；CI 用同一组命令，文档规则在 Linux 上跑、应用检查在 macOS 上跑。检查失败时修代码或修脚本，不用 `--no-verify` 绕过。设计取向与检查边界见 [ADR 0006](docs/adr/0006-verification-gates.md)，决策清单见 [docs/adr/](docs/adr/README.md)。
+`make check` 是提交前唯一需要记住的入口：MyGo vet、Go vet、测试、gofmt、仓库规则（`scripts/check-rules.py` 的 16 项可判定检查）与 catalogs 校验。仓库规则不只查文档，还查文档代码块里的命令是否真实存在、apps 之间是否互相导入、有没有引入前端工程文件或 WebView 绑定、有没有私钥与本机路径、入口 `main.go` 是否超过 300 行。`.githooks/pre-commit` 调用 `make check`，`.githooks/commit-msg` 校验 `type(scope): 简述` 与 scope 白名单，首次克隆后执行一次 `make hooks` 同时启用两者。CI 分三个作业：Linux 跑仓库规则与 Windows/Linux 交叉 vet，macOS 跑 `make check`、覆盖率门槛（`make cover`，生成代码不计，当前 89.1%）、竞态检测（`make race`）、生成物同步（`make check-gen`）与真实打包（`make build`）。检查失败时修代码或修脚本，不用 `--no-verify` 绕过。设计取向与检查边界见 [ADR 0006](docs/adr/0006-verification-gates.md)，决策清单见 [docs/adr/](docs/adr/README.md)。
 
 仓库目前没有配置 remote，CI 定义尚未在远端真正运行过；本地能验证的是 `make check` 与钩子本身。
 

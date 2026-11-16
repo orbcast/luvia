@@ -31,3 +31,26 @@ jobs:
           cache-dependency-path: apps/desktop/go.sum
       - name: Check app
         run: make check
+      - name: Check coverage
+        run: make cover
+      - name: Check races
+        run: make race
+      - name: Check generated code
+        run: make check-gen
+      - name: Build the app
+        run: make build
+
+  cross:
+    name: cross build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - name: Vet for Windows and Linux
+        run: |
+          cd apps/desktop
+          CGO_ENABLED=0 GOOS=windows go vet ./...
+          CGO_ENABLED=0 GOOS=linux go vet ./...

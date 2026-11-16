@@ -57,7 +57,7 @@
 
 - Go 代码修改时先跑定向测试；每个可交付步骤完成后，在本目录执行 `CGO_ENABLED=0 go test ./...` 与 `go tool mygo vet .`。纯文档修改免跑应用检查；小幅外观修改保留已有无窗口测试和静态检查，不默认新增复杂 UI 测试。
 - 业务、接口或结构性代码改动增加 `go vet ./...`；共享状态、并发或后台任务改动增加 `go test -race ./...`，race 检查不能设置 `CGO_ENABLED=0`。
-- 根目录 `make test` 默认检查本应用，`make check` 汇总 vet、test、格式、仓库规则与 catalogs 校验；`.githooks/pre-commit` 与 CI 调用同一入口。已在相同代码状态通过的同等检查不重复执行。这些命令不自动检查其他应用或共享模块。
+- 根目录 `make test` 默认检查本应用，`make check` 汇总 vet、test、格式、仓库规则与 catalogs 校验；覆盖率用 `make cover`（生成代码不计，门槛 80%），竞态用 `make race`；`.githooks/pre-commit` 与 CI 调用同一入口。已在相同代码状态通过的同等检查不重复执行。这些命令不自动检查其他应用或共享模块。
 - 仅在明确渲染/平台风险、大范围布局/主题变更或用户要求时，用根目录 `make dev` 启动应用，验证受影响场景并结束本次启动的进程。不默认执行多尺寸截图和完整 GUI 回归。
 - 打包、资源、发布或原生集成相关改动按需执行根目录 `make build`；产物在 `apps/desktop/build/<平台>/`。无法验证的平台和检查必须说明。
 

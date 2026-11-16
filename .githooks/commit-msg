@@ -1,0 +1,31 @@
+#!/bin/sh
+# 提交信息规范：type(scope): 简述，scope 限定在仓库的模块名里。
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+message_file=$1
+subject=$(sed -n '1p' "$message_file")
+
+case "$subject" in
+	Merge* | Revert*) exit 0 ;;
+esac
+
+if ! printf '%s' "$subject" | grep -Eq \
+	'^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([a-z0-9-]+\))?: .{2,}$'; then
+	echo "commit-msg: 标题应为 type(scope): 简述，例如 fix(repo): 修正文档断链" >&2
+	exit 1
+fi
+
+scope=$(printf '%s' "$subject" | sed -nE 's/^[a-z]+\(([a-z0-9-]+)\):.*/\1/p')
+if [ -n "$scope" ]; then
+	case " repo desktop agents docs rules app packages " in
+	*" $scope "*) ;;
+	*)
+		echo "commit-msg: scope 应为 repo/desktop/agents/docs/rules/app/packages，收到 $scope" >&2
+		exit 1
+		;;
+	esac
+fi
+
+case "$subject" in
+*。 | *.) echo "commit-msg: 标题结尾不加句号" >&2 && exit 1 ;;
+esac
