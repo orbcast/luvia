@@ -111,7 +111,7 @@ func openProfile(userData, cache string) profile {
 	}
 	images := media.New(filepath.Join(cache, "artwork"), http.DefaultClient)
 
-	rules := loader.DefaultDir(filepath.Join(userData, "rules"), filepath.Join(resourceDir(), "rules"))
+	rules := loader.DefaultDir(filepath.Join(userData, "rules"), filepath.Join(resourceDir(), "luvia-rules"))
 	set, err := loader.Load(rules, engine.Options{Client: http.DefaultClient})
 	if err != nil {
 		log.Printf("rules %s: %v", rules, err)

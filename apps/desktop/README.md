@@ -28,7 +28,7 @@ Solar 图标母版及来源清单位于 [assets/ui-icons/solar](../../assets/ui-
 
 解析层分四个包：`internal/source` 定义契约、`Ref` 与错误分类，不依赖 HTTP；`internal/source/rule` 严格解码并校验规则；`internal/source/engine` 执行请求、签名、翻页、字段映射和线路兑换；`internal/source/loader` 扫描目录、跳过坏规则并收集诊断，支持热重载。引擎不缓存、不聚合，也不自动续期直链。
 
-规则目录按 `LUVIA_RULES_DIR`、用户数据目录的 `rules/`、应用包内 `Resources/rules/` 的顺序解析；开发态指向仓库里的 `apps/luvia-rules`。规则来自运行时文件，不编译进二进制，因此拆仓后无需改代码。
+规则目录按 `LUVIA_RULES_DIR`、用户数据目录的 `rules/`、应用包内 `Resources/luvia-rules/` 的顺序解析；开发态指向仓库里的 `apps/luvia-rules`，`mygo.json` 的 `resources` 把该仓库目录原样复制进应用包，因此 `make dev` 与 `make build` 的产物都自带规则。规则来自运行时文件，不编译进二进制，因此拆仓后无需改代码。
 
 `make rules-verify` 用规则自带的 `fixtures/` 离线跑通每个源，不访问真实上游；这条通路同时用一份 `maccms` 形状的假上游证明 DSL 不是为单一站点定制的。
 
@@ -58,4 +58,4 @@ trap 'kill "$app_pid" 2>/dev/null || true; rm -rf "$run_dir"' EXIT
 
 从仓库根目录运行 `make dev` 启动：它会把 `LUVIA_RULES_DIR` 指向仓库内的 `apps/luvia-rules` 并打印实际目录，因此开发版开箱即可读到 kanju 源；用 `LUVIA_RULES_DIR=... make dev` 可以换成别的规则目录。`make check` 执行静态检查、无窗口行为测试、图标生成器及覆盖率脚本测试及仓库规则，`make cover` 检查手写 Go 覆盖率，`make race` 检查竞态，`make icons-check` 校验 Solar 来源与 SVG。`make check-gen` 在干净检出上确认 catalogs 和图标生成物同步；提交前执行 `make hooks` 安装钩子。
 
-`make build` 打包当前平台，产物在 `build/`。无窗口测试不证明 GPU 材质、系统菜单或其他平台渲染正确，涉及这些边界的变化需做对应原生验证。技术规则见 [AGENTS.md](AGENTS.md)，设计取舍见 [ADR 0007](../../docs/adr/0007-desktop-shell.md)。
+`make build` 打包当前平台并把 `apps/luvia-rules` 内置为应用包资源，产物在 `build/`；打包后的应用不依赖环境变量即可读到源规则，用户数据目录的 `rules/` 或 `LUVIA_RULES_DIR` 仍可覆盖。无窗口测试不证明 GPU 材质、系统菜单或其他平台渲染正确，涉及这些边界的变化需做对应原生验证。技术规则见 [AGENTS.md](AGENTS.md)，设计取舍见 [ADR 0007](../../docs/adr/0007-desktop-shell.md)。
