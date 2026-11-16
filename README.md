@@ -20,7 +20,8 @@ apps/                  独立应用，可使用不同语言和工程形式
     AGENTS.md           Go/MyGo 专属编码与测试约束
     main.go             状态 + view + 窗口
     main_test.go        用 ui.NewTester 跑的界面测试
-    mygo.json           应用名、identifier、版本、图标、产物目录
+    locales/            多语言 catalogs（en 源语言 + zh-Hans）与生成的 Go 文案函数
+    mygo.json           应用名、identifier、版本、图标、产物目录、catalogs 目录
     AppIcon.icon/       macOS 图标文档（macos.icon）：系统遮罩 + 矢量标志
     resources/icon.png      通用图标（Windows/Linux/开发版，黑色超椭圆）
     build/              打包产物（已忽略）
@@ -32,8 +33,12 @@ assets/                跨端共享的正式品牌与界面素材母版，禁止
   README.md            素材归属、格式与生成说明
   icons/               图标源文件（矢量 SVG + 无损 WebP）+ 说明
 scripts/icons.sh        图标母版 → 当前桌面应用图标文件（make icons）
+scripts/check-rules.py  仓库规则检查：临时产物、文档链接与索引、AGENTS 预算、文案与配色字面量
+.githooks/pre-commit    提交前跑 make check（克隆后执行一次 make hooks 启用）
+.github/workflows/ci.yml CI：文档规则在 Linux、应用检查在 macOS 上执行
 docs/                  Agent 与人类共同参考的正式专题文档
   README.md            文档归属、索引、查阅与维护约定
+  adr/                 架构决策记录：为什么这样定、代价与重新评估条件
 .agents/skills/         智能体技能（MyGo 维护与原生模块、通用 Iconify 脚本）
 AGENTS.md               跨应用治理、解耦、设计同步、临时目录与风险分级测试
 DESIGN.md               深浅主题语义 Token、配色与跨应用设计同步规范
@@ -61,7 +66,11 @@ Makefile                当前 MyGo 桌面应用的开发、测试、打包入�
 make dev      # 启动开发版，改 Go 代码后自动重建
 make test     # 跑当前桌面应用的全部测试（不需要窗口）
 make build    # 打包当前平台到 apps/desktop/build/
-make check    # 提交前检查：vet + test + gofmt
+make check    # 提交前检查：vet + test + 格式 + 仓库规则 + catalogs
+make rules    # 只跑仓库规则检查（文档、临时产物、AGENTS 预算、字面量）
+make i18n     # 校验多语言 catalogs 与生成结果是否同步
+make hooks    # 启用 .githooks/pre-commit（每个克隆一次）
+make icons-check  # 校验 assets/ui-icons 的 Solar 图标（尚无图标时跳过）
 make icons    # 改了图标母版后同步到应用
 make doctor   # 检查环境
 make skills   # 更新 .agents/skills
@@ -78,7 +87,15 @@ make skills   # 更新 .agents/skills
 - 每行可删除；“清除已完成”批量清理。删除要等这一帧构建结束再执行，避免遍历时下标错位。
 - 没有任务时显示空状态文案。
 
+界面文案全部来自 `apps/desktop/locales/`（英文源语言加简体中文），窗口标题与页头的品牌名 `Luvia` 除外。新增或修改文案时改 catalogs 后跑 `make i18n` 与 `go tool mygo generate`，流程见 [ADR 0005](docs/adr/0005-localized-messages.md)。
+
 `apps/desktop/main_test.go` 演示了不开窗口的测试：`ui.NewTester` 点击、输入、按 Enter，然后断言界面文案和 `app` 字段。
+
+## 检查与提交
+
+`make check` 是提交前唯一需要记住的入口：MyGo vet、Go vet、测试、gofmt、仓库规则（`scripts/check-rules.py`）与 catalogs 校验。`.githooks/pre-commit` 调用它，首次克隆后执行一次 `make hooks` 启用；CI 用同一组命令，文档规则在 Linux 上跑、应用检查在 macOS 上跑。检查失败时修代码或修脚本，不用 `--no-verify` 绕过。设计取向与检查边界见 [ADR 0006](docs/adr/0006-verification-gates.md)，决策清单见 [docs/adr/](docs/adr/README.md)。
+
+仓库目前没有配置 remote，CI 定义尚未在远端真正运行过；本地能验证的是 `make check` 与钩子本身。
 
 ## 写自己的界面
 
@@ -99,12 +116,19 @@ make skills   # 更新 .agents/skills
   "identifier": "com.example.luvia",
   "version": "0.1.0",
   "out": "build",
+  "i18n": {
+    "dir": "locales",
+    "source": "en"
+  },
   "icon": "resources/icon.png",
-  "macos": { "icon": "AppIcon.icon" }
+  "macos": {
+    "icon": "AppIcon.icon"
+  }
 }
 ```
 
 - `identifier` 决定应用数据目录与单实例身份，正式使用前改成自己的反向域名；改名会让旧数据目录失效。
+- `i18n.dir` 指向 catalogs 目录，`source` 是源语言；改这两项会改变生成代码与语言回退行为。
 - 原生界面应用不需要 `mygo.config.ts`，也不需要 Node 工具链。
 
 ### 图标
