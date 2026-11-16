@@ -1,0 +1,16 @@
+{
+  "id": "sample-series",
+  "title": "示例剧集",
+  "content_kind": "short_drama",
+  "year": 2023,
+  "area": "内地",
+  "genres": ["悬疑", "短剧"],
+  "description": "一段用于验证规则映射的简介。",
+  "poster_url": "https://cdn.example/poster-series.jpg",
+  "backdrop_url": "https://cdn.example/backdrop-series.jpg",
+  "remarks": "更新至 3 集",
+  "actors": ["演员甲", "演员乙"],
+  "directors": ["导演丙"],
+  "episode_count": 3,
+  "total_episode_count": 3
+}

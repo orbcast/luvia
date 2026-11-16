@@ -1,0 +1,14 @@
+{
+  "episodes": [
+    { "id": "ep-2", "token": "token-2", "number": 2 },
+    { "id": "ep-3", "token": "token-3", "number": 3, "title": "收束" }
+  ],
+  "episode_count": 3,
+  "episode_pagination": {
+    "has_more": false,
+    "limit": 200,
+    "offset": 200,
+    "returned_count": 2,
+    "total_count": 3
+  }
+}

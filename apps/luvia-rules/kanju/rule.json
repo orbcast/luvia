@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "id": "kanju",
+  "name": "看剧",
+  "baseURL": "https://kanju1.com",
+  "http": {
+    "timeoutMs": 30000,
+    "retries": 2,
+    "concurrency": 4,
+    "maxPages": 20,
+    "headers": [
+      { "name": "Accept", "value": "application/json" },
+      { "name": "Origin", "value": "https://kanju1.com" },
+      { "name": "Referer", "value": "https://kanju1.com/" },
+      { "name": "User-Agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" },
+      { "name": "x-ai-movie-client-name", "value": "dianyingtiantang-frontend" },
+      { "name": "x-ai-movie-client-version", "value": "1.0.0" },
+      { "name": "x-ai-movie-build-version", "value": "dianyingtiantang-v2026.11.06.2-search-header-f6f73501a448-web" },
+      { "name": "x-ai-movie-protocol-version", "value": "2026-07-05.library-v2.playback-v1" },
+      { "name": "x-ai-movie-site-host", "value": "kanju1.com" }
+    ]
+  },
+  "sign": {
+    "secret": "${env:KANJU_SECRET}",
+    "message": "{method}\n{path}\n{timestamp}\n{nonce}",
+    "timestampUnit": "ms",
+    "nonceBytes": 16,
+    "headers": [
+      { "name": "x-ai-movie-timestamp", "value": "{timestamp}" },
+      { "name": "x-ai-movie-nonce", "value": "{nonce}" },
+      { "name": "x-ai-movie-signature", "value": "{signature}" }
+    ]
+  },
+  "home": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/v1/feed/home",
+        "query": [
+          { "key": "scope", "value": "public" },
+          { "key": "mode", "value": "preview" },
+          { "key": "sections", "value": "6" },
+          { "key": "cards", "value": "12" }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res.sections[*]",
+      "fields": {
+        "id": "id",
+        "title": "title",
+        "subtitle": "subtitle"
+      },
+      "cards": {
+        "from": "cards[*]",
+        "fields": {
+          "id": "id",
+          "title": "title",
+          "kind": "content_kind",
+          "year": "year",
+          "area": "area",
+          "tags": "genres",
+          "remarks": "remarks",
+          "posterUrl": "poster_url",
+          "backdropUrl": "backdrop_url"
+        }
+      }
+    }
+  },
+  "list": {
+    "kindValues": {
+      "movie": "movie",
+      "series": "series",
+      "anime": "anime",
+      "variety": "variety"
+    },
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/v1/browse/catalog",
+        "query": [
+          { "key": "q", "value": "{keyword}" },
+          { "key": "page", "value": "{page}" },
+          { "key": "limit", "value": "24" },
+          { "key": "kind", "value": "{kind}" },
+          { "key": "intent", "value": "latest_catalog" }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res",
+      "page": "res.pagination.page",
+      "hasMore": "res.pagination.has_more",
+      "cards": {
+        "from": "res.cards[*]",
+        "fields": {
+          "id": "id",
+          "title": "title",
+          "kind": "content_kind",
+          "year": "year",
+          "area": "area",
+          "tags": "genres",
+          "remarks": "remarks",
+          "posterUrl": "poster_url",
+          "backdropUrl": "backdrop_url"
+        }
+      }
+    }
+  },
+  "detail": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/v1/catalog/{id}"
+      }
+    ],
+    "output": {
+      "from": "res",
+      "fields": {
+        "id": "id",
+        "title": "title",
+        "kind": "content_kind",
+        "year": "year",
+        "area": "area",
+        "tags": "genres",
+        "overview": "description",
+        "posterUrl": "poster_url",
+        "backdropUrl": "backdrop_url",
+        "remarks": "remarks",
+        "actors": "actors",
+        "directors": "directors",
+        "episodeCount": { "fn": "int", "args": [{ "fn": "coalesce", "args": ["total_episode_count", "episode_count"] }] }
+      }
+    }
+  },
+  "episodes": {
+    "steps": [
+      {
+        "op": "paginate",
+        "as": "pages",
+        "mode": "offset",
+        "size": 200,
+        "maxPages": 20,
+        "path": "/v1/catalog/{id}/episodes",
+        "query": [
+          { "key": "limit", "value": "200" },
+          { "key": "offset", "value": "{offset}" }
+        ],
+        "items": "episodes[*]",
+        "hasMore": "episode_pagination.has_more"
+      }
+    ],
+    "output": {
+      "from": "pages[*]",
+      "fields": {
+        "id": "id",
+        "number": "number",
+        "title": "title",
+        "payload": "token"
+      }
+    }
+  },
+  "resolve": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/v1/playback/resolve/{payload}"
+      }
+    ],
+    "lines": {
+      "from": "res.line_options[*]",
+      "fields": {
+        "id": { "fn": "coalesce", "args": ["playback_source_id", "id"] },
+        "label": { "fn": "coalesce", "args": ["label", "display_label", "provider_name"] },
+        "urlKind": "url_kind",
+        "url": "url",
+        "ticket": "resolve_ticket",
+        "default": "selected"
+      },
+      "exchange": {
+        "ticket": "ticket",
+        "request": {
+          "method": "POST",
+          "path": "/v1/playback/resolve-line",
+          "query": [{ "key": "view", "value": "compact" }],
+          "body": { "ticket": { "template": "{ticket}" } }
+        },
+        "url": "line.url",
+        "urlKind": "line.url_kind"
+      },
+      "maxAttempts": 12,
+      "preferUrlKind": "mp4"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "line_options": [
+    {
+      "playback_source_id": "line-hls",
+      "id": "provider-hls",
+      "label": "线路一",
+      "display_label": "线路一（备用）",
+      "provider_name": "云播",
+      "provider_id": "provider-hls",
+      "url": "resolve://ticket-hls",
+      "url_kind": "hls",
+      "resolve_mode": "ticket",
+      "resolve_ticket": "ticket-hls",
+      "selected": true
+    },
+    {
+      "playback_source_id": "line-mp4",
+      "id": "provider-mp4",
+      "label": "线路二",
+      "display_label": "线路二",
+      "provider_name": "直连",
+      "provider_id": "provider-mp4",
+      "url": "resolve://ticket-mp4",
+      "url_kind": "mp4",
+      "resolve_mode": "ticket",
+      "resolve_ticket": "ticket-mp4",
+      "selected": false
+    }
+  ]
+}

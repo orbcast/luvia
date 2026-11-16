@@ -15,6 +15,7 @@
 
 - `main.go` 只负责入口、平台 API 与依赖组装。`internal/appshell/` 放导航、菜单和主题，`internal/appwindow/` 放主窗口生命周期，`internal/preferences/` 放主题偏好读写；不把实现持续堆进入口。
 - 复杂功能按需放入 `internal/<feature>/`；目前不预建目录、空接口或通用框架。业务规则、用例与 I/O 适配按实际需要拆分，业务核心不依赖 `ui.Context`、`ui.Element` 或窗口。
+- 源规则解析层固定为 `internal/source`（契约与错误分类）、`internal/source/rule`（规则解码与校验）、`internal/source/engine`（解释器与 HTTP）、`internal/source/loader`（目录扫描与诊断），依赖单向；上游名称、密钥与端点只出现在 `apps/luvia-rules` 的规则数据里，不写进 desktop 源码。规则格式见 [docs/rule-dsl.md](../../docs/rule-dsl.md)。
 - 行为测试集中在 `tests/`，通过生产包的公开接口验证；不在生产目录混放测试。夹具按需放 `tests/testdata/`，不把测试专用辅助逻辑塞进生产代码。
 - `mygo.json`、`resources/`、`AppIcon.icon/` 放本端配置与资源，不放业务逻辑。共享素材遵循 [assets/README.md](../../assets/README.md)，已确认复用的能力遵循 [packages/README.md](../../packages/README.md)。
 

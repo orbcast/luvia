@@ -1,0 +1,28 @@
+{
+  "cards": [
+    {
+      "id": "sample-movie",
+      "title": "示例电影",
+      "content_kind": "movie",
+      "year": 2024,
+      "area": "内地",
+      "genres": ["剧情"],
+      "poster_url": "https://cdn.example/poster-movie.jpg",
+      "remarks": "HD"
+    },
+    {
+      "id": "sample-doc",
+      "title": "示例纪录片",
+      "content_kind": "documentary",
+      "year": 2021,
+      "area": "英国",
+      "genres": ["纪录"],
+      "poster_url": "https://cdn.example/poster-doc.jpg",
+      "remarks": "全 6 集"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "has_more": true
+  }
+}
