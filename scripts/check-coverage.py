@@ -23,8 +23,7 @@ def main() -> int:
     parser.add_argument("--min", type=float, default=80.0)
     args = parser.parse_args()
 
-    per_file: dict[str, list[int]] = {}
-    total = covered = 0
+    blocks: dict[str, tuple[int, bool]] = {}
     with open(args.profile, encoding="utf-8") as profile:
         header = profile.readline().strip()
         if not header.startswith("mode:"):
@@ -39,12 +38,24 @@ def main() -> int:
             if GENERATED.search(path):
                 continue
             size, hits = int(statements), int(count)
-            total += size
-            per_file.setdefault(path, [0, 0])
-            per_file[path][0] += size
-            if hits > 0:
-                covered += size
-                per_file[path][1] += size
+            # -coverpkg profiles can repeat a block for multiple test binaries.
+            # Count each source range once, covered when any binary exercised it.
+            previous = blocks.get(location, (size, False))
+            if previous[0] != size:
+                print(f"check-coverage: {location} 语句数量冲突", file=sys.stderr)
+                return 1
+            blocks[location] = (size, previous[1] or hits > 0)
+
+    per_file: dict[str, list[int]] = {}
+    total = covered = 0
+    for location, (size, hit) in blocks.items():
+        path = location.split(":")[0]
+        total += size
+        per_file.setdefault(path, [0, 0])
+        per_file[path][0] += size
+        if hit:
+            covered += size
+            per_file[path][1] += size
 
     if not total:
         print("check-coverage: 没有统计到任何语句", file=sys.stderr)

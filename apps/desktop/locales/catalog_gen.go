@@ -34,102 +34,212 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
-// NewTaskLabel says "New task"
+// Discover says "Discover"
 // in the language the app shows.
 //
-// Label of the input that adds a task.
-func NewTaskLabel() string { return In(i18n.Locale()).NewTaskLabel() }
+// Discovery navigation destination
+func Discover() string { return In(i18n.Locale()).Discover() }
 
-// NewTaskLabel says "New task"
+// Discover says "Discover"
 // in the language of msgs.
 //
-// Label of the input that adds a task.
-func (msgs Messages) NewTaskLabel() string {
-	return Catalog.Format(msgs.locale, "newTaskLabel", nil)
+// Discovery navigation destination
+func (msgs Messages) Discover() string {
+	return Catalog.Format(msgs.locale, "discover", nil)
 }
 
-// NewTaskPlaceholder says "Type something, then press Enter"
+// Library says "Library"
 // in the language the app shows.
 //
-// Placeholder of the input that adds a task.
-func NewTaskPlaceholder() string { return In(i18n.Locale()).NewTaskPlaceholder() }
+// Media library navigation destination
+func Library() string { return In(i18n.Locale()).Library() }
 
-// NewTaskPlaceholder says "Type something, then press Enter"
+// Library says "Library"
 // in the language of msgs.
 //
-// Placeholder of the input that adds a task.
-func (msgs Messages) NewTaskPlaceholder() string {
-	return Catalog.Format(msgs.locale, "newTaskPlaceholder", nil)
+// Media library navigation destination
+func (msgs Messages) Library() string {
+	return Catalog.Format(msgs.locale, "library", nil)
 }
 
-// Add says "Add"
+// Following says "Following"
 // in the language the app shows.
 //
-// Button that adds the task typed in the input.
-func Add() string { return In(i18n.Locale()).Add() }
+// Followed shows navigation destination
+func Following() string { return In(i18n.Locale()).Following() }
 
-// Add says "Add"
+// Following says "Following"
 // in the language of msgs.
 //
-// Button that adds the task typed in the input.
-func (msgs Messages) Add() string {
-	return Catalog.Format(msgs.locale, "add", nil)
+// Followed shows navigation destination
+func (msgs Messages) Following() string {
+	return Catalog.Format(msgs.locale, "following", nil)
 }
 
-// ClearDone says "Clear done"
+// Search says "Search"
 // in the language the app shows.
 //
-// Button that removes every task already checked off.
-func ClearDone() string { return In(i18n.Locale()).ClearDone() }
+// Search navigation destination
+func Search() string { return In(i18n.Locale()).Search() }
 
-// ClearDone says "Clear done"
+// Search says "Search"
 // in the language of msgs.
 //
-// Button that removes every task already checked off.
-func (msgs Messages) ClearDone() string {
-	return Catalog.Format(msgs.locale, "clearDone", nil)
+// Search navigation destination
+func (msgs Messages) Search() string {
+	return Catalog.Format(msgs.locale, "search", nil)
 }
 
-// Summary says "{total, plural, one {# task} other {# tasks}} · {open} open"
+// Settings says "Settings"
 // in the language the app shows.
 //
-// Count of tasks above the list: how many there are and how many are still
-// open.
-func Summary(total int, open int) string { return In(i18n.Locale()).Summary(total, open) }
+// Settings navigation destination
+func Settings() string { return In(i18n.Locale()).Settings() }
 
-// Summary says "{total, plural, one {# task} other {# tasks}} · {open} open"
+// Settings says "Settings"
 // in the language of msgs.
 //
-// Count of tasks above the list: how many there are and how many are still
-// open.
-func (msgs Messages) Summary(total int, open int) string {
-	return Catalog.Format(msgs.locale, "summary", map[string]any{"total": total, "open": open})
+// Settings navigation destination
+func (msgs Messages) Settings() string {
+	return Catalog.Format(msgs.locale, "settings", nil)
 }
 
-// Empty says "No tasks yet."
+// Navigation says "Main navigation"
 // in the language the app shows.
 //
-// Shown in place of the list when there is no task.
-func Empty() string { return In(i18n.Locale()).Empty() }
+// Accessible name for the app navigation region
+func Navigation() string { return In(i18n.Locale()).Navigation() }
 
-// Empty says "No tasks yet."
+// Navigation says "Main navigation"
 // in the language of msgs.
 //
-// Shown in place of the list when there is no task.
-func (msgs Messages) Empty() string {
-	return Catalog.Format(msgs.locale, "empty", nil)
+// Accessible name for the app navigation region
+func (msgs Messages) Navigation() string {
+	return Catalog.Format(msgs.locale, "navigation", nil)
 }
 
-// Delete says "Delete"
+// ViewMenu says "View"
 // in the language the app shows.
 //
-// Button of a row that removes that task.
-func Delete() string { return In(i18n.Locale()).Delete() }
+// System menu containing navigation and display preferences
+func ViewMenu() string { return In(i18n.Locale()).ViewMenu() }
 
-// Delete says "Delete"
+// ViewMenu says "View"
 // in the language of msgs.
 //
-// Button of a row that removes that task.
-func (msgs Messages) Delete() string {
-	return Catalog.Format(msgs.locale, "delete", nil)
+// System menu containing navigation and display preferences
+func (msgs Messages) ViewMenu() string {
+	return Catalog.Format(msgs.locale, "viewMenu", nil)
+}
+
+// Appearance says "Appearance"
+// in the language the app shows.
+//
+// Theme preference submenu
+func Appearance() string { return In(i18n.Locale()).Appearance() }
+
+// Appearance says "Appearance"
+// in the language of msgs.
+//
+// Theme preference submenu
+func (msgs Messages) Appearance() string {
+	return Catalog.Format(msgs.locale, "appearance", nil)
+}
+
+// Language says "Language"
+// in the language the app shows.
+//
+// Application language submenu
+func Language() string { return In(i18n.Locale()).Language() }
+
+// Language says "Language"
+// in the language of msgs.
+//
+// Application language submenu
+func (msgs Messages) Language() string {
+	return Catalog.Format(msgs.locale, "language", nil)
+}
+
+// FollowSystem says "Follow System"
+// in the language the app shows.
+//
+// Use the operating system theme or language preference
+func FollowSystem() string { return In(i18n.Locale()).FollowSystem() }
+
+// FollowSystem says "Follow System"
+// in the language of msgs.
+//
+// Use the operating system theme or language preference
+func (msgs Messages) FollowSystem() string {
+	return Catalog.Format(msgs.locale, "followSystem", nil)
+}
+
+// Light says "Light"
+// in the language the app shows.
+//
+// Light theme preference
+func Light() string { return In(i18n.Locale()).Light() }
+
+// Light says "Light"
+// in the language of msgs.
+//
+// Light theme preference
+func (msgs Messages) Light() string {
+	return Catalog.Format(msgs.locale, "light", nil)
+}
+
+// Dark says "Dark"
+// in the language the app shows.
+//
+// Dark theme preference
+func Dark() string { return In(i18n.Locale()).Dark() }
+
+// Dark says "Dark"
+// in the language of msgs.
+//
+// Dark theme preference
+func (msgs Messages) Dark() string {
+	return Catalog.Format(msgs.locale, "dark", nil)
+}
+
+// English says "English"
+// in the language the app shows.
+//
+// English language preference
+func English() string { return In(i18n.Locale()).English() }
+
+// English says "English"
+// in the language of msgs.
+//
+// English language preference
+func (msgs Messages) English() string {
+	return Catalog.Format(msgs.locale, "english", nil)
+}
+
+// SimplifiedChinese says "Simplified Chinese"
+// in the language the app shows.
+//
+// Simplified Chinese language preference
+func SimplifiedChinese() string { return In(i18n.Locale()).SimplifiedChinese() }
+
+// SimplifiedChinese says "Simplified Chinese"
+// in the language of msgs.
+//
+// Simplified Chinese language preference
+func (msgs Messages) SimplifiedChinese() string {
+	return Catalog.Format(msgs.locale, "simplifiedChinese", nil)
+}
+
+// SettingsMenu says "Settings…"
+// in the language the app shows.
+//
+// Application menu command opening the settings destination
+func SettingsMenu() string { return In(i18n.Locale()).SettingsMenu() }
+
+// SettingsMenu says "Settings…"
+// in the language of msgs.
+//
+// Application menu command opening the settings destination
+func (msgs Messages) SettingsMenu() string {
+	return Catalog.Format(msgs.locale, "settingsMenu", nil)
 }

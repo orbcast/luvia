@@ -18,5 +18,6 @@
 - [0004 界面图标与品牌图标分离](0004-interface-and-brand-icons.md)
 - [0005 多语言 catalogs 与文案测试](0005-localized-messages.md)
 - [0006 验证闸门：make check、pre-commit 与 CI](0006-verification-gates.md)
+- [0007 桌面框架与应用内职责分层](0007-desktop-shell.md)
 
 新增决策时在本列表补一行，写完跑 `make rules` 确认索引、文件名和链接都在。

@@ -2,7 +2,7 @@
 
 Luvia 是一个视频播放器项目，按独立应用和共享能力组织代码，允许各应用选择适合自身需求的语言与框架，例如 Go / MyGo 或 Swift / SwiftUI。共同治理原则见根目录 [AGENTS.md](AGENTS.md)，技术专属约束由各应用维护；正式架构、功能、契约与指南文档统一由 [docs/README.md](docs/README.md) 导航，供 Agent 与人类共同参考。
 
-当前可运行代码仍是一个 Go + [MyGo](https://mygo.run) 桌面待办示例，尚未实现视频播放，演示状态、输入、列表、空状态和无窗口测试。该应用采用 MyGo 自绘的原生 UI，不加载网页、不使用 WebView；目前没有 Swift 工程。应用导航与新增应用约定见 [apps/README.md](apps/README.md)，桌面使用说明见 [apps/desktop/README.md](apps/desktop/README.md)。以下环境、命令和 MyGo 开发说明均针对当前桌面应用。
+当前可运行代码是 Go + [MyGo](https://mygo.run) 桌面框架，已实现左侧导航、原生窗口顶栏、系统菜单、主题和语言选择，业务内容留空，尚未实现视频播放。该应用采用 MyGo 自绘的原生 UI，不加载网页、不使用 WebView；目前没有 Swift 工程。应用导航与新增应用约定见 [apps/README.md](apps/README.md)，桌面使用说明见 [apps/desktop/README.md](apps/desktop/README.md)。以下环境、命令和 MyGo 开发说明均针对当前桌面应用。
 
 ## 环境要求
 
@@ -18,8 +18,11 @@ apps/                  独立应用，可使用不同语言和工程形式
   desktop/              MyGo 桌面应用（Go module，独立构建与发布）
     README.md           本端环境、命令与平台说明
     AGENTS.md           Go/MyGo 专属编码与测试约束
-    main.go             状态 + view + 窗口
-    main_test.go        用 ui.NewTester 跑的界面测试
+    main.go             入口、平台 API 与依赖组装
+    internal/appshell/  应用Tabbar、菜单与设计 Token
+    internal/appwindow/ 主窗口关闭与重新激活
+    internal/preferences/ 主题偏好读写
+    tests/              独立的行为测试，通过公开接口验证实现
     locales/            多语言 catalogs（en 源语言 + zh-Hans）与生成的 Go 文案函数
     mygo.json           应用名、identifier、版本、图标、产物目录、catalogs 目录
     AppIcon.icon/       macOS 图标文档（macos.icon）：系统遮罩 + 矢量标志
@@ -31,7 +34,8 @@ packages/              确有多个消费者的可复用模块，按语言选择
   README.md            模块归属、依赖边界与验证说明
 assets/                跨端共享的正式品牌与界面素材母版，禁止临时工作产物
   README.md            素材归属、格式与生成说明
-  icons/               图标源文件（矢量 SVG + 无损 WebP）+ 说明
+  icons/               品牌图标源文件（矢量 SVG + 无损 WebP）+ 说明
+  ui-icons/solar/      导航 Solar Linear SVG 母版与来源清单
 scripts/icons.sh        图标母版 → 当前桌面应用图标文件（make icons）
 scripts/check-rules.py  仓库规则检查：临时产物、文档链接与索引、AGENTS 预算、文案与配色字面量
 .githooks/pre-commit    提交前跑 make check（克隆后执行一次 make hooks 启用）
@@ -54,9 +58,9 @@ Makefile                当前 MyGo 桌面应用的开发、测试、打包入�
 
 ## 设计与界面图标
 
-界面配色与深浅主题的语义 Token 见 [DESIGN.md](DESIGN.md)。设计变化须同步该文档与受影响应用的实际 Token 定义；当前桌面示例仍使用 MyGo 默认主题，尚未接入播放器设计。用户提供的参考图片不放入项目，Agent 任务文件和一次性脚手架使用 OS 临时目录，详见 [AGENTS.md](AGENTS.md) 与 [素材目录约束](assets/README.md)。
+界面配色与深浅主题的语义 Token 见 [DESIGN.md](DESIGN.md)。设计变化须同步该文档与受影响应用的实际 Token 定义；当前桌面框架已接入画布、导航与主题 Token。用户提供的参考图片不放入项目，Agent 任务文件和一次性脚手架使用 OS 临时目录，详见 [AGENTS.md](AGENTS.md) 与 [素材目录约束](assets/README.md)。
 
-操作、导航与状态图标统一使用 Solar SVG，通过可复用的 [use-iconify-skill](.agents/skills/use-iconify-skill/SKILL.md) 查询、分页、下载和离线校验。技能支持其他 Iconify 集合，本项目的 Solar 限制由根目录 `AGENTS.md` 规定；品牌应用图标继续使用下文的独立流程。当前尚未引入界面 SVG，不创建空素材目录。
+操作、导航与状态图标统一使用 Solar SVG，通过可复用的 [use-iconify-skill](.agents/skills/use-iconify-skill/SKILL.md) 查询、分页、下载和离线校验。技能支持其他 Iconify 集合，本项目的 Solar 限制由根目录 `AGENTS.md` 规定；品牌应用图标继续使用下文的独立流程。导航 SVG 已存放在 `assets/ui-icons/solar/`，由 `scripts/generate-desktop-icons.py` 生成桌面嵌入资源。
 
 ## 常用命令
 
@@ -64,14 +68,15 @@ Makefile                当前 MyGo 桌面应用的开发、测试、打包入�
 
 ```bash
 make dev      # 启动开发版，改 Go 代码后自动重建
-make test     # 跑当前桌面应用的全部测试（不需要窗口）
+make test     # 跑当前桌面应用的无窗口测试
+make test-native # MyGo 原生 UI 回归（先按 apps/desktop/README.md 启动隔离应用）
 make build    # 打包当前平台到 apps/desktop/build/
 make check    # 提交前检查：vet + test + 格式 + 仓库规则 + catalogs
 make rules    # 只跑仓库规则检查（文档、命令、依赖方向、密钥、字面量）
 make i18n     # 校验 catalogs 的占位符与复数形式（译文完整性由 make rules 拦）
 make cover    # 语句覆盖率门槛，生成代码不计（CI 执行）
 make race     # 竞态检测（CI 执行）
-make check-gen # 确认生成代码与 catalogs 一致（CI 执行）
+make check-gen # 确认 catalogs 与 Solar 生成代码同步（CI 执行）
 make hooks    # 启用 pre-commit 与 commit-msg（每个克隆一次）
 make icons-check  # 校验 assets/ui-icons 的 Solar 图标（尚无图标时跳过）
 make icons    # 改了图标母版后同步到应用
@@ -81,28 +86,21 @@ make skills   # 更新 .agents/skills
 
 等价的直接命令在 `apps/desktop` 下执行：`go tool mygo dev`、`CGO_ENABLED=0 go test ./...`、`go tool mygo build`、`go tool mygo vet .`。
 
-## 示例应用
+## 桌面框架
 
-`apps/desktop/main.go` 是一个最小但完整的待办应用：
+主窗口提供发现、资源库、追剧、搜索、设置五个导航入口，点击、菜单和 `⌘1`～`⌘5` 同步选中状态，`⌘,` 进入设置；业务区域均留空。显示菜单可切换主题和语言并记住选择，系统菜单和窗口行为复用 MyGo。框架代码按 `internal/` 下的导航、窗口与偏好职责划分，`main.go` 只做组装，详见 [桌面说明](apps/desktop/README.md) 与 [ADR 0007](docs/adr/0007-desktop-shell.md)。
 
-- 输入框回车或点“添加”新增待办；空白输入被忽略。
-- 复选框切换完成状态，顶部实时统计“共 N 项 · 未完成 M”。
-- 每行可删除；“清除已完成”批量清理。删除要等这一帧构建结束再执行，避免遍历时下标错位。
-- 没有任务时显示空状态文案。
-
-界面文案全部来自 `apps/desktop/locales/`（英文源语言加简体中文），窗口标题与页头的品牌名 `Luvia` 除外。新增或修改文案时改 catalogs 后跑 `make i18n` 与 `go tool mygo generate`，流程见 [ADR 0005](docs/adr/0005-localized-messages.md)。
-
-`apps/desktop/main_test.go` 演示了不开窗口的测试：`ui.NewTester` 点击、输入、按 Enter，然后断言界面文案和 `app` 字段。
+界面文案来自 `apps/desktop/locales/`（英文源语言加简体中文），品牌名 `Luvia` 除外。新增或修改文案时改 catalogs 后跑 `make i18n` 与 `go tool mygo generate`，流程见 [ADR 0005](docs/adr/0005-localized-messages.md)。`apps/desktop/tests/` 在独立目录验证导航、菜单、语言、布局、偏好和窗口重开，测试不启动原生窗口。
 
 ## 检查与提交
 
-`make check` 是提交前唯一需要记住的入口：MyGo vet、Go vet、测试、gofmt、仓库规则（`scripts/check-rules.py` 的 16 项可判定检查）与 catalogs 校验。仓库规则不只查文档，还查文档代码块里的命令是否真实存在、apps 之间是否互相导入、有没有引入前端工程文件或 WebView 绑定、有没有私钥与本机路径、入口 `main.go` 是否超过 300 行。`.githooks/pre-commit` 调用 `make check`，`.githooks/commit-msg` 校验 `type(scope): 简述` 与 scope 白名单，首次克隆后执行一次 `make hooks` 同时启用两者。CI 分三个作业：Linux 跑仓库规则与 Windows/Linux 交叉 vet，macOS 跑 `make check`、覆盖率门槛（`make cover`，生成代码不计，当前 89.1%）、竞态检测（`make race`）、生成物同步（`make check-gen`）与真实打包（`make build`）。检查失败时修代码或修脚本，不用 `--no-verify` 绕过。设计取向与检查边界见 [ADR 0006](docs/adr/0006-verification-gates.md)，决策清单见 [docs/adr/](docs/adr/README.md)。
+`make check` 是提交前唯一需要记住的入口：MyGo vet、Go vet、测试、gofmt、仓库规则（`scripts/check-rules.py` 的 16 项可判定检查）与 catalogs 校验。仓库规则不只查文档，还查文档代码块里的命令是否真实存在、apps 之间是否互相导入、有没有引入前端工程文件或 WebView 绑定、有没有私钥与本机路径、入口 `main.go` 是否超过 300 行。`.githooks/pre-commit` 调用 `make check`，`.githooks/commit-msg` 校验 `type(scope): 简述` 与 scope 白名单，首次克隆后执行一次 `make hooks` 同时启用两者。CI 分三个作业：Linux 跑仓库规则与 Windows/Linux 交叉 vet，macOS 跑 `make check`、覆盖率门槛（`make cover`，生成代码不计，门槛 80%）、竞态检测（`make race`）、生成物同步（`make check-gen`）与真实打包（`make build`）。检查失败时修代码或修脚本，不用 `--no-verify` 绕过。设计取向与检查边界见 [ADR 0006](docs/adr/0006-verification-gates.md)，决策清单见 [docs/adr/](docs/adr/README.md)。
 
 仓库目前没有配置 remote，CI 定义尚未在远端真正运行过；本地能验证的是 `make check` 与钩子本身。
 
 ## 写自己的界面
 
-1. 把可变状态放在一个结构体上（示例里的 `app`），`view` 每帧只读状态、构建控件、处理本帧输入。
+1. 把可变状态放在明确的实例上（如 `appshell.Shell`），`View` 每帧只读状态、构建控件、处理本帧输入。
 2. 需要持久身份（焦点、命令、滚动位置）时用 `.Key(key)`、`.Bind(&handle)`；元素本身会过期，不要存进状态或后台 goroutine。
 3. 慢任务放后台 goroutine，结果通过 `mygo.Window.Update` 发布，并丢弃过期结果。
 4. 长列表或表格用 `ui.List`、`ui.Table`、`ui.Grid`，不要手写大量 `Row`。

@@ -1,0 +1,80 @@
+{
+  "icons": {
+    "solar:clapperboard-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/clapperboard-linear/",
+      "file": "solar--clapperboard-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "ac90402403611185f48b0db4a77f8b6f46699ad6c8b94cb36c4e6be7fe30f55b",
+      "source": "https://api.iconify.design/solar/clapperboard-linear.svg"
+    },
+    "solar:heart-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/heart-linear/",
+      "file": "solar--heart-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "75aba02f336e75bb1e99d83aba0b57bba92b75565e1fc7622605c6ae82e44e5d",
+      "source": "https://api.iconify.design/solar/heart-linear.svg"
+    },
+    "solar:home-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/home-linear/",
+      "file": "solar--home-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "27488446dd3c7780dde24134eab02ef2aba0bdd901156e873ae35f607e69764f",
+      "source": "https://api.iconify.design/solar/home-linear.svg"
+    },
+    "solar:magnifer-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/magnifer-linear/",
+      "file": "solar--magnifer-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "2ded5d5f635633f0c728319ea161204bb7242d19e4a4ecdfb0cc8afd0accb118",
+      "source": "https://api.iconify.design/solar/magnifer-linear.svg"
+    },
+    "solar:tuning-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/tuning-linear/",
+      "file": "solar--tuning-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "5fe0b2b72ca7fa1e79e568bcbfcf04621039423bb1a6140d2943240c2bfaeceb",
+      "source": "https://api.iconify.design/solar/tuning-linear.svg"
+    }
+  },
+  "version": 1
+}

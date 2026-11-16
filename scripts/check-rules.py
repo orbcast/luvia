@@ -449,14 +449,18 @@ def check_text_hygiene(files: list[str]) -> list[str]:
     problems = []
     for path in files:
         try:
-            raw = open(os.path.join(ROOT, path), "rb").read()
+            with open(os.path.join(ROOT, path), "rb") as source:
+                raw = source.read()
         except OSError:
             continue
         if b"\x00" in raw:
             continue
         if b"\r\n" in raw:
             problems.append(f"{path}: 使用 CRLF，统一为 LF")
-        if raw and not raw.endswith(b"\n"):
+        # Preserve the checksum-managed upstream SVG bytes. make check also
+        # runs icons-check to enforce manifest membership and SHA-256.
+        managed_svg = re.fullmatch(r"assets/ui-icons/solar/solar--[a-z0-9-]+\.svg", path)
+        if raw and not raw.endswith(b"\n") and not managed_svg:
             problems.append(f"{path}: 缺少结尾换行")
         if path.endswith((".md", ".png", ".webp")):
             continue
