@@ -12,11 +12,13 @@
   4. docs/adr/ 的文件名符合 NNNN-kebab-case.md；
   5. AGENTS.md 不超过体量预算（根 9000 字符，应用/模块 6000 字符）；
   6. apps/ 下非测试 Go 文件的字符串字面量不含中日韩文字（文案走 catalogs）；
-  7. apps/ 下集中 Token 文件之外不出现十六进制颜色（配色走 DESIGN 语义 Token）。
+  7. apps/ 下集中 Token 文件之外不出现十六进制颜色（配色走 DESIGN 语义 Token）；
+  8. 各语言 catalogs 的键与源语言一致（MyGo 对缺失译文只告警，这里要拦住）。
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -79,6 +81,7 @@ def failures() -> list[str]:
     problems.extend(check_adr_names(files))
     problems.extend(check_agents_budget(files))
     problems.extend(check_go_sources(files))
+    problems.extend(check_catalogs(files))
     return problems
 
 
@@ -214,6 +217,48 @@ def check_go_sources(files: list[str]) -> list[str]:
                     problems.append(
                         f"{path}:{line}: 十六进制颜色 {color}，配色应由 DESIGN.md 的语义 Token 提供"
                     )
+    return problems
+
+
+def catalog_dirs(files: list[str]) -> list[str]:
+    return sorted(
+        {
+            os.path.dirname(path)
+            for path in files
+            if path.endswith(".json") and "/locales/" in path
+        }
+    )
+
+
+def check_catalogs(files: list[str]) -> list[str]:
+    """每份译文都要覆盖源语言的每个键，不靠 fallback 蒙过去。"""
+    problems = []
+    for directory in catalog_dirs(files):
+        config = os.path.join(os.path.dirname(directory), "mygo.json")
+        source = "en"
+        if os.path.exists(os.path.join(ROOT, config)):
+            data = json.load(open(os.path.join(ROOT, config), encoding="utf-8"))
+            source = data.get("i18n", {}).get("source", source)
+        base_path = os.path.join(ROOT, directory, source + ".json")
+        if not os.path.exists(base_path):
+            problems.append(f"{directory}: 缺少源语言 {source}.json")
+            continue
+        base = json.load(open(base_path, encoding="utf-8"))
+        keys = {key for key in base if not key.startswith("@")}
+        for name in sorted(os.listdir(os.path.join(ROOT, directory))):
+            if not name.endswith(".json") or name == source + ".json":
+                continue
+            path = f"{directory}/{name}"
+            try:
+                other = json.load(open(os.path.join(ROOT, path), encoding="utf-8"))
+            except json.JSONDecodeError as err:
+                problems.append(f"{path}: 不是有效 JSON: {err}")
+                continue
+            translated = {key for key in other if not key.startswith("@")}
+            for key in sorted(keys - translated):
+                problems.append(f"{path}: 缺少译文 {key}")
+            for key in sorted(translated - keys):
+                problems.append(f"{path}: 源语言没有 {key}，多余的键会一直无人使用")
     return problems
 
 
