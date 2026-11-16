@@ -4,13 +4,13 @@ APP ?= apps/desktop
 MYGO ?= go tool mygo
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor dev test build vet fmt check skills icons
+.PHONY: help doctor dev test build vet fmt check rules i18n hooks icons icons-check skills
 
 ## help: 列出可用命令
 help:
 	@echo "Luvia · 可用命令"
 	@echo
-	@grep -hE '^## [a-z-]+:' $(MAKEFILE_LIST) | sed -E 's/^## ([a-z-]+): */  make \1 — /' | sort
+	@grep -hE '^## [a-z0-9-]+:' $(MAKEFILE_LIST) | sed -E 's/^## ([a-z0-9-]+): */  make \1 — /' | sort
 
 ## doctor: 检查本机是否满足 MyGo 的开发条件
 doctor:
@@ -40,10 +40,33 @@ vet:
 fmt:
 	@gofmt -w $(APP)
 
-## check: 提交前检查（格式、静态检查、测试）
-check: vet test
+## check: 提交前检查（格式、静态检查、测试、仓库规则、catalogs）
+check: vet test rules i18n
 	@unformatted="$$(gofmt -l $(APP))"; \
 	if [ -n "$$unformatted" ]; then echo "需要 gofmt: $$unformatted"; exit 1; fi
+
+## rules: 检查仓库规则（临时产物、文档链接与索引、AGENTS 预算、文案与配色字面量）
+rules:
+	@python3 -B scripts/check-rules.py
+
+## i18n: 校验多语言 catalogs（占位符、译文完整性与已生成代码）
+i18n:
+	@cd $(APP) && $(MYGO) i18n check
+
+## hooks: 把仓库的 .githooks 设为 Git 钩子目录（每个克隆执行一次）
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "pre-commit 已启用：make check"
+
+## icons-check: 校验 assets/ui-icons 下 Solar 图标的来源、风格与 currentColor（尚无图标时跳过）
+icons-check:
+	@if [ -d assets/ui-icons/solar ]; then \
+		python3 -B .agents/skills/use-iconify-skill/scripts/iconify.py check \
+			--dest assets/ui-icons/solar --prefix solar \
+			--style linear --style bold --require-current-color; \
+	else \
+		echo "没有 assets/ui-icons/solar，跳过图标校验"; \
+	fi
 
 ## skills: 更新 .agents/skills 下随 CLI 分发的智能体技能
 skills:

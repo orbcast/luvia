@@ -20,8 +20,10 @@
 
 ## 多语言与组件复用
 
-- 用户可见文案、导航提示、无障碍名称和自定义菜单标签必须接入 MyGo 内置多语言功能，不在界面或动作代码中写死中文或英文。当前目标语言为简体中文（`zh-Hans`）和英文（`en`）。
-- 通过 `mygo.json` 的 `i18n` 配置与 JSON catalogs 管理翻译，使用固定版本 CLI 生成的 Go 文案函数；生成代码与 catalogs 一起维护，不自行实现平行的语言字典或语言持久化机制。语言选择与持久化复用 MyGo 提供的 API，切换后同步自定义菜单等一次性设置的标签。
+- 用户可见文案、导航提示、无障碍名称和自定义菜单标签必须接入 MyGo 内置多语言功能，不在界面或动作代码中写死中文或英文；`scripts/check-rules.py` 会检查非测试 Go 代码里的中日韩字符串字面量。当前语言为英文（`en`，源语言）和简体中文（`zh-Hans`）。
+- 文案在 `locales/en.json` 与 `locales/zh-Hans.json`，`mygo.json` 的 `i18n` 段指向该目录，`go tool mygo generate` 生成 `locales/catalog_gen.go`。界面只调用生成的函数（如 `locales.Add()`、`locales.Summary(n, m)`），改文案先改 catalogs 再重新生成，不自行实现平行的语言字典或语言持久化机制。
+- 品牌名 `Luvia` 不翻译，保留字面量；其余文案一律进 catalogs。语言选择与持久化复用 MyGo 提供的 API，切换后同步自定义菜单等一次性设置的标签。
+- 测试用 `locales.In("en")` 取查找标签与断言文本，不写死中文；验证“界面跟随语言”时用 `i18n.SetLocaleFunc` 指向 `zh-Hans` 并在 `t.Cleanup` 恢复。流程与取舍见 [ADR 0005](../../docs/adr/0005-localized-messages.md)。
 - 优先复用当前 MyGo 版本提供的控件、布局、输入、焦点和无障碍能力，减少自绘制组件。液态玻璃效果优先使用官方 `plugins/glass` 材质或适用的窗口材质，不自行绘制一套玻璃效果；根据原生 UI 的实际承载方式选择 API。
 - UI 命名复用 [UI 术语表](../../docs/terminology.md)；新增术语按根目录规则与用户确认并简短记录。
 
@@ -55,7 +57,7 @@
 
 - Go 代码修改时先跑定向测试；每个可交付步骤完成后，在本目录执行 `CGO_ENABLED=0 go test ./...` 与 `go tool mygo vet .`。纯文档修改免跑应用检查；小幅外观修改保留已有无窗口测试和静态检查，不默认新增复杂 UI 测试。
 - 业务、接口或结构性代码改动增加 `go vet ./...`；共享状态、并发或后台任务改动增加 `go test -race ./...`，race 检查不能设置 `CGO_ENABLED=0`。
-- 根目录 `make test` 默认检查本应用，`make check` 汇总 vet、test 和格式检查；已在相同代码状态通过的同等检查不重复执行。这些命令不自动检查其他应用或共享模块。
+- 根目录 `make test` 默认检查本应用，`make check` 汇总 vet、test、格式、仓库规则与 catalogs 校验；`.githooks/pre-commit` 与 CI 调用同一入口。已在相同代码状态通过的同等检查不重复执行。这些命令不自动检查其他应用或共享模块。
 - 仅在明确渲染/平台风险、大范围布局/主题变更或用户要求时，用根目录 `make dev` 启动应用，验证受影响场景并结束本次启动的进程。不默认执行多尺寸截图和完整 GUI 回归。
 - 打包、资源、发布或原生集成相关改动按需执行根目录 `make build`；产物在 `apps/desktop/build/<平台>/`。无法验证的平台和检查必须说明。
 
