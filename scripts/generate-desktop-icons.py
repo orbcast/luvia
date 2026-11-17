@@ -20,6 +20,8 @@ ICONS = (
     ("bookmark", "linear"),
     ("alt-arrow-right", "linear"),
     ("alt-arrow-down", "linear"),
+    ("widget-2", "linear"),
+    ("list", "linear"),
 )
 
 OUTPUT = "apps/desktop/internal/icons/icons_gen.go"

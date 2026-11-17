@@ -12,6 +12,7 @@ import (
 
 	"luvia/apps/desktop/internal/appshell"
 	"luvia/apps/desktop/internal/appwindow"
+	"luvia/apps/desktop/internal/catalog"
 	"luvia/apps/desktop/internal/design"
 	"luvia/apps/desktop/internal/home"
 	"luvia/apps/desktop/internal/library"
@@ -59,6 +60,11 @@ func main() {
 			Interval: 6 * time.Second,
 			OnAll:    func() { shell.Navigate(appshell.Library) },
 		})
+		catalogPage := catalog.New(catalog.Deps{
+			Source:  profile.source,
+			Library: profile.library,
+			Images:  profile.images,
+		})
 		settingsPage := settings.New(settings.Deps{
 			Theme: actions.Theme, SetTheme: actions.SetTheme,
 			Locale: actions.Locale, SetLocale: actions.SetLocale,
@@ -68,6 +74,8 @@ func main() {
 			switch shell.Selected() {
 			case appshell.Discover:
 				return discover.View(c)
+			case appshell.Library:
+				return catalogPage.View(c)
 			case appshell.Settings:
 				return settingsPage.View(c)
 			}

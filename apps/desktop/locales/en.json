@@ -169,5 +169,110 @@
   "weekRange": "{start} – {end}",
   "@weekRange": {
     "description": "Week heading range; start is a month and day, end is a day"
+  },
+  "quality4k": "4K Ultra HD",
+  "@quality4k": {
+    "description": "Hero quality badge for a 4K title"
+  },
+  "qualityHd": "1080P HD",
+  "@qualityHd": {
+    "description": "Hero quality badge for a non-4K title"
+  },
+  "dolbyVision": "Dolby Vision",
+  "@dolbyVision": {
+    "description": "Hero brand badge for Dolby Vision titles"
+  },
+  "libraryCount": "{count, plural, one {# title} other {# titles}}",
+  "@libraryCount": {
+    "description": "Number of titles the resource library holds",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchLibrary": "Search the library",
+  "@searchLibrary": {
+    "description": "Placeholder of the resource library search box"
+  },
+  "categoryAll": "All",
+  "@categoryAll": {
+    "description": "Resource library category tab for every title"
+  },
+  "categoryMovie": "Movies",
+  "@categoryMovie": {
+    "description": "Resource library category tab for films"
+  },
+  "categorySeries": "Series",
+  "@categorySeries": {
+    "description": "Resource library category tab for series"
+  },
+  "categoryAnime": "Anime",
+  "@categoryAnime": {
+    "description": "Resource library category tab for anime"
+  },
+  "categoryVariety": "Variety",
+  "@categoryVariety": {
+    "description": "Resource library category tab for variety shows"
+  },
+  "categoryShort": "Shorts",
+  "@categoryShort": {
+    "description": "Resource library category tab for short dramas"
+  },
+  "filterAllTitles": "All titles",
+  "@filterAllTitles": {
+    "description": "Resource library filter showing every title"
+  },
+  "filterFavorites": "Favorites",
+  "@filterFavorites": {
+    "description": "Resource library filter showing followed titles"
+  },
+  "filterAllTypes": "All types",
+  "@filterAllTypes": {
+    "description": "Resource library type filter default"
+  },
+  "filterAllStatus": "All status",
+  "@filterAllStatus": {
+    "description": "Resource library status filter default"
+  },
+  "filterDefaultSort": "Default order",
+  "@filterDefaultSort": {
+    "description": "Resource library sort default"
+  },
+  "sortLatest": "Latest",
+  "@sortLatest": {
+    "description": "Resource library sort by newest"
+  },
+  "sortRating": "Rating",
+  "@sortRating": {
+    "description": "Resource library sort by rating"
+  },
+  "statusUpdating": "Updating",
+  "@statusUpdating": {
+    "description": "Poster badge for a still-running title"
+  },
+  "statusCompleted": "Completed",
+  "@statusCompleted": {
+    "description": "Poster badge for a finished title"
+  },
+  "gridView": "Grid view",
+  "@gridView": {
+    "description": "Resource library layout toggle: poster grid"
+  },
+  "listView": "List view",
+  "@listView": {
+    "description": "Resource library layout toggle: compact list"
+  },
+  "libraryEmpty": "No titles here yet",
+  "@libraryEmpty": {
+    "description": "Resource library when the category has nothing"
+  },
+  "libraryError": "This library could not load",
+  "@libraryError": {
+    "description": "Resource library when the source failed"
+  },
+  "libraryLoading": "Loading the library…",
+  "@libraryLoading": {
+    "description": "Resource library while the source answers"
   }
 }

@@ -593,3 +593,353 @@ func WeekRange(start string, end string) string { return In(i18n.Locale()).WeekR
 func (msgs Messages) WeekRange(start string, end string) string {
 	return Catalog.Format(msgs.locale, "weekRange", map[string]any{"start": start, "end": end})
 }
+
+// Quality4k says "4K Ultra HD"
+// in the language the app shows.
+//
+// Hero quality badge for a 4K title
+func Quality4k() string { return In(i18n.Locale()).Quality4k() }
+
+// Quality4k says "4K Ultra HD"
+// in the language of msgs.
+//
+// Hero quality badge for a 4K title
+func (msgs Messages) Quality4k() string {
+	return Catalog.Format(msgs.locale, "quality4k", nil)
+}
+
+// QualityHd says "1080P HD"
+// in the language the app shows.
+//
+// Hero quality badge for a non-4K title
+func QualityHd() string { return In(i18n.Locale()).QualityHd() }
+
+// QualityHd says "1080P HD"
+// in the language of msgs.
+//
+// Hero quality badge for a non-4K title
+func (msgs Messages) QualityHd() string {
+	return Catalog.Format(msgs.locale, "qualityHd", nil)
+}
+
+// DolbyVision says "Dolby Vision"
+// in the language the app shows.
+//
+// Hero brand badge for Dolby Vision titles
+func DolbyVision() string { return In(i18n.Locale()).DolbyVision() }
+
+// DolbyVision says "Dolby Vision"
+// in the language of msgs.
+//
+// Hero brand badge for Dolby Vision titles
+func (msgs Messages) DolbyVision() string {
+	return Catalog.Format(msgs.locale, "dolbyVision", nil)
+}
+
+// LibraryCount says "{count, plural, one {# title} other {# titles}}"
+// in the language the app shows.
+//
+// Number of titles the resource library holds
+func LibraryCount(count int) string { return In(i18n.Locale()).LibraryCount(count) }
+
+// LibraryCount says "{count, plural, one {# title} other {# titles}}"
+// in the language of msgs.
+//
+// Number of titles the resource library holds
+func (msgs Messages) LibraryCount(count int) string {
+	return Catalog.Format(msgs.locale, "libraryCount", map[string]any{"count": count})
+}
+
+// SearchLibrary says "Search the library"
+// in the language the app shows.
+//
+// Placeholder of the resource library search box
+func SearchLibrary() string { return In(i18n.Locale()).SearchLibrary() }
+
+// SearchLibrary says "Search the library"
+// in the language of msgs.
+//
+// Placeholder of the resource library search box
+func (msgs Messages) SearchLibrary() string {
+	return Catalog.Format(msgs.locale, "searchLibrary", nil)
+}
+
+// CategoryAll says "All"
+// in the language the app shows.
+//
+// Resource library category tab for every title
+func CategoryAll() string { return In(i18n.Locale()).CategoryAll() }
+
+// CategoryAll says "All"
+// in the language of msgs.
+//
+// Resource library category tab for every title
+func (msgs Messages) CategoryAll() string {
+	return Catalog.Format(msgs.locale, "categoryAll", nil)
+}
+
+// CategoryMovie says "Movies"
+// in the language the app shows.
+//
+// Resource library category tab for films
+func CategoryMovie() string { return In(i18n.Locale()).CategoryMovie() }
+
+// CategoryMovie says "Movies"
+// in the language of msgs.
+//
+// Resource library category tab for films
+func (msgs Messages) CategoryMovie() string {
+	return Catalog.Format(msgs.locale, "categoryMovie", nil)
+}
+
+// CategorySeries says "Series"
+// in the language the app shows.
+//
+// Resource library category tab for series
+func CategorySeries() string { return In(i18n.Locale()).CategorySeries() }
+
+// CategorySeries says "Series"
+// in the language of msgs.
+//
+// Resource library category tab for series
+func (msgs Messages) CategorySeries() string {
+	return Catalog.Format(msgs.locale, "categorySeries", nil)
+}
+
+// CategoryAnime says "Anime"
+// in the language the app shows.
+//
+// Resource library category tab for anime
+func CategoryAnime() string { return In(i18n.Locale()).CategoryAnime() }
+
+// CategoryAnime says "Anime"
+// in the language of msgs.
+//
+// Resource library category tab for anime
+func (msgs Messages) CategoryAnime() string {
+	return Catalog.Format(msgs.locale, "categoryAnime", nil)
+}
+
+// CategoryVariety says "Variety"
+// in the language the app shows.
+//
+// Resource library category tab for variety shows
+func CategoryVariety() string { return In(i18n.Locale()).CategoryVariety() }
+
+// CategoryVariety says "Variety"
+// in the language of msgs.
+//
+// Resource library category tab for variety shows
+func (msgs Messages) CategoryVariety() string {
+	return Catalog.Format(msgs.locale, "categoryVariety", nil)
+}
+
+// CategoryShort says "Shorts"
+// in the language the app shows.
+//
+// Resource library category tab for short dramas
+func CategoryShort() string { return In(i18n.Locale()).CategoryShort() }
+
+// CategoryShort says "Shorts"
+// in the language of msgs.
+//
+// Resource library category tab for short dramas
+func (msgs Messages) CategoryShort() string {
+	return Catalog.Format(msgs.locale, "categoryShort", nil)
+}
+
+// FilterAllTitles says "All titles"
+// in the language the app shows.
+//
+// Resource library filter showing every title
+func FilterAllTitles() string { return In(i18n.Locale()).FilterAllTitles() }
+
+// FilterAllTitles says "All titles"
+// in the language of msgs.
+//
+// Resource library filter showing every title
+func (msgs Messages) FilterAllTitles() string {
+	return Catalog.Format(msgs.locale, "filterAllTitles", nil)
+}
+
+// FilterFavorites says "Favorites"
+// in the language the app shows.
+//
+// Resource library filter showing followed titles
+func FilterFavorites() string { return In(i18n.Locale()).FilterFavorites() }
+
+// FilterFavorites says "Favorites"
+// in the language of msgs.
+//
+// Resource library filter showing followed titles
+func (msgs Messages) FilterFavorites() string {
+	return Catalog.Format(msgs.locale, "filterFavorites", nil)
+}
+
+// FilterAllTypes says "All types"
+// in the language the app shows.
+//
+// Resource library type filter default
+func FilterAllTypes() string { return In(i18n.Locale()).FilterAllTypes() }
+
+// FilterAllTypes says "All types"
+// in the language of msgs.
+//
+// Resource library type filter default
+func (msgs Messages) FilterAllTypes() string {
+	return Catalog.Format(msgs.locale, "filterAllTypes", nil)
+}
+
+// FilterAllStatus says "All status"
+// in the language the app shows.
+//
+// Resource library status filter default
+func FilterAllStatus() string { return In(i18n.Locale()).FilterAllStatus() }
+
+// FilterAllStatus says "All status"
+// in the language of msgs.
+//
+// Resource library status filter default
+func (msgs Messages) FilterAllStatus() string {
+	return Catalog.Format(msgs.locale, "filterAllStatus", nil)
+}
+
+// FilterDefaultSort says "Default order"
+// in the language the app shows.
+//
+// Resource library sort default
+func FilterDefaultSort() string { return In(i18n.Locale()).FilterDefaultSort() }
+
+// FilterDefaultSort says "Default order"
+// in the language of msgs.
+//
+// Resource library sort default
+func (msgs Messages) FilterDefaultSort() string {
+	return Catalog.Format(msgs.locale, "filterDefaultSort", nil)
+}
+
+// SortLatest says "Latest"
+// in the language the app shows.
+//
+// Resource library sort by newest
+func SortLatest() string { return In(i18n.Locale()).SortLatest() }
+
+// SortLatest says "Latest"
+// in the language of msgs.
+//
+// Resource library sort by newest
+func (msgs Messages) SortLatest() string {
+	return Catalog.Format(msgs.locale, "sortLatest", nil)
+}
+
+// SortRating says "Rating"
+// in the language the app shows.
+//
+// Resource library sort by rating
+func SortRating() string { return In(i18n.Locale()).SortRating() }
+
+// SortRating says "Rating"
+// in the language of msgs.
+//
+// Resource library sort by rating
+func (msgs Messages) SortRating() string {
+	return Catalog.Format(msgs.locale, "sortRating", nil)
+}
+
+// StatusUpdating says "Updating"
+// in the language the app shows.
+//
+// Poster badge for a still-running title
+func StatusUpdating() string { return In(i18n.Locale()).StatusUpdating() }
+
+// StatusUpdating says "Updating"
+// in the language of msgs.
+//
+// Poster badge for a still-running title
+func (msgs Messages) StatusUpdating() string {
+	return Catalog.Format(msgs.locale, "statusUpdating", nil)
+}
+
+// StatusCompleted says "Completed"
+// in the language the app shows.
+//
+// Poster badge for a finished title
+func StatusCompleted() string { return In(i18n.Locale()).StatusCompleted() }
+
+// StatusCompleted says "Completed"
+// in the language of msgs.
+//
+// Poster badge for a finished title
+func (msgs Messages) StatusCompleted() string {
+	return Catalog.Format(msgs.locale, "statusCompleted", nil)
+}
+
+// GridView says "Grid view"
+// in the language the app shows.
+//
+// Resource library layout toggle: poster grid
+func GridView() string { return In(i18n.Locale()).GridView() }
+
+// GridView says "Grid view"
+// in the language of msgs.
+//
+// Resource library layout toggle: poster grid
+func (msgs Messages) GridView() string {
+	return Catalog.Format(msgs.locale, "gridView", nil)
+}
+
+// ListView says "List view"
+// in the language the app shows.
+//
+// Resource library layout toggle: compact list
+func ListView() string { return In(i18n.Locale()).ListView() }
+
+// ListView says "List view"
+// in the language of msgs.
+//
+// Resource library layout toggle: compact list
+func (msgs Messages) ListView() string {
+	return Catalog.Format(msgs.locale, "listView", nil)
+}
+
+// LibraryEmpty says "No titles here yet"
+// in the language the app shows.
+//
+// Resource library when the category has nothing
+func LibraryEmpty() string { return In(i18n.Locale()).LibraryEmpty() }
+
+// LibraryEmpty says "No titles here yet"
+// in the language of msgs.
+//
+// Resource library when the category has nothing
+func (msgs Messages) LibraryEmpty() string {
+	return Catalog.Format(msgs.locale, "libraryEmpty", nil)
+}
+
+// LibraryError says "This library could not load"
+// in the language the app shows.
+//
+// Resource library when the source failed
+func LibraryError() string { return In(i18n.Locale()).LibraryError() }
+
+// LibraryError says "This library could not load"
+// in the language of msgs.
+//
+// Resource library when the source failed
+func (msgs Messages) LibraryError() string {
+	return Catalog.Format(msgs.locale, "libraryError", nil)
+}
+
+// LibraryLoading says "Loading the library…"
+// in the language the app shows.
+//
+// Resource library while the source answers
+func LibraryLoading() string { return In(i18n.Locale()).LibraryLoading() }
+
+// LibraryLoading says "Loading the library…"
+// in the language of msgs.
+//
+// Resource library while the source answers
+func (msgs Messages) LibraryLoading() string {
+	return Catalog.Format(msgs.locale, "libraryLoading", nil)
+}

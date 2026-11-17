@@ -85,9 +85,10 @@ func waitFor(t *testing.T, finished <-chan struct{}) {
 
 func TestDiscoverRendersHeroAndLibraryState(t *testing.T) {
 	page, store, _, finished := newDiscoverPage(t)
+	page.Start()
+	waitFor(t, finished)
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
 	tt.SetLocale("en")
-	waitFor(t, finished)
 	tt.Frame()
 
 	for _, text := range []string{"Dune", "Continue Watching", "This Week", "Nothing watched yet"} {
@@ -109,9 +110,10 @@ func TestDiscoverRendersHeroAndLibraryState(t *testing.T) {
 
 func TestDiscoverShowsDetailsHint(t *testing.T) {
 	page, _, _, finished := newDiscoverPage(t)
+	page.Start()
+	waitFor(t, finished)
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
 	tt.SetLocale("en")
-	waitFor(t, finished)
 	tt.Frame()
 	if err := tt.Click("Details"); err != nil {
 		t.Fatalf("details button: %v", err)
@@ -130,14 +132,15 @@ func TestShellShowsDiscoverAndPlaceholder(t *testing.T) {
 		}
 		return page.View(c)
 	})
+	page.Start()
+	waitFor(t, finished)
 	tt := ui.NewTester(shell.View, 1100, 720)
 	tt.SetLocale("en")
-	waitFor(t, finished)
 	tt.Frame()
 	if !tt.HasText("Dune") {
 		t.Fatalf("discover content missing in %v", tt.Texts())
 	}
-	if err := tt.Click(appshell.Library.Label(english)); err != nil {
+	if err := tt.Click(appshell.Following.Label(english)); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -168,9 +171,10 @@ func placeholderLike(c *ui.Context, page appshell.Page) ui.Element {
 
 func TestHeroActionsShareOneHeight(t *testing.T) {
 	page, _, _, finished := newDiscoverPage(t)
+	page.Start()
+	waitFor(t, finished)
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
 	tt.SetLocale("en")
-	waitFor(t, finished)
 
 	// Find returns the labeled button itself, which is the box the design is
 	// about: both actions sit on one line and take one height.
@@ -195,9 +199,10 @@ func TestHeroActionsShareOneHeight(t *testing.T) {
 
 func TestDiscoverFitsANarrowWindow(t *testing.T) {
 	page, _, _, finished := newDiscoverPage(t)
+	page.Start()
+	waitFor(t, finished)
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 460, 760)
 	tt.SetLocale("en")
-	waitFor(t, finished)
 
 	inset := float32(design.NarrowGutter)
 	play, ok := tt.Find("Continue Playing")

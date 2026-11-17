@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/source"
 )
@@ -281,5 +283,63 @@ func TestPlayAndDetailUseCallbacks(t *testing.T) {
 	page.detail(card)
 	if page.notice != noticeDetail {
 		t.Fatalf("missing detail page must be explained, notice %v", page.notice)
+	}
+}
+
+func TestHasQualityReadsRemarksAndTags(t *testing.T) {
+	if !hasQuality(source.Card{Remarks: "4K HDR"}, "4K") {
+		t.Fatal("remarks did not flag 4K")
+	}
+	tagged := source.Card{Tags: []string{"Dolby", "1080P"}}
+	if hasQuality(tagged, "4K") {
+		t.Fatal("1080P tag read as 4K")
+	}
+	if !hasQuality(tagged, "1080P") {
+		t.Fatal("tag did not flag 1080P")
+	}
+	if hasQuality(source.Card{}, "4K") {
+		t.Fatal("empty card flagged 4K")
+	}
+}
+
+func TestSplitBadgeSeparatesHeadline(t *testing.T) {
+	if head, tail := splitBadge("4K Ultra HD"); head != "4K" || tail != "Ultra HD" {
+		t.Fatalf("split %q %q", head, tail)
+	}
+	if head, tail := splitBadge("1080P"); head != "1080P" || tail != "" {
+		t.Fatalf("single token split %q %q", head, tail)
+	}
+}
+
+func TestHeroShowsQualityAndBrandBadges(t *testing.T) {
+	page, finished := newPage(t, Deps{Source: &fakeSource{home: sampleHome()}})
+	load(t, page, finished)
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	// Dune is not flagged 4K, so the hero wears the HD quality chip beside the
+	// Dolby Vision brand chip.
+	for _, want := range []string{"1080P", "Dolby Vision"} {
+		if !tt.HasText(want) {
+			t.Fatalf("missing %q in %v", want, tt.Texts())
+		}
+	}
+}
+
+func TestHeroShows4kBadgeWhenFlagged(t *testing.T) {
+	home := sampleHome()
+	home.Sections[1].Cards[0].Remarks = "4K HDR"
+	page, finished := newPage(t, Deps{Source: &fakeSource{home: home}})
+	load(t, page, finished)
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	if !tt.HasText("4K") || !tt.HasText("Ultra HD") {
+		t.Fatalf("4K badge missing in %v", tt.Texts())
+	}
+	if tt.HasText("1080P") {
+		t.Fatalf("HD badge shown for a 4K title: %v", tt.Texts())
 	}
 }

@@ -181,18 +181,65 @@ func (p *Page) heroMeta(c *ui.Context, t *ui.Theme, m locales.Messages, card sou
 		}
 		parts = append(parts, tag)
 	}
-	if len(parts) == 0 {
-		return
-	}
 	ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
-		ui.Text(c, strings.Join(parts, " · ")).FontSize(12).TextColor(art.Muted)
-		for i, tag := range card.Tags {
-			if i < len(parts) || i > 4 {
-				continue
-			}
-			ui.Badge(c, tag).FontSize(11).Radius(5).TextColor(art.Ink).Background(art.Veil)
+		if len(parts) > 0 {
+			ui.Text(c, strings.Join(parts, " · ")).FontSize(12).TextColor(art.Muted)
+		}
+		p.qualityBadge(c, t, m, card)
+		p.brandBadge(c, m)
+	})
+}
+
+// qualityBadge states the hero print's resolution. It borrows the theme's
+// inverse pair so it reads light on the dark hero and dark on the washed
+// light one, standing clear of the muted metadata around it.
+func (p *Page) qualityBadge(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
+	label := m.QualityHd()
+	if hasQuality(card, "4K") {
+		label = m.Quality4k()
+	}
+	bg, fg := design.QualityBadge(t)
+	ui.Row(c).AlignItems(ui.Center).Gap(5).Radius(6).Padding(4, 9).Background(bg).Children(func() {
+		head, tail := splitBadge(label)
+		ui.Text(c, head).FontSize(12).Bold().TextColor(fg)
+		if tail != "" {
+			ui.Text(c, tail).FontSize(11).TextColor(fg)
 		}
 	})
+}
+
+// brandBadge tags a Dolby Vision title with its brand pill: a small purple
+// mark beside the pale label over a near-black chip, legible on both heroes.
+func (p *Page) brandBadge(c *ui.Context, m locales.Messages) {
+	bg, mark, fg := design.BrandBadge()
+	ui.Row(c).AlignItems(ui.Center).Gap(6).Radius(6).Padding(4, 9).Background(bg).Children(func() {
+		ui.Box(c).Size(11, 11).Radius(3).Background(mark)
+		ui.Text(c, m.DolbyVision()).FontSize(11).TextColor(fg)
+	})
+}
+
+// hasQuality reports whether a card advertises want in its remarks or tags,
+// which is how a source flags a print's resolution.
+func hasQuality(card source.Card, want string) bool {
+	if strings.Contains(strings.ToUpper(card.Remarks), want) {
+		return true
+	}
+	for _, tag := range card.Tags {
+		if strings.Contains(strings.ToUpper(tag), want) {
+			return true
+		}
+	}
+	return false
+}
+
+// splitBadge separates a quality label into its headline figure and the words
+// after it, so "4K Ultra HD" reads as a bold "4K" beside a quieter "Ultra HD".
+func splitBadge(label string) (head, tail string) {
+	label = strings.TrimSpace(label)
+	if i := strings.IndexAny(label, " \u3000"); i >= 0 {
+		return label[:i], strings.TrimSpace(label[i:])
+	}
+	return label, ""
 }
 
 func (p *Page) heroActions(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
@@ -459,7 +506,7 @@ func (p *Page) weekSection(c *ui.Context, t *ui.Theme, m locales.Messages, snap 
 			posterW := clamp((available-(columns-1)*posterGap)/columns, 120, 220)
 			ui.Row(c).FillWidth().Gap(posterGap).AlignItems(ui.Start).Wrap().Children(func() {
 				for _, follow := range updates {
-					p.posterCard(c, t, follow, posterW)
+					p.posterCard(c, t, m, follow, posterW)
 				}
 			})
 		}
@@ -505,11 +552,11 @@ func (p *Page) dayCell(c *ui.Context, t *ui.Theme, m locales.Messages, day time.
 	}
 }
 
-func (p *Page) posterCard(c *ui.Context, t *ui.Theme, follow library.Follow, w float32) {
+func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, follow library.Follow, w float32) {
 	card := source.Card{Ref: follow.Media, Title: follow.Title, PosterURL: follow.PosterURL}
 	button := ui.ButtonBase(c).Width(w).Radius(12).Label(follow.Title).Background(ui.Transparent)
 	button.Children(func() {
-		ui.Column(c).FillWidth().Gap(8).Children(func() {
+		ui.Column(c).FillWidth().Gap(7).Children(func() {
 			frame := ui.Box(c).FillWidth().Height(w * 1.5).Radius(12).Clip().Background(t.Surface)
 			frame.Children(func() {
 				if p.deps.Images != nil {
@@ -517,13 +564,31 @@ func (p *Page) posterCard(c *ui.Context, t *ui.Theme, follow library.Follow, w f
 						ui.Image(c, bitmap).Fill().Fit(ui.Cover)
 					}
 				}
+				// These cards are the week's fresh updates, so they wear the
+				// updating status pill; the update date follows under the title.
+				bg, fg := design.PosterStatus(true)
+				ui.Row(c).Absolute().Left(8).Top(8).Radius(5).Padding(2, 7).Background(bg).Children(func() {
+					ui.Text(c, m.StatusUpdating()).FontSize(10).Bold().TextColor(fg)
+				})
 			})
-			ui.Text(c, follow.Title).FontSize(12).Bold().TextColor(t.Text).MaxLines(1)
+			ui.Text(c, follow.Title).FontSize(13).Bold().TextColor(t.Text).MaxLines(1)
+			if meta := p.followMeta(c, follow); meta != "" {
+				ui.Text(c, meta).FontSize(11).TextColor(t.TextMuted).MaxLines(1)
+			}
 		})
 	})
 	if button.Clicked() {
 		p.detail(card)
 	}
+}
+
+// followMeta writes the day a followed series last updated, the one fact the
+// library keeps about each follow beyond its title and artwork.
+func (p *Page) followMeta(c *ui.Context, follow library.Follow) string {
+	if follow.UpdatedAt.IsZero() {
+		return ""
+	}
+	return i18n.FormatDate(c.Locale(), follow.UpdatedAt, i18n.DateOptions{Skeleton: "MMMd"})
 }
 
 func (p *Page) emptyPanel(c *ui.Context, t *ui.Theme, title, hint string) {

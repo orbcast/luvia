@@ -179,3 +179,53 @@ func OnArtwork(t *ui.Theme) Artwork {
 // MaskOpaque is the opaque stop of a mask that fades artwork out.
 func MaskOpaque() ui.Color     { return ui.RGB(0, 0, 0) }
 func TrackOnArtwork() ui.Color { return ui.RGBA(255, 255, 255, 0.30) }
+
+// CategoryTint is the pill color of one resource-library category. The tints
+// are fixed category colors, the same in both themes: the "all" tab is warm
+// paper with ink text, the saturated ones keep white text.
+type CategoryTint struct {
+	Background ui.Color
+	Foreground ui.Color
+}
+
+// categoryTints maps the resource library's category order onto its tints:
+// all, movie, series, anime, variety, short.
+var categoryTints = [6]CategoryTint{
+	{ui.Hex("#F0E1DA"), ui.Hex("#221B33")},
+	{ui.Hex("#971E39"), ui.RGBA(255, 255, 255, 0.98)},
+	{ui.Hex("#2C4A6E"), ui.RGBA(255, 255, 255, 0.98)},
+	{ui.Hex("#563A79"), ui.RGBA(255, 255, 255, 0.98)},
+	{ui.Hex("#23624F"), ui.RGBA(255, 255, 255, 0.98)},
+	{ui.Hex("#75452F"), ui.RGBA(255, 255, 255, 0.98)},
+}
+
+// CategoryTints returns the category pills' colors in display order.
+func CategoryTints() [6]CategoryTint { return categoryTints }
+
+// CategoryRing is the ring the selected category tab wears. It is a cool blue
+// that stays distinct from every category tint and from the theme accent.
+func CategoryRing() ui.Color { return ui.Hex("#5B86E8") }
+
+// QualityBadge is the hero's "4K" chip: it takes the theme's inverse pair, so
+// it reads light on the dark hero and dark on the washed light one.
+func QualityBadge(t *ui.Theme) (bg, fg ui.Color) { return t.Inverse, t.InverseText }
+
+// BrandBadge is the hero's Dolby-style chip: a violet pill with a lighter
+// brand mark and white label, legible and brand-like on both heroes.
+func BrandBadge() (bg, mark, fg ui.Color) {
+	return ui.Hex("#3E2E9E"), ui.Hex("#8E7BFF"), ui.RGBA(255, 255, 255, 0.96)
+}
+
+// PosterBadge is the small quality pill laid over a poster image.
+func PosterBadge() (bg, fg ui.Color) {
+	return ui.RGBA(10, 8, 14, 0.62), ui.RGBA(255, 255, 255, 0.96)
+}
+
+// PosterStatus is the update-state pill over a poster: teal while updating,
+// neutral once it is complete.
+func PosterStatus(updating bool) (bg, fg ui.Color) {
+	if updating {
+		return ui.Hex("#2A6E63"), ui.RGBA(255, 255, 255, 0.98)
+	}
+	return ui.RGBA(10, 8, 14, 0.62), ui.RGBA(255, 255, 255, 0.96)
+}
