@@ -2,17 +2,17 @@
 
 ## 定位
 
-Luvia 是一个视频播放器项目。仓库按独立应用组织，允许 Go / MyGo、Swift / SwiftUI 等不同技术栈，技术选择在各应用内确定。当前可运行代码是 MyGo 桌面框架、发现页（Home）、资源库页（Library）、详情页（Detail）与播放页（Player），视频播放已接入来源解析与系统视频组件。根目录 `AGENTS.md` 规定共同治理原则，`apps/desktop/AGENTS.md` 保留该应用的 MyGo 原生 UI 与无窗口测试约束。
+Luvia 是一个视频播放器项目。仓库按独立应用组织，允许 Go / MyGo、Swift / SwiftUI 等不同技术栈，技术选择在各应用内确定。当前可运行代码是 MyGo 桌面框架、发现页（Home）、资源库页（Library）、详情页（Detail）与播放页（Player），视频播放已接入来源解析与系统视频组件，重复观看经本地缓存代理。根目录 `AGENTS.md` 规定共同治理原则，`apps/desktop/AGENTS.md` 保留该应用的 MyGo 原生 UI 与无窗口测试约束。
 
 ## 当前状态
 
 - `apps/desktop` 是唯一可运行的应用：已实现应用Tabbar（发现、资源库、追剧、搜索、设置）、原生顶栏、系统菜单、主题和语言选择，以及发现页与资源库页。发现页含沉浸式 Hero 轮播（6 秒自动、悬停暂停、缩略图切换）、继续观看、本周追剧与空态；资源库页按分类彩色页签、筛选行与海报网格浏览源列表，默认「全部」分类与网格视图；追剧、搜索仍为占位、设置页提供外观与语言，占位页标题按页面边距排布，不与 AppShell 重叠。窗口宽度小于 720 逻辑单位时 AppShell 从左侧列变为底部 Dock，同一块玻璃与同一组按钮经 MyGo 转场连续移动；窄布局下页面边距收窄、Hero 文案换行、卡片与海报列数随宽度下降。界面文案使用多语言 catalogs（`en` 源语言、`zh-Hans`），品牌名 `Luvia` 不翻译。
-- 发现页与资源库页的数据分两层：片单来自源规则的首页与列表操作，观看进度与追剧来自本地库 `library.json`（以 `source.Ref` 为键），远程图片由 `internal/media` 下载并缓存；详情页读取来源的详情与选集并渲染海报、标签、简介、选集网格与右栏资料，播放页解析选中线路后交给系统视频组件播放，并把观看进度写回本地库；发现页与资源库的播放、详情入口都进入详情页。
+- 发现页与资源库页的数据分两层：片单来自源规则的首页与列表操作，观看进度与追剧来自本地库 `library.json`（以 `source.Ref` 为键），远程图片由 `internal/media` 下载并缓存；详情页读取来源的详情与选集并渲染海报、标签、简介、选集网格与右栏资料，播放页解析选中线路后交给系统视频组件播放，并把观看进度写回本地库；播放地址经 `internal/videocache` 的本地回环代理改写，HLS 子清单、分片与密钥落盘缓存，首帧到达前显示缓冲提示；发现页与资源库的播放、详情入口都进入详情页。
 - `apps/luvia-rules` 定义并维护源规则：一条规则是纯数据 JSON，由一个上游目录（`rule.json` + `fixtures/` + `README.md`）组成。目前已接入 `kanju/`（首页、列表与搜索、详情、选集、线路解析），格式见 [源规则格式](docs/rule-dsl.md)，未来随时可能迁移至独立仓库。
 - `apps/README.md` 导航应用与规则目录，`packages/` 仅有复用模块说明，尚无共享代码模块。Swift 等技术栈是未来选项，未创建工程。
 - `docs/` 现有 [文档索引](docs/README.md)、[UI 术语表](docs/terminology.md)、[源规则格式](docs/rule-dsl.md) 与 [架构决策记录](docs/adr/README.md)；`DESIGN.md` 记录深浅主题配色与 Token，桌面框架已接入。
 - 验证入口统一为 `make check`（MyGo vet、Go vet、测试、gofmt、仓库规则、catalogs）；`.githooks/pre-commit` 调用同一入口，`.githooks/commit-msg` 校验提交标题，CI 分三个作业（Linux 仓库规则、Linux 交叉 vet、macOS 应用检查/覆盖率/竞态/生成物/打包）；`scripts/check-rules.py` 承担 16 项可判定检查，`scripts/check-coverage.py` 统计手写代码覆盖率。
-- 测试：`apps/desktop/tests/` 通过生产包公开接口验证导航、菜单同步、快捷键、语言、布局、主题偏好、窗口重开、发现页与资源库页交互，包含一条 headless 像素回归（Hero 底边与页面背景色差、亮色海报上标题区亮度）；源规则用规则自带 fixtures 与一份 `maccms` 形状的假上游验证 DSL 的通用性，`make rules-verify` 离线执行。生产实现按 `internal/appshell/`、`internal/appwindow/`、`internal/preferences/`、`internal/design/`、`internal/home/`、`internal/catalog/`、`internal/detail/`、`internal/player/`、`internal/screens/`、`internal/library/`、`internal/media/` 分层，源规则解析层按 `internal/source`（契约）、`internal/source/rule`（解码与校验）、`internal/source/engine`（解释器）、`internal/source/loader`（目录与诊断）分层。
+- 测试：`apps/desktop/tests/` 通过生产包公开接口验证导航、菜单同步、快捷键、语言、布局、主题偏好、窗口重开、发现页与资源库页交互，包含一条 headless 像素回归（Hero 底边与页面背景色差、亮色海报上标题区亮度）；源规则用规则自带 fixtures 与一份 `maccms` 形状的假上游验证 DSL 的通用性，`make rules-verify` 离线执行。生产实现按 `internal/appshell/`、`internal/appwindow/`、`internal/preferences/`、`internal/design/`、`internal/home/`、`internal/catalog/`、`internal/detail/`、`internal/player/`、`internal/screens/`、`internal/library/`、`internal/media/`、`internal/videocache/` 分层，源规则解析层按 `internal/source`（契约）、`internal/source/rule`（解码与校验）、`internal/source/engine`（解释器）、`internal/source/loader`（目录与诊断）分层。
 - 历史验证记录（不代表本轮重新执行）：`CGO_ENABLED=0 go test ./...`、`go tool mygo vet .`、`go tool mygo build -skip-dmg`（darwin/arm64，产出 `Luvia.app` 约 12 MB，含 `Assets.car`）。
 - 仓库已完成首次 `git init`，尚未配置 remote；后续变更按根目录 `AGENTS.md` 的原子提交约定维护。
 
@@ -41,12 +41,13 @@ Luvia 是一个视频播放器项目。仓库按独立应用组织，允许 Go /
 - 规则仍有一部分只能靠人判断（职责归属、设计语义、文案是否清晰），`scripts/check-rules.py` 只覆盖可判定的部分，不能当作全部合规的证明。
 - `make icons` 依赖 `dwebp`（`brew install webp`）或带 Pillow 的 `python3`；生成物已入库，日常构建不需要这两个工具。
 - 桌面框架只覆盖导航、发现页、资源库页与应用边界；`ui.List`、`ui.Table`、多窗口、`mygo.WatchFiles` 等尚未使用。
-- 图片缓存按 `sha256(url)` 累积，没有容量上限与淘汰策略；本地库格式为 version 1 的 JSON，尚无迁移代码。
+- 图片缓存按 `sha256(url)` 累积，没有容量上限与淘汰策略，仍待淘汰；视频缓存有字节上限与 LRU（默认磁盘 2 GiB、单对象 512 MiB），首次播放需先完整下载对象（超上限的大文件只透传不缓存），HLS 的段与密钥同样缓存。
+- 真实 HLS 播放仍依赖系统解码器：macOS 的 AVFoundation 原生支持，Linux 需要 `gstreamer1.0-plugins-bad` 提供 hlsdemux，当前 Linux 开发机未安装且无 root，故真实 HLS 在本机无法播放（与缓存无关）。本地库格式为 version 1 的 JSON，尚无迁移代码。
 - 详情页与播放页已实现，但播放页的弹幕、字幕与评论没有数据来源，只保留画面、控制条、正在播放与选集；评分、收藏数、放送资料等参考图字段上游未提供，界面按真实字段（类型、地区、年份、话数、导演、演员、标签）展示；片单聚合（跨源）尚未实现；资源库页只取列表首页、无分页加载更多；发现页只用一个源，Hero 的“横幅最多分区”是布局启发式而非规则概念。
 
 ## 下一步
 
 - 为播放页接入弹幕、字幕与评论的数据来源，并把播放页进度写回接上继续观看的续播位置；追剧、搜索沿用同一套源与本地库。
-- 设置页暴露规则目录配置项，替代目前的环境变量与默认目录约定；再按需要做跨源聚合与缓存淘汰。
+- 设置页暴露规则目录配置项，替代目前的环境变量与默认目录约定；再按需要做跨源聚合与图片缓存淘汰。
 - 配置远端后让 CI 真正跑一次，并把结果写回本文件；发布时补 macOS 签名/公证与 Windows/Linux 打包验证。
 - 出现需要两个以上应用共用的真实契约时，再按 ADR 0001 提取 `packages/` 模块。

@@ -21,5 +21,6 @@
 - [0007 桌面框架与应用内职责分层](0007-desktop-shell.md)
 - [0008 源规则用声明式 DSL，desktop 只做通用解释](0008-rule-dsl-and-engine.md)
 - [0009 发现页由源规则首页与本地观看库组合](0009-home-page-and-local-library.md)
+- [0010 视频经本地缓存代理播放](0010-video-cache-proxy.md)
 
 新增决策时在本列表补一行，写完跑 `make rules` 确认索引、文件名和链接都在。

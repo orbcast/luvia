@@ -16,6 +16,7 @@ import (
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
 	"luvia/apps/desktop/internal/source"
+	"luvia/apps/desktop/internal/videocache"
 )
 
 const requestTimeout = 30 * time.Second
@@ -44,6 +45,7 @@ type Deps struct {
 	Source    source.Source
 	Library   *library.Store
 	Images    *media.Loader
+	Cache     *videocache.Cache
 	Run       func(func())
 	OnBack    func()
 	OpenVideo func(string) (*ui.VideoPlayer, error)
@@ -177,6 +179,9 @@ func (p *Page) open(url string) {
 	if url == "" {
 		p.notice = noticeUnavailable
 		return
+	}
+	if p.deps.Cache != nil {
+		url = p.deps.Cache.ProxyURL(url)
 	}
 	system, err := p.deps.OpenVideo(url)
 	if err != nil {

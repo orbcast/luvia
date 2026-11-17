@@ -11,6 +11,7 @@ import (
 	"luvia/apps/desktop/internal/media"
 	"luvia/apps/desktop/internal/player"
 	"luvia/apps/desktop/internal/source"
+	"luvia/apps/desktop/internal/videocache"
 )
 
 // mode is which screen the router currently shows.
@@ -26,6 +27,7 @@ type Deps struct {
 	Source    source.Source
 	Library   *library.Store
 	Images    *media.Loader
+	Cache     *videocache.Cache
 	Base      func(*ui.Context) ui.Element
 	Refresh   func()
 	Run       func(func())
@@ -52,7 +54,7 @@ func New(deps Deps) *Router {
 		OnPlay: r.openPlayer, OnBack: r.backFromDetail,
 	})
 	r.player = player.New(player.Deps{
-		Source: deps.Source, Library: deps.Library, Images: deps.Images, Run: deps.Run,
+		Source: deps.Source, Library: deps.Library, Images: deps.Images, Cache: deps.Cache, Run: deps.Run,
 		OnBack: r.backFromPlayer, OpenVideo: deps.OpenVideo,
 	})
 	return r

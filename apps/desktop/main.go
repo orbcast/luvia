@@ -24,11 +24,13 @@ import (
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/engine"
 	"luvia/apps/desktop/internal/source/loader"
+	"luvia/apps/desktop/internal/videocache"
 	"luvia/apps/desktop/locales"
 )
 
 func main() {
 	shell := appshell.New()
+	var videoCache *videocache.Cache
 	mygo.App.WhenReady(func() {
 		userData, err := mygo.App.Path(mygo.PathUserData)
 		if err != nil {
@@ -42,6 +44,7 @@ func main() {
 		preferences.RestoreTheme(themePath, mygo.Theme.SetSource)
 
 		profile := openProfile(userData, cache)
+		videoCache = profile.video
 		var introCtrl *playintro.Controller
 		window := appwindow.New(func() appwindow.Window {
 			return mygo.NewWindow(mygo.WindowOptions{
@@ -87,6 +90,7 @@ func main() {
 			Source:    profile.source,
 			Library:   profile.library,
 			Images:    profile.images,
+			Cache:     profile.video,
 			Refresh:   window.Refresh,
 			Immersive: shell.SetNavigationHidden,
 			Intro:     func() { introCtrl.Start(nil) },
@@ -124,6 +128,9 @@ func main() {
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
+	if videoCache != nil {
+		_ = videoCache.Close()
+	}
 }
 
 // profile is the local state the window needs before any source answers.
@@ -131,6 +138,7 @@ type profile struct {
 	source  source.Source
 	library *library.Store
 	images  *media.Loader
+	video   *videocache.Cache
 }
 
 // openProfile opens the configured rule directory, the local library and the
@@ -142,17 +150,21 @@ func openProfile(userData, cache string) profile {
 		log.Printf("library %s: %v", libraryPath, err)
 	}
 	images := media.New(filepath.Join(cache, "artwork"), http.DefaultClient)
+	video, err := videocache.New(filepath.Join(cache, "video"), videocache.Options{})
+	if err != nil {
+		log.Printf("video cache %s: %v", filepath.Join(cache, "video"), err)
+	}
 
 	rules := loader.DefaultDir(filepath.Join(userData, "rules"), filepath.Join(resourceDir(), "luvia-rules"))
 	set, err := loader.Load(rules, engine.Options{Client: http.DefaultClient})
 	if err != nil {
 		log.Printf("rules %s: %v", rules, err)
-		return profile{library: store, images: images}
+		return profile{library: store, images: images, video: video}
 	}
 	for _, diagnostic := range set.Diagnostics() {
 		log.Printf("rule skipped: %v", diagnostic)
 	}
-	return profile{source: preferredSource(set), library: store, images: images}
+	return profile{source: preferredSource(set), library: store, images: images, video: video}
 }
 
 func preferredSource(set *loader.Set) source.Source {

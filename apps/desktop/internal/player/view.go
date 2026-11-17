@@ -58,9 +58,23 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Cover)
 	} else {
 		p.stageFallback(c, t, m)
+		if p.player != nil && p.notice == noticeNone {
+			p.stageBuffering(c, m)
+		}
 	}
 	p.stageTop(c, t, m)
 	p.stageControls(c, t, m)
+}
+
+// stageBuffering shows a quiet marker while the system player has opened the
+// media but not yet delivered its first frame.
+func (p *Page) stageBuffering(c *ui.Context, m locales.Messages) {
+	ui.Row(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
+		Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Radius(999).Padding(8, 16).Background(ui.RGBA(0, 0, 0, 0.5)).Children(func() {
+			ui.Text(c, m.Buffering()).FontSize(13).TextColor(mediaInk)
+		})
+	})
 }
 
 func (p *Page) stageFallback(c *ui.Context, t *ui.Theme, m locales.Messages) {
