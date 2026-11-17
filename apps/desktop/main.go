@@ -21,6 +21,7 @@ import (
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/engine"
 	"luvia/apps/desktop/internal/source/loader"
+	"luvia/apps/desktop/internal/splash"
 	"luvia/apps/desktop/locales"
 )
 
@@ -77,17 +78,24 @@ func main() {
 			shell.SyncMenu(mygo.App.Menu())
 			window.Refresh()
 		})
-		rebuildMenu()
 		mygo.App.OnLocaleChanged(func(string) { rebuildMenu() })
 		if runtime.GOOS == "darwin" {
 			mygo.App.OnWindowAllClosed(func() {})
 		}
+		revealed := false
 		mygo.App.OnActivate(func(visible bool) {
-			if !visible {
+			if !visible && revealed {
 				window.Open()
 			}
 		})
-		window.Open()
+		// Show the opening animation first; the main window opens when it
+		// finishes so the launch reads as one continuous transition. The menu
+		// is installed only then, so the splash shows no menu bar.
+		splash.Show(func() {
+			revealed = true
+			rebuildMenu()
+			window.Open()
+		})
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

@@ -22,6 +22,12 @@ Luvia 的 Go / MyGo 桌面应用。目前实现应用框架与发现页（Home�
 
 Solar 图标母版及来源清单位于 [assets/ui-icons/solar](../../assets/ui-icons/solar/README.md)。在本目录执行 `go generate ./...` 从母版生成 `internal/icons/icons_gen.go`，`internal/icons` 负责按名称解析并缓存；只修改母版，不手改生成物。图标随应用嵌入，不依赖运行时网络，`currentColor` 跟随语义前景色。
 
+## 应用图标与开屏动画
+
+应用图标母版在仓库根目录 `assets/icons/`，`make icons` 生成 `resources/icon.png`（Windows/Linux/开发版）并同步 macOS 的 `AppIcon.icon/Assets/mark.svg`。开屏动画由 `internal/splash` 负责：`main.go` 启动时先显示一个 512×512 的无边框深色窗口，用 `ui.Video` 播放内嵌的 `opening.apng`（球体从小放大后淡入 Luvia 字样），播放结束再打开主窗口并安装菜单。动画内嵌、不依赖运行时文件或网络；解码失败时直接进入主窗口，不会卡住启动。
+
+动画母版与生成脚本见 [assets/brand/opening/README.md](../../assets/brand/opening/README.md)，改图标或动画后运行 `make brand` 重新生成，不手改生成物。`internal/splash` 的自检在 `go test ./...` 中解码内嵌动画，防止空资源；无窗口环境可用 `xvfb-run` 起虚拟屏后台验证开屏与主界面，不干扰真实桌面。
+
 ## 源规则解析层
 
 播放器不直接实现任何站点。`apps/luvia-rules/<source-id>/rule.json` 用声明式 JSON 描述上游，本应应用通过 `internal/source` 的五个操作（首页、列表、详情、选集、解析）读取，规则格式与字段见 [docs/rule-dsl.md](../../docs/rule-dsl.md)。

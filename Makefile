@@ -5,7 +5,7 @@ MYGO ?= go tool mygo
 COVER_MIN ?= 80
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor dev test test-native build vet fmt check rules rules-verify i18n cover race check-gen hooks icons icons-check skills
+.PHONY: help doctor dev test test-native build vet fmt check rules rules-verify i18n cover race check-gen hooks icons icons-check brand skills
 
 ## help: 列出可用命令
 help:
@@ -48,6 +48,10 @@ build:
 ## icons: 从 assets/icons 的共享母版重新生成各应用的 PNG 图标
 icons:
 	@sh scripts/icons.sh
+
+## brand: 从 assets/icons 母版生成开屏动画（APNG）到 assets/brand 与应用内嵌副本
+brand:
+	@python3 -B scripts/generate-opening.py
 
 ## vet: 运行 MyGo 的静态检查与 go vet
 vet:
