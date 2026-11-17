@@ -3,6 +3,7 @@ package catalog
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
@@ -17,12 +18,39 @@ const (
 	tabHeight       = 52
 	tabHeightDocked = 44
 	tabGap          = 12
-	fieldHeight     = 38
 	posterRatio     = 1.5 // height over width for a 2:3 poster
 	minPosterWidth  = 120
 	maxColumns      = 6
 	posterGap       = 20
+	// tabColsDocked lays the six category pills three to a row on a narrow
+	// window, so they wrap into two even rows instead of running off the edge.
+	tabColsDocked = 3
 )
+
+var (
+	// layoutIn fades a fresh grid or list into its place when the layout or the
+	// category changes, so the body swaps like a page instead of a slide show.
+	layoutIn = ui.ElementTransition{
+		Duration: 200 * time.Millisecond,
+		Enter:    &ui.Motion{Opacity: 0, Y: 8},
+		Exit:     &ui.Motion{Opacity: 0, Y: -8},
+	}
+	// tabMotion carries the selected category's ring and fill between tabs.
+	tabMotion = ui.ElementTransition{Duration: 140 * time.Millisecond, Colors: true}
+	// imageIn fades a poster in as its cached bitmap arrives, so a placeholder
+	// shows at once and the artwork eases in rather than popping.
+	imageIn = ui.ElementTransition{Duration: 220 * time.Millisecond, Enter: &ui.Motion{}}
+)
+
+// margins are the page's left and right gutters. The left one clears the
+// floating AppShell; the right one is a normal page gutter, so a wide window
+// does not leave a dead strip of empty space along its edge.
+func margins(width float32) (left, right float32) {
+	if design.Docked(width) {
+		return design.NarrowGutter, design.NarrowGutter
+	}
+	return design.Inset(width), design.PageGutter
+}
 
 // View builds the resource library inside the AppShell's content area.
 func (p *Page) View(c *ui.Context) ui.Element {
@@ -31,11 +59,11 @@ func (p *Page) View(c *ui.Context) ui.Element {
 	t := c.Theme()
 	m := locales.In(c.Locale())
 	width, _ := c.Size()
-	inset := design.Inset(width)
+	left, right := margins(width)
 
 	scroll := ui.Scroll(c).Fill().Background(t.Background).ScrollbarAxes(false, true)
 	scroll.Children(func() {
-		ui.Column(c).FillWidth().Padding(28, inset, 64+design.BottomClearance(width), inset).
+		ui.Column(c).FillWidth().Padding(28, right, 64+design.BottomClearance(width), left).
 			Gap(20).Children(func() {
 			p.header(c, t, m, width)
 			p.tabs(c, t, m, width)
@@ -46,40 +74,36 @@ func (p *Page) View(c *ui.Context) ui.Element {
 	return scroll
 }
 
-// header draws the title, its count and the search field on one line.
+// header draws the title and its count. Search lives in the global dock, so the
+// page does not repeat it here.
 func (p *Page) header(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
 	titleSize := float32(26)
-	searchWidth := float32(300)
 	if design.Docked(width) {
 		titleSize = 22
-		searchWidth = 200
 	}
 	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(10).Children(func() {
 		ui.Text(c, m.Library()).FontSize(titleSize).Bold().TextColor(t.Text)
 		ui.Text(c, m.LibraryCount(len(p.cards))).FontSize(13).TextColor(t.TextMuted)
-		ui.Spacer(c)
-		field := ui.SearchField(c, &p.query).Width(searchWidth).Height(fieldHeight).
-			Radius(11).Background(t.Surface).Placeholder(m.SearchLibrary())
-		if field.Submitted() {
-			p.reload()
-		}
 	})
 }
 
-// tabs draws the six equal category pills, the selected one ringed in blue.
+// tabs draws the six category pills. A wide window fits them on one row; a
+// docked one lays them three to a row so they wrap neatly instead of clipping.
 func (p *Page) tabs(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	available := width - 2*design.Inset(width)
+	left, right := margins(width)
+	available := width - left - right
 	gap := float32(tabGap)
 	height := float32(tabHeight)
 	fontSize := float32(15)
+	columns := catCount
 	if design.Docked(width) {
-		height, fontSize = tabHeightDocked, 13
+		height, fontSize, columns = tabHeightDocked, 13, tabColsDocked
 	}
-	cardW := (available - gap*float32(catCount-1)) / float32(catCount)
-	if cardW < 60 {
-		cardW = 60
+	cardW := (available - gap*float32(columns-1)) / float32(columns)
+	if cardW < 56 {
+		cardW = 56
 	}
-	ui.Row(c).FillWidth().Gap(gap).Children(func() {
+	ui.Row(c).FillWidth().Wrap().Gap(gap).Children(func() {
 		for i := 0; i < catCount; i++ {
 			p.tab(c, t, m, i, cardW, height, fontSize)
 		}
@@ -90,7 +114,7 @@ func (p *Page) tab(c *ui.Context, t *ui.Theme, m locales.Messages, index int, w,
 	tint := design.CategoryTints()[index]
 	label := categoryLabel(m, index)
 	button := ui.ButtonBase(c).Key("cat:" + strconv.Itoa(index)).Width(w).Height(h).
-		Radius(12).Label(label).Background(tint.Background)
+		Radius(12).Label(label).Background(tint.Background).Transition(tabMotion)
 	if index == p.category {
 		button.Border(2, design.CategoryRing())
 	}
@@ -181,8 +205,11 @@ func (p *Page) favoriteFilter(c *ui.Context, t *ui.Theme, m locales.Messages) {
 }
 
 // selectField is one surface drop-down over a list of labels.
-func (p *Page) selectField(c *ui.Context, t *ui.Theme, value *int, labels []string, _ float32) {
+func (p *Page) selectField(c *ui.Context, t *ui.Theme, value *int, labels []string, width float32) {
 	w := float32(132)
+	if design.Docked(width) {
+		w = 104
+	}
 	sel := ui.SelectBase(c, value)
 	sel.Trigger.Width(w).Height(36).Radius(10).PaddingX(12).
 		AlignItems(ui.Center).Gap(8).Background(t.Surface).Label(labels[*value])
@@ -215,7 +242,8 @@ func (p *Page) viewToggle(c *ui.Context, t *ui.Theme, m locales.Messages) {
 func (p *Page) viewButton(c *ui.Context, t *ui.Theme, grid bool, name, label string) {
 	on := p.grid == grid
 	ink := t.TextMuted
-	button := ui.ButtonBase(c).Key("view:"+name).Size(34, 34).Radius(9).Label(label).Tooltip(label)
+	button := ui.ButtonBase(c).Key("view:"+name).Size(34, 34).Radius(9).Label(label).Tooltip(label).
+		Transition(tabMotion)
 	if on {
 		button.Background(t.Surface).Border(1, t.Border)
 		ink = t.Text
@@ -235,7 +263,7 @@ func (p *Page) viewButton(c *ui.Context, t *ui.Theme, grid bool, name, label str
 func (p *Page) results(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
 	switch {
 	case p.loading:
-		p.stateText(c, t, m.LibraryLoading(), 14)
+		p.loadingView(c, t, m)
 		return
 	case p.err != nil:
 		p.errorView(c, t, m)
@@ -247,11 +275,28 @@ func (p *Page) results(c *ui.Context, t *ui.Theme, m locales.Messages, width flo
 		p.stateText(c, t, m.LibraryEmpty(), 14)
 		return
 	}
+	mode := "list"
 	if p.grid {
-		p.gridView(c, t, m, width, cards)
-		return
+		mode = "grid"
 	}
-	p.listView(c, t, m, cards)
+	// Keying by layout lets a grid/list swap cross-fade as one body instead of
+	// snapping, so the page keeps a sense of place.
+	ui.Box(c).Key("layout:" + mode).FillWidth().Transition(layoutIn).Children(func() {
+		if p.grid {
+			p.gridView(c, t, m, width, cards)
+			return
+		}
+		p.listView(c, t, m, cards)
+	})
+}
+
+// loadingView pairs the load message with a live spinner, so a slow source
+// reads as working rather than frozen.
+func (p *Page) loadingView(c *ui.Context, t *ui.Theme, m locales.Messages) {
+	ui.Row(c).FillWidth().Padding(48, 0).AlignItems(ui.Center).Gap(10).Children(func() {
+		ui.Spinner(c).Size(16, 16).TextColor(t.TextMuted)
+		ui.Text(c, m.LibraryLoading()).FontSize(14).TextColor(t.TextMuted)
+	})
 }
 
 // sectionRow names the current category and counts the titles drawn.
@@ -264,7 +309,8 @@ func (p *Page) sectionRow(c *ui.Context, t *ui.Theme, m locales.Messages, count 
 
 // gridView lays the posters out in as many columns as fit, capped at six.
 func (p *Page) gridView(c *ui.Context, t *ui.Theme, m locales.Messages, width float32, cards []source.Card) {
-	available := width - 2*design.Inset(width)
+	left, right := margins(width)
+	available := width - left - right
 	gap := float32(posterGap)
 	columns := int((available + gap) / (minPosterWidth + gap))
 	if columns < 1 {
@@ -277,21 +323,28 @@ func (p *Page) gridView(c *ui.Context, t *ui.Theme, m locales.Messages, width fl
 	// last column of a full row onto the next line.
 	cardW := (available-gap*float32(columns-1))/float32(columns) - 0.5
 	ui.Row(c).FillWidth().Wrap().Gap(gap).AlignItems(ui.Start).Children(func() {
-		for _, card := range cards {
-			p.posterCard(c, t, m, card, cardW)
+		for i, card := range cards {
+			p.posterCard(c, t, m, card, cardW, i)
 		}
 	})
 }
 
 // posterCard is one 2:3 poster with its badges, title, bookmark and metadata.
-func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card, w float32) {
-	ui.Column(c).Width(w).Gap(8).Children(func() {
+func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card, w float32, index int) {
+	// A small per-index delay staggers the posters in as they arrive, so a new
+	// category flows onto the page instead of all popping at once.
+	motion := ui.Snappy
+	motion.Delay = time.Duration(index%12) * 22 * time.Millisecond
+	column := ui.Column(c).Key("card:" + card.Ref.String()).Width(w).Gap(8).
+		Transition(ui.ElementTransition{Animation: &motion, Enter: &ui.Motion{Y: 10}})
+	column.Children(func() {
 		frame := ui.ButtonBase(c).Key("poster:" + card.Ref.String()).Width(w).Height(w * posterRatio).
 			Radius(12).Clip().Background(t.Surface).Label(card.Title)
 		frame.Children(func() {
+			p.posterPlaceholder(c, t)
 			if p.deps.Images != nil {
 				if bitmap := p.deps.Images.Bitmap(card.PosterURL); bitmap != nil {
-					ui.Image(c, bitmap).Fill().Fit(ui.Cover)
+					ui.Image(c, bitmap).Fill().Fit(ui.Cover).Transition(imageIn)
 				}
 			}
 			p.qualityBadge(c, card)
@@ -300,6 +353,13 @@ func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, card s
 		if frame.Clicked() {
 			p.detail(card)
 		}
+		// Hover lifts the poster a touch; this pose only paints, so a wall of
+		// posters stays smooth.
+		pose := ui.Pose{}
+		if frame.Hovered() {
+			pose = ui.Pose{Y: -4, Scale: 1.012}
+		}
+		frame.AnimatePose(pose, ui.Snappy)
 
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
 			title := ui.ButtonBase(c).Grow(1).Height(20).Radius(4).
@@ -316,6 +376,16 @@ func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, card s
 		if meta := p.metaLine(m, card); meta != "" {
 			ui.Text(c, meta).FontSize(11).TextColor(t.TextMuted).MaxLines(1)
 		}
+	})
+}
+
+// posterPlaceholder fills a poster frame that has no artwork yet (loading or
+// missing) with a quiet mark, so an empty card reads as empty rather than
+// broken.
+func (p *Page) posterPlaceholder(c *ui.Context, t *ui.Theme) {
+	ui.Column(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
+		Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, icons.Parse("clapperboard-linear")).Size(30, 30).TextColor(t.TextMuted).Opacity(0.45)
 	})
 }
 
@@ -365,23 +435,28 @@ func (p *Page) bookmark(c *ui.Context, t *ui.Theme, m locales.Messages, card sou
 // listView draws the compact rows the list toggle chooses.
 func (p *Page) listView(c *ui.Context, t *ui.Theme, m locales.Messages, cards []source.Card) {
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
-		for _, card := range cards {
-			p.listRow(c, t, m, card)
+		for i, card := range cards {
+			p.listRow(c, t, m, card, i)
 		}
 	})
 }
 
-func (p *Page) listRow(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
-	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(func() {
+func (p *Page) listRow(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card, index int) {
+	motion := ui.Snappy
+	motion.Delay = time.Duration(index%12) * 22 * time.Millisecond
+	row := ui.Row(c).Key("row-wrap:" + card.Ref.String()).FillWidth().AlignItems(ui.Center).Gap(12).
+		Transition(ui.ElementTransition{Animation: &motion, Enter: &ui.Motion{Y: 8}})
+	row.Children(func() {
 		main := ui.ButtonBase(c).Key("row:"+card.Ref.String()).Grow(1).Radius(10).
 			Padding(8, 10).Label(card.Title).Background(t.Surface)
 		main.Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(14).Children(func() {
 				thumb := ui.Box(c).Width(44).Height(66).Radius(8).Clip().Background(t.Background)
 				thumb.Children(func() {
+					p.posterPlaceholder(c, t)
 					if p.deps.Images != nil {
 						if bitmap := p.deps.Images.Bitmap(card.PosterURL); bitmap != nil {
-							ui.Image(c, bitmap).Fill().Fit(ui.Cover)
+							ui.Image(c, bitmap).Fill().Fit(ui.Cover).Transition(imageIn)
 						}
 					}
 				})

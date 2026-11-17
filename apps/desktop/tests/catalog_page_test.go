@@ -163,3 +163,58 @@ func TestShellNavigatesToCatalog(t *testing.T) {
 		t.Fatalf("library destination did not show the catalog in %v", tt.Texts())
 	}
 }
+
+// TestCatalogLoadingAndNarrowLayout covers the spinner while a source answers
+// and the docked layout that wraps the six category pills instead of clipping.
+func TestCatalogLoadingAndNarrowLayout(t *testing.T) {
+	page, _, run := newCatalogPage(t)
+	page.Start()
+
+	loading := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(ui.DarkTheme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 1100, 720)
+	loading.SetLocale("en")
+	loading.Frame()
+	if !loading.HasText("Loading the library") {
+		t.Fatalf("loading state missing its message in %v", loading.Texts())
+	}
+	apply(t, run)
+
+	narrow := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(ui.DarkTheme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 430, 820)
+	narrow.SetLocale("en")
+	narrow.Frame()
+	for _, label := range []string{"All", "Movies", "Series", "Anime", "Variety", "Shorts", "Interstellar"} {
+		if !narrow.HasText(label) {
+			t.Fatalf("narrow layout missing %q in %v", label, narrow.Texts())
+		}
+	}
+}
+
+// TestCatalogSwitchesToList covers the list layout the view toggle chooses.
+func TestCatalogSwitchesToList(t *testing.T) {
+	page, _, run := newCatalogPage(t)
+	page.Start()
+	apply(t, run)
+
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(ui.DarkTheme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	if err := tt.Click("List view"); err != nil {
+		t.Fatalf("list view: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("Interstellar") {
+		t.Fatalf("list layout lost its titles in %v", tt.Texts())
+	}
+}
