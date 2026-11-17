@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""生成 Luvia 的开屏动画（APNG）。
+"""生成 Luvia 的启播动画（APNG）——点击播放后在播放器建立起播前播放的一段品牌动画。
 
-动画风格参考用户提供的 AssTV 开屏：蓝色球体从小放大到满尺寸，随后底部
+动画风格参考用户提供的素材：蓝色球体从小放大到满尺寸，随后底部
 淡入品牌字样。这里把品牌字样换成 Luvia，母版素材取自 assets/icons/mark.webp
 （透明底蓝色球+镂空播放键），因此更换图标后重新生成本动画即可保持一致。
 
 输出两份完全相同的文件：
-  - assets/brand/opening/luvia-opening.apng     动画母版（正式素材，体积不受限）
-  - apps/desktop/internal/splash/opening.apng   应用内嵌副本（go:embed 使用）
+  - assets/brand/playintro/luvia-playintro.apng 动画母版（正式素材，体积不受限）
+  - apps/desktop/internal/playintro/playintro.apng 应用内嵌副本（go:embed 使用）
 
 用法（仓库根目录）：make brand，或 python3 -B scripts/generate-opening.py
 """
@@ -22,10 +22,10 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 BALL = os.path.join(ROOT, "assets", "icons", "mark.webp")
-MASTER_OUT = os.path.join(ROOT, "assets", "brand", "opening", "luvia-opening.apng")
-EMBED_OUT = os.path.join(ROOT, "apps", "desktop", "internal", "splash", "opening.apng")
+MASTER_OUT = os.path.join(ROOT, "assets", "brand", "playintro", "luvia-playintro.apng")
+EMBED_OUT = os.path.join(ROOT, "apps", "desktop", "internal", "playintro", "playintro.apng")
 
-CANVAS = 512          # 画布边长，与开屏窗口一致
+CANVAS = 512          # 画布边长，与开屏动画素材一致
 FRAME_MS = 33         # 约 30fps
 DURATION = 2.2        # 总时长（秒）
 WORDMARK = "Luvia"

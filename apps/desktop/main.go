@@ -17,12 +17,12 @@ import (
 	"luvia/apps/desktop/internal/home"
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
+	"luvia/apps/desktop/internal/playintro"
 	"luvia/apps/desktop/internal/preferences"
 	"luvia/apps/desktop/internal/settings"
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/engine"
 	"luvia/apps/desktop/internal/source/loader"
-	"luvia/apps/desktop/internal/splash"
 	"luvia/apps/desktop/locales"
 )
 
@@ -41,29 +41,38 @@ func main() {
 		preferences.RestoreTheme(themePath, mygo.Theme.SetSource)
 
 		profile := openProfile(userData, cache)
+		var introCtrl *playintro.Controller
 		window := appwindow.New(func() appwindow.Window {
 			return mygo.NewWindow(mygo.WindowOptions{
 				Title: "Luvia", Width: 1100, Height: 720, MinWidth: 400, MinHeight: 400,
-				StateKey: "main", TitleBarStyle: mygo.TitleBarHidden, Content: ui.View(shell.View),
+				StateKey: "main", TitleBarStyle: mygo.TitleBarHidden,
+				Content: ui.View(func(c *ui.Context) {
+					shell.View(c)
+					introCtrl.View(c)
+				}),
 			})
 		})
+		introCtrl = playintro.New(func() { window.Refresh() })
 
 		actions := appshell.MenuActions{
 			Theme:    mygo.Theme.Source,
 			SetTheme: func(source mygo.ThemeSource) { preferences.ChangeTheme(themePath, source, mygo.Theme.SetSource) },
 			Locale:   mygo.App.ChosenLocale, SetLocale: mygo.App.SetLocale,
 		}
+		onPlay := func(source.Ref) { introCtrl.Start(nil) }
 		discover := home.New(home.Deps{
 			Source:   profile.source,
 			Library:  profile.library,
 			Images:   profile.images,
 			Interval: 6 * time.Second,
+			OnPlay:   onPlay,
 			OnAll:    func() { shell.Navigate(appshell.Library) },
 		})
 		catalogPage := catalog.New(catalog.Deps{
 			Source:  profile.source,
 			Library: profile.library,
 			Images:  profile.images,
+			OnPlay:  onPlay,
 		})
 		settingsPage := settings.New(settings.Deps{
 			Theme: actions.Theme, SetTheme: actions.SetTheme,
@@ -86,24 +95,17 @@ func main() {
 			shell.SyncMenu(mygo.App.Menu())
 			window.Refresh()
 		})
+		rebuildMenu()
 		mygo.App.OnLocaleChanged(func(string) { rebuildMenu() })
 		if runtime.GOOS == "darwin" {
 			mygo.App.OnWindowAllClosed(func() {})
 		}
-		revealed := false
 		mygo.App.OnActivate(func(visible bool) {
-			if !visible && revealed {
+			if !visible {
 				window.Open()
 			}
 		})
-		// Show the opening animation first; the main window opens when it
-		// finishes so the launch reads as one continuous transition. The menu
-		// is installed only then, so the splash shows no menu bar.
-		splash.Show(func() {
-			revealed = true
-			rebuildMenu()
-			window.Open()
-		})
+		window.Open()
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

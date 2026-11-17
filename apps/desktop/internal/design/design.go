@@ -41,10 +41,10 @@ const (
 // NavigationTint is the grey wash the selected AppShell destination sits on.
 func NavigationTint() ui.Color { return ui.RGBA(128, 128, 128, 0.22) }
 
-// SplashBackground is the dark backdrop the launch animation sits on. The
-// opening splash is always dark, whatever the desktop appearance, so its blue
+// PlayIntroBackground is the dark backdrop the play-intro (启播) animation sits
+// on. The intro is always dark, whatever the desktop appearance, so its blue
 // mark and white wordmark stay legible.
-const SplashBackground = "#0B0A0F"
+func PlayIntroBackground() ui.Color { return ui.Hex("#0B0A0F") }
 
 // ShellGroupHeight is the glass panel around count destinations stacked in
 // a column: the padding on both ends and one gap between each pair.
