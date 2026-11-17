@@ -1384,6 +1384,36 @@ func (msgs Messages) SubtitlesLabel() string {
 	return Catalog.Format(msgs.locale, "subtitlesLabel", nil)
 }
 
+// DanmakuLabel says "Danmaku"
+// in the language the app shows.
+func DanmakuLabel() string { return In(i18n.Locale()).DanmakuLabel() }
+
+// DanmakuLabel says "Danmaku"
+// in the language of msgs.
+func (msgs Messages) DanmakuLabel() string {
+	return Catalog.Format(msgs.locale, "danmakuLabel", nil)
+}
+
+// Rewind10 says "Rewind 10 seconds"
+// in the language the app shows.
+func Rewind10() string { return In(i18n.Locale()).Rewind10() }
+
+// Rewind10 says "Rewind 10 seconds"
+// in the language of msgs.
+func (msgs Messages) Rewind10() string {
+	return Catalog.Format(msgs.locale, "rewind10", nil)
+}
+
+// Forward10 says "Forward 10 seconds"
+// in the language the app shows.
+func Forward10() string { return In(i18n.Locale()).Forward10() }
+
+// Forward10 says "Forward 10 seconds"
+// in the language of msgs.
+func (msgs Messages) Forward10() string {
+	return Catalog.Format(msgs.locale, "forward10", nil)
+}
+
 // EpisodesTab says "Episodes"
 // in the language the app shows.
 func EpisodesTab() string { return In(i18n.Locale()).EpisodesTab() }

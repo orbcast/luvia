@@ -165,6 +165,21 @@
       "sha256": "3172b233fd1acc1912a1730d4d7ad81f5857e87cb93424e75a6a4e6d6bcc1f74",
       "source": "https://api.iconify.design/solar/close-circle-linear.svg"
     },
+    "solar:close-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/close-linear/",
+      "file": "solar--close-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "5881c1f25faedbdbafbfcd76a83dba393a0a22f1589d26c8a97be1f862f6285b",
+      "source": "https://api.iconify.design/solar/close-linear.svg"
+    },
     "solar:document-text-linear": {
       "author": {
         "name": "480 Design",
@@ -389,6 +404,36 @@
       },
       "sha256": "4db49f718db7e554646242397ae5da56cec7ceadeb5eff56177a7fe428935f99",
       "source": "https://api.iconify.design/solar/playlist-linear.svg"
+    },
+    "solar:rewind-10-seconds-back-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/rewind-10-seconds-back-linear/",
+      "file": "solar--rewind-10-seconds-back-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "be48e1f67806e548d16f0ef8eaa6edbc80a8e457bfc921e597999f55ad64eb6a",
+      "source": "https://api.iconify.design/solar/rewind-10-seconds-back-linear.svg"
+    },
+    "solar:rewind-10-seconds-forward-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/rewind-10-seconds-forward-linear/",
+      "file": "solar--rewind-10-seconds-forward-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "f6cf6cb99b0367f2eb0a806e3c38b40a006dea19b38ac86538700a347b211233",
+      "source": "https://api.iconify.design/solar/rewind-10-seconds-forward-linear.svg"
     },
     "solar:screencast-linear": {
       "author": {

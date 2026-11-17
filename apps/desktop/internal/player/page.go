@@ -73,7 +73,7 @@ type Page struct {
 	volume       float64
 	rate         float64
 	showSubtitle bool
-	volumeOpen   bool
+	danmaku      bool
 	panelHidden  bool
 	cinema       bool
 	expanded     bool
@@ -95,7 +95,7 @@ func New(deps Deps) *Page {
 	if deps.OpenVideo == nil {
 		deps.OpenVideo = video.OpenURL
 	}
-	p := &Page{deps: deps, index: -1, volume: 1, rate: 1, playing: true}
+	p := &Page{deps: deps, index: -1, volume: 1, rate: 1, playing: true, danmaku: true}
 	if deps.Images != nil {
 		deps.Images.SetChanged(func() { p.invalidate() })
 	}
@@ -108,7 +108,7 @@ func (p *Page) Open(detail source.Detail, episodes []source.Episode, index int) 
 	p.detail, p.episodes, p.index = detail, episodes, index
 	p.lineID, p.playback = "", source.Playback{}
 	p.loading, p.err, p.notice, p.started = false, nil, noticeNone, false
-	p.playing, p.muted, p.showSubtitle, p.volumeOpen, p.panelHidden, p.cinema = true, false, false, false, false, false
+	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, false, false, true, false, false
 	p.expanded, p.tab, p.scrub, p.scrubbing = false, tabEpisodes, 0, false
 	p.Start()
 }
@@ -311,9 +311,25 @@ func (p *Page) SetVolume(v float64) {
 	p.invalidate()
 }
 
-// ToggleVolumePanel expands or hides the volume slider.
-func (p *Page) ToggleVolumePanel() {
-	p.volumeOpen = !p.volumeOpen
+// ToggleDanmaku shows or hides the comment layer over the picture.
+func (p *Page) ToggleDanmaku() {
+	p.danmaku = !p.danmaku
+	p.invalidate()
+}
+
+// SeekBy moves the playhead by delta, clamped inside the clip.
+func (p *Page) SeekBy(delta time.Duration) {
+	if p.player == nil {
+		return
+	}
+	target := p.player.Position() + delta
+	if target < 0 {
+		target = 0
+	}
+	if d := p.player.Duration(); d > 0 && target > d {
+		target = d
+	}
+	p.player.Seek(target)
 	p.invalidate()
 }
 

@@ -42,7 +42,6 @@ func (p *Page) View(c *ui.Context) ui.Element {
 			p.stage(c, t, m, width)
 		case p.panelHidden:
 			p.stage(c, t, m, width)
-			p.panelReveal(c, t, m)
 		default:
 			ui.Row(c).Fill().Children(func() {
 				ui.Box(c).Grow(1).FillHeight().Children(func() { p.stage(c, t, m, width-panelWidth) })
@@ -89,51 +88,111 @@ func (p *Page) stageFallback(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	}
 }
 
+// stageTop draws the episode marker at the top-left and the floating control
+// cluster (volume slider plus close / danmaku / panel buttons) at the top-right.
 func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	back := ui.ButtonBase(c).Key("player-back").Absolute().Left(24).Top(44).Size(40, 40).Radius(20).
-		Material(glass.Glass{}).Label(m.Back()).Tooltip(m.Back()).ZIndex(8)
-	if back.Hovered() {
-		back.Material(glass.Glass{Interactive: true})
-	}
-	back.Children(func() {
-		ui.Icon(c, icons.Parse("alt-arrow-left-linear")).Size(20, 20).TextColor(mediaInk)
-	})
-	if back.Clicked() {
-		p.Back()
-	}
 	if episode, ok := p.current(); ok {
-		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(78).Top(56).
+		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(84).Top(24).
 			FontSize(13).Bold().TextColor(mediaInk)
+	}
+	ui.Row(c).Absolute().Right(24).Top(52).AlignItems(ui.Center).Gap(12).Children(func() {
+		p.volumeControl(c, m)
+		p.playerPill(c, m)
+	})
+}
+
+// volumeControl is the pill holding the volume track and its speaker toggle.
+func (p *Page) volumeControl(c *ui.Context, m locales.Messages) {
+	ui.Row(c).AlignItems(ui.Center).Gap(8).Radius(999).Padding(6, 12).Material(glass.Glass{}).Children(func() {
+		p.volumeTrack(c, m)
+		label := m.MuteLabel()
+		if p.muted {
+			label = m.UnmuteLabel()
+		}
+		speaker := ui.ButtonBase(c).Key("volume-mute").Size(24, 24).Radius(999).Label(label).Tooltip(label)
+		speaker.Children(func() {
+			ink := mediaInk
+			if p.muted {
+				ink = mediaMuted
+			}
+			ui.Icon(c, icons.Parse("volume-loud-linear")).Size(17, 17).TextColor(ink)
+		})
+		if speaker.Clicked() {
+			p.ToggleMute()
+		}
+	})
+}
+
+// volumeTrack is the thin white volume bar; pressing it sets the level.
+func (p *Page) volumeTrack(c *ui.Context, m locales.Messages) {
+	const trackWidth float32 = 88
+	frac := float32(clampF(p.volume, 0, 1))
+	ui.Box(c).Width(trackWidth).Height(18).Children(func() {
+		track := ui.ButtonBase(c).Key("volume-track").Fill().Label(m.VolumeLabel()).Tooltip(m.VolumeLabel())
+		track.Children(func() {
+			ui.Box(c).Absolute().Left(0).Right(0).Top(7).Height(4).Radius(2).Background(ui.RGBA(255, 255, 255, 0.28))
+			ui.Box(c).Absolute().Left(0).Top(7).Height(4).Radius(2).Background(mediaInk).Width(trackWidth * frac)
+			ui.Box(c).Absolute().Top(4).Left(trackWidth*frac-5).Size(10, 10).Radius(5).Background(mediaInk)
+		})
+		if x, _, over := track.PointerPosition(); over && track.Pressed() {
+			p.SetVolume(float64(x / trackWidth))
+		}
+	})
+}
+
+// playerPill is the close / danmaku / panel-toggle cluster at the top-right.
+func (p *Page) playerPill(c *ui.Context, m locales.Messages) {
+	panelLabel := m.CollapsePanel()
+	if p.panelHidden {
+		panelLabel = m.ExpandPanel()
+	}
+	ui.Row(c).AlignItems(ui.Center).Gap(2).Radius(999).Padding(4).Material(glass.Glass{}).Children(func() {
+		p.pillButton(c, "close", "close-linear", m.ClosePlayer(), false, p.Back)
+		p.pillButton(c, "danmaku", "chat-round-linear", m.DanmakuLabel(), p.danmaku, p.ToggleDanmaku)
+		p.pillButton(c, "panel", "widget-2-linear", panelLabel, false, p.TogglePanel)
+	})
+}
+
+func (p *Page) pillButton(c *ui.Context, key, icon, tip string, active bool, fn func()) {
+	button := ui.ButtonBase(c).Key("p-"+key).Size(34, 34).Radius(999).Label(tip).Tooltip(tip).
+		Background(ui.Transparent)
+	ink := mediaMuted
+	switch {
+	case active:
+		button.Background(ui.RGBA(255, 255, 255, 0.16))
+		ink = mediaInk
+	case button.Hovered():
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
+	}
+	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(18, 18).TextColor(ink) })
+	if button.Clicked() {
+		fn()
 	}
 }
 
 func (p *Page) stageControls(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	ui.Column(c).Absolute().Left(0).Right(0).Bottom(0).Padding(0, 22, 16, 22).Gap(10).Children(func() {
+	ui.Column(c).Absolute().Left(0).Right(0).Bottom(0).Padding(0, 24, 16, 24).Gap(8).Children(func() {
 		if episode, ok := p.current(); ok {
-			ui.Text(c, p.detail.Title+"  "+p.episodeLabel(m, episode)).FontSize(13).Bold().TextColor(mediaInk)
+			ui.Text(c, p.detail.Title+"  "+p.episodeLabel(m, episode)).FontSize(14).Bold().TextColor(mediaInk)
 		}
 
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(10).Children(func() {
 			ui.Text(c, clock(p.position())).FontSize(11).TextColor(mediaInk)
 			p.scrubber(c)
 			ui.Text(c, clock(p.duration())).FontSize(11).TextColor(mediaInk)
 		})
 
-		if p.volumeOpen {
-			p.volumePanel(c, m)
-		}
-
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+				p.iconButton(c, "rewind", "rewind-10-seconds-back-linear", m.Rewind10(), func() { p.SeekBy(-10 * time.Second) })
 				p.playButton(c, m)
-				p.iconButton(c, "next", "skip-next-linear", m.NextEpisode(), p.Next)
+				p.iconButton(c, "forward", "rewind-10-seconds-forward-linear", m.Forward10(), func() { p.SeekBy(10 * time.Second) })
 			})
 			ui.Spacer(c)
 			ui.Row(c).AlignItems(ui.Center).Gap(2).Radius(999).Padding(4).Material(glass.Glass{}).Children(func() {
 				p.iconButton(c, "prev", "skip-previous-linear", m.PreviousEpisode(), p.Previous)
+				p.iconButton(c, "next", "skip-next-linear", m.NextEpisode(), p.Next)
 				p.rateButton(c, m)
-				p.volumeButton(c, m)
-				p.subtitleButton(c, m)
 				p.fullscreenButton(c, m)
 			})
 		})
@@ -166,11 +225,11 @@ func (p *Page) playButton(c *ui.Context, m locales.Messages) {
 		icon, label = "pause-bold", m.PauseLabel()
 	}
 	button := ui.ButtonBase(c).Key("play").Size(44, 44).Radius(22).Label(label).Tooltip(label).
-		Material(glass.Glass{})
+		Background(ui.Transparent)
 	if button.Hovered() {
-		button.Material(glass.Glass{Interactive: true})
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
 	}
-	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(20, 20).TextColor(mediaInk) })
+	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(24, 24).TextColor(mediaInk) })
 	if button.Clicked() {
 		p.TogglePlay()
 	}
@@ -178,64 +237,14 @@ func (p *Page) playButton(c *ui.Context, m locales.Messages) {
 
 func (p *Page) rateButton(c *ui.Context, m locales.Messages) {
 	label := rateLabel(p.rate)
-	button := ui.ButtonBase(c).Key("rate").Height(34).Radius(9).PaddingX(10).Label(m.PlaybackSpeed()).
+	button := ui.ButtonBase(c).Key("rate").Size(34, 34).Radius(9).Label(m.PlaybackSpeed()).
 		Tooltip(m.PlaybackSpeed()).Background(ui.Transparent)
+	if button.Hovered() {
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
+	}
 	button.Children(func() { ui.Text(c, label).FontSize(12).Bold().TextColor(mediaInk) })
 	if button.Clicked() {
 		p.CycleRate()
-	}
-}
-
-// volumeButton opens the volume slider; a small chevron shows whether it is
-// expanded, as a disclosure control.
-func (p *Page) volumeButton(c *ui.Context, m locales.Messages) {
-	button := ui.ButtonBase(c).Key("volume").Height(34).Radius(9).PaddingX(8).
-		Label(m.VolumeLabel()).Tooltip(m.VolumeLabel()).Background(ui.Transparent)
-	if p.volumeOpen || button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
-	}
-	button.Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
-			ui.Icon(c, icons.Parse("volume-loud-linear")).Size(18, 18).TextColor(mediaInk)
-			chevron := ui.Icon(c, icons.Parse("alt-arrow-down-linear")).Size(10, 10).TextColor(mediaMuted)
-			if p.volumeOpen {
-				chevron.Rotate(180)
-			}
-		})
-	})
-	if button.Clicked() {
-		p.ToggleVolumePanel()
-	}
-}
-
-// volumePanel is the slider the volume button discloses, right-aligned over the
-// control bar.
-func (p *Page) volumePanel(c *ui.Context, m locales.Messages) {
-	ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-		ui.Spacer(c)
-		ui.Row(c).AlignItems(ui.Center).Gap(10).Radius(12).Padding(8, 12).Material(glass.Glass{}).Children(func() {
-			ui.Icon(c, icons.Parse("volume-loud-linear")).Size(16, 16).TextColor(mediaInk)
-			slider := ui.Slider(c, &p.volume, 0, 1).Width(150).Height(22)
-			slider.OnChange(func() { p.SetVolume(p.volume) })
-			ui.Text(c, fmt.Sprintf("%d%%", int(p.volume*100+0.5))).FontSize(11).TextColor(mediaInk)
-		})
-	})
-}
-
-// subtitleButton toggles the subtitle layer; its active state is a lit pill.
-func (p *Page) subtitleButton(c *ui.Context, m locales.Messages) {
-	ink := mediaMuted
-	button := ui.ButtonBase(c).Key("subtitle").Size(34, 34).Radius(9).Label(m.SubtitlesLabel()).
-		Tooltip(m.SubtitlesLabel()).Background(ui.Transparent)
-	if p.showSubtitle {
-		button.Background(ui.RGBA(255, 255, 255, 0.16))
-		ink = mediaInk
-	} else if button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
-	}
-	button.Children(func() { ui.Icon(c, icons.Parse("subtitles-linear")).Size(18, 18).TextColor(ink) })
-	if button.Clicked() {
-		p.ToggleSubtitle()
 	}
 }
 
@@ -246,6 +255,9 @@ func (p *Page) fullscreenButton(c *ui.Context, m locales.Messages) {
 	}
 	button := ui.ButtonBase(c).Key("fullscreen").Size(34, 34).Radius(9).Label(label).
 		Tooltip(label).Background(ui.Transparent)
+	if button.Hovered() {
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
+	}
 	button.Children(func() { ui.Icon(c, icons.Parse("full-screen-linear")).Size(18, 18).TextColor(mediaInk) })
 	if button.Clicked() {
 		p.ToggleCinema()
@@ -270,20 +282,6 @@ func (p *Page) panel(c *ui.Context, t *ui.Theme, m locales.Messages, height floa
 	box.Children(func() {
 		scroll := ui.Scroll(c).Fill()
 		scroll.Children(func() { p.panelBody(c, t, m, panelWidth) })
-		// A slim handle on the panel's left seam, vertically centered, folds the
-		// panel away; the same grip returns on the right seam to reopen it.
-		handle := ui.ButtonBase(c).Key("p-collapse").Absolute().Left(-10).Top(height/2-28).
-			Size(20, 56).Radius(10).Material(glass.Glass{Interactive: false}).
-			Label(m.CollapsePanel()).Tooltip(m.CollapsePanel()).ZIndex(8)
-		if handle.Hovered() {
-			handle.Material(glass.Glass{Interactive: true})
-		}
-		handle.Children(func() {
-			ui.Icon(c, icons.Parse("alt-arrow-right-linear")).Size(16, 16).TextColor(t.TextMuted)
-		})
-		if handle.Clicked() {
-			p.TogglePanel()
-		}
 	})
 }
 
@@ -325,23 +323,6 @@ func (p *Page) panelBody(c *ui.Context, t *ui.Theme, m locales.Messages, width f
 	})
 }
 
-// panelReveal is the arrow left floating on the video once the now-playing
-// panel is hidden, so the viewer can bring it back.
-func (p *Page) panelReveal(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	_, height := c.Size()
-	button := ui.ButtonBase(c).Key("p-reveal").Absolute().Right(6).Top(height/2-28).Size(20, 56).Radius(10).
-		Material(glass.Glass{}).Label(m.ExpandPanel()).Tooltip(m.ExpandPanel()).ZIndex(8)
-	if button.Hovered() {
-		button.Material(glass.Glass{Interactive: true})
-	}
-	button.Children(func() {
-		ui.Icon(c, icons.Parse("alt-arrow-left-linear")).Size(16, 16).TextColor(mediaMuted)
-	})
-	if button.Clicked() {
-		p.TogglePanel()
-	}
-}
-
 func (p *Page) panelHeader(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	ui.Row(c).FillWidth().AlignItems(ui.Start).Children(func() {
 		ui.Column(c).Grow(1).Gap(5).Children(func() {
@@ -350,9 +331,7 @@ func (p *Page) panelHeader(c *ui.Context, t *ui.Theme, m locales.Messages) {
 			if episode, ok := p.current(); ok {
 				ui.Text(c, fmt.Sprintf("ep.%d  %s", episode.Number, episode.Title)).FontSize(12).TextColor(t.TextMuted)
 			}
-			if d := p.duration(); d > 0 {
-				ui.Text(c, fmt.Sprintf("%s %s", m.DurationLabel(), clock(d))).FontSize(11).TextColor(t.TextMuted)
-			}
+			ui.Text(c, p.metaLine(m)).FontSize(11).TextColor(t.TextMuted)
 		})
 		close := ui.ButtonBase(c).Key("p-close").Size(30, 30).Radius(15).Label(m.ClosePlayer()).
 			Tooltip(m.ClosePlayer()).Background(ui.Transparent)
@@ -364,6 +343,26 @@ func (p *Page) panelHeader(c *ui.Context, t *ui.Theme, m locales.Messages) {
 			p.Back()
 		}
 	})
+}
+
+// metaLine is the duration and year shown under the episode title.
+func (p *Page) metaLine(m locales.Messages) string {
+	parts := []string{fmt.Sprintf("%s %s", m.DurationLabel(), clock(p.duration()))}
+	if p.detail.Year > 0 {
+		parts = append(parts, strconv.Itoa(p.detail.Year))
+	}
+	return joinMeta(parts)
+}
+
+func joinMeta(parts []string) string {
+	out := ""
+	for i, part := range parts {
+		if i > 0 {
+			out += " · "
+		}
+		out += part
+	}
+	return out
 }
 
 func (p *Page) panelTabs(c *ui.Context, t *ui.Theme, m locales.Messages) {

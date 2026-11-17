@@ -64,6 +64,15 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 	tt.SetLocale("en")
 	tt.Frame()
 
+	// The overlay chrome: volume track, speaker, danmaku toggle and the two
+	// ten-second seeks all take a click without leaving the screen.
+	for _, label := range []string{"Volume", "Mute", "Danmaku", "Rewind 10 seconds", "Forward 10 seconds"} {
+		if err := tt.Click(label); err != nil {
+			t.Fatalf("click %q: %v", label, err)
+		}
+		tt.Frame()
+	}
+
 	page.TogglePlay()
 	page.TogglePlay()
 	page.ToggleMute()
