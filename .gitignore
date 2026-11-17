@@ -63,3 +63,6 @@ Desktop.ini
 *.log
 /tmp/
 /.tmp/
+
+# 本地界面还原参考截图（仅本地对照，不入库）
+ui-reference/
