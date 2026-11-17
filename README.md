@@ -2,7 +2,7 @@
 
 Luvia 是一个视频播放器项目，按独立应用和共享能力组织代码，允许各应用选择适合自身需求的语言与框架，例如 Go / MyGo 或 Swift / SwiftUI。共同治理原则见根目录 [AGENTS.md](AGENTS.md)，技术专属约束由各应用维护；正式架构、功能、契约与指南文档统一由 [docs/README.md](docs/README.md) 导航，供 Agent 与人类共同参考。
 
-当前可运行代码是 Go + [MyGo](https://mygo.run) 桌面框架，已实现左侧导航、原生窗口顶栏、系统菜单、主题和语言选择，业务内容留空，尚未实现视频播放。该应用采用 MyGo 自绘的原生 UI，不加载网页、不使用 WebView；目前没有 Swift 工程。应用导航与新增应用约定见 [apps/README.md](apps/README.md)，桌面使用说明见 [apps/desktop/README.md](apps/desktop/README.md)。以下环境、命令和 MyGo 开发说明均针对当前桌面应用。
+当前可运行代码是 Go + [MyGo](https://mygo.run) 桌面框架，已实现左侧导航、原生窗口顶栏、系统菜单、主题和语言选择，以及发现、资源库、详情与播放页面，视频播放走来源规则解析与系统视频组件。该应用采用 MyGo 自绘的原生 UI，不加载网页、不使用 WebView；目前没有 Swift 工程。应用导航与新增应用约定见 [apps/README.md](apps/README.md)，桌面使用说明见 [apps/desktop/README.md](apps/desktop/README.md)。以下环境、命令和 MyGo 开发说明均针对当前桌面应用。
 
 ## 环境要求
 
@@ -88,7 +88,7 @@ make skills   # 更新 .agents/skills
 
 ## 桌面框架
 
-主窗口提供发现、资源库、追剧、搜索、设置五个导航入口，点击、菜单和 `⌘1`～`⌘5` 同步选中状态，`⌘,` 进入设置；业务区域均留空。显示菜单可切换主题和语言并记住选择，系统菜单和窗口行为复用 MyGo。框架代码按 `internal/` 下的导航、窗口与偏好职责划分，`main.go` 只做组装，详见 [桌面说明](apps/desktop/README.md) 与 [ADR 0007](docs/adr/0007-desktop-shell.md)。
+主窗口提供发现、资源库、追剧、搜索、设置五个导航入口，点击、菜单和 `⌘1`～`⌘5` 同步选中状态，`⌘,` 进入设置；发现、资源库、详情与播放为已实现页面，追剧、搜索仍为占位。显示菜单可切换主题和语言并记住选择，系统菜单和窗口行为复用 MyGo。框架代码按 `internal/` 下的导航、窗口与偏好职责划分，`main.go` 只做组装，详见 [桌面说明](apps/desktop/README.md) 与 [ADR 0007](docs/adr/0007-desktop-shell.md)。
 
 界面文案来自 `apps/desktop/locales/`（英文源语言加简体中文），品牌名 `Luvia` 除外。新增或修改文案时改 catalogs 后跑 `make i18n` 与 `go tool mygo generate`，流程见 [ADR 0005](docs/adr/0005-localized-messages.md)。`apps/desktop/tests/` 在独立目录验证导航、菜单、语言、布局、偏好和窗口重开，测试不启动原生窗口。
 

@@ -943,3 +943,563 @@ func LibraryLoading() string { return In(i18n.Locale()).LibraryLoading() }
 func (msgs Messages) LibraryLoading() string {
 	return Catalog.Format(msgs.locale, "libraryLoading", nil)
 }
+
+// Back says "Back"
+// in the language the app shows.
+func Back() string { return In(i18n.Locale()).Back() }
+
+// Back says "Back"
+// in the language of msgs.
+func (msgs Messages) Back() string {
+	return Catalog.Format(msgs.locale, "back", nil)
+}
+
+// DetailLoading says "Loading details…"
+// in the language the app shows.
+func DetailLoading() string { return In(i18n.Locale()).DetailLoading() }
+
+// DetailLoading says "Loading details…"
+// in the language of msgs.
+func (msgs Messages) DetailLoading() string {
+	return Catalog.Format(msgs.locale, "detailLoading", nil)
+}
+
+// DetailError says "This title could not load"
+// in the language the app shows.
+func DetailError() string { return In(i18n.Locale()).DetailError() }
+
+// DetailError says "This title could not load"
+// in the language of msgs.
+func (msgs Messages) DetailError() string {
+	return Catalog.Format(msgs.locale, "detailError", nil)
+}
+
+// PlayNow says "Play"
+// in the language the app shows.
+func PlayNow() string { return In(i18n.Locale()).PlayNow() }
+
+// PlayNow says "Play"
+// in the language of msgs.
+func (msgs Messages) PlayNow() string {
+	return Catalog.Format(msgs.locale, "playNow", nil)
+}
+
+// TabOverview says "Overview"
+// in the language the app shows.
+func TabOverview() string { return In(i18n.Locale()).TabOverview() }
+
+// TabOverview says "Overview"
+// in the language of msgs.
+func (msgs Messages) TabOverview() string {
+	return Catalog.Format(msgs.locale, "tabOverview", nil)
+}
+
+// TabCast says "Cast"
+// in the language the app shows.
+func TabCast() string { return In(i18n.Locale()).TabCast() }
+
+// TabCast says "Cast"
+// in the language of msgs.
+func (msgs Messages) TabCast() string {
+	return Catalog.Format(msgs.locale, "tabCast", nil)
+}
+
+// TabComments says "Comments"
+// in the language the app shows.
+func TabComments() string { return In(i18n.Locale()).TabComments() }
+
+// TabComments says "Comments"
+// in the language of msgs.
+func (msgs Messages) TabComments() string {
+	return Catalog.Format(msgs.locale, "tabComments", nil)
+}
+
+// TabCrew says "Crew"
+// in the language the app shows.
+func TabCrew() string { return In(i18n.Locale()).TabCrew() }
+
+// TabCrew says "Crew"
+// in the language of msgs.
+func (msgs Messages) TabCrew() string {
+	return Catalog.Format(msgs.locale, "tabCrew", nil)
+}
+
+// WatchEyebrow says "WATCH"
+// in the language the app shows.
+func WatchEyebrow() string { return In(i18n.Locale()).WatchEyebrow() }
+
+// WatchEyebrow says "WATCH"
+// in the language of msgs.
+func (msgs Messages) WatchEyebrow() string {
+	return Catalog.Format(msgs.locale, "watchEyebrow", nil)
+}
+
+// EpisodesTitle says "Episodes"
+// in the language the app shows.
+func EpisodesTitle() string { return In(i18n.Locale()).EpisodesTitle() }
+
+// EpisodesTitle says "Episodes"
+// in the language of msgs.
+func (msgs Messages) EpisodesTitle() string {
+	return Catalog.Format(msgs.locale, "episodesTitle", nil)
+}
+
+// EpisodeCount says "{count, plural, one {# episode} other {# episodes}}"
+// in the language the app shows.
+func EpisodeCount(count int) string { return In(i18n.Locale()).EpisodeCount(count) }
+
+// EpisodeCount says "{count, plural, one {# episode} other {# episodes}}"
+// in the language of msgs.
+func (msgs Messages) EpisodeCount(count int) string {
+	return Catalog.Format(msgs.locale, "episodeCount", map[string]any{"count": count})
+}
+
+// SelectedSource says "Selected source"
+// in the language the app shows.
+func SelectedSource() string { return In(i18n.Locale()).SelectedSource() }
+
+// SelectedSource says "Selected source"
+// in the language of msgs.
+func (msgs Messages) SelectedSource() string {
+	return Catalog.Format(msgs.locale, "selectedSource", nil)
+}
+
+// LineLabel says "Line"
+// in the language the app shows.
+func LineLabel() string { return In(i18n.Locale()).LineLabel() }
+
+// LineLabel says "Line"
+// in the language of msgs.
+func (msgs Messages) LineLabel() string {
+	return Catalog.Format(msgs.locale, "lineLabel", nil)
+}
+
+// SeriesEpisodes says "Episodes"
+// in the language the app shows.
+func SeriesEpisodes() string { return In(i18n.Locale()).SeriesEpisodes() }
+
+// SeriesEpisodes says "Episodes"
+// in the language of msgs.
+func (msgs Messages) SeriesEpisodes() string {
+	return Catalog.Format(msgs.locale, "seriesEpisodes", nil)
+}
+
+// AboutEyebrow says "ABOUT"
+// in the language the app shows.
+func AboutEyebrow() string { return In(i18n.Locale()).AboutEyebrow() }
+
+// AboutEyebrow says "ABOUT"
+// in the language of msgs.
+func (msgs Messages) AboutEyebrow() string {
+	return Catalog.Format(msgs.locale, "aboutEyebrow", nil)
+}
+
+// AboutTitle says "Synopsis"
+// in the language the app shows.
+func AboutTitle() string { return In(i18n.Locale()).AboutTitle() }
+
+// AboutTitle says "Synopsis"
+// in the language of msgs.
+func (msgs Messages) AboutTitle() string {
+	return Catalog.Format(msgs.locale, "aboutTitle", nil)
+}
+
+// ExpandAll says "Show all"
+// in the language the app shows.
+func ExpandAll() string { return In(i18n.Locale()).ExpandAll() }
+
+// ExpandAll says "Show all"
+// in the language of msgs.
+func (msgs Messages) ExpandAll() string {
+	return Catalog.Format(msgs.locale, "expandAll", nil)
+}
+
+// CollapseAll says "Show less"
+// in the language the app shows.
+func CollapseAll() string { return In(i18n.Locale()).CollapseAll() }
+
+// CollapseAll says "Show less"
+// in the language of msgs.
+func (msgs Messages) CollapseAll() string {
+	return Catalog.Format(msgs.locale, "collapseAll", nil)
+}
+
+// Collection says "Collection"
+// in the language the app shows.
+func Collection() string { return In(i18n.Locale()).Collection() }
+
+// Collection says "Collection"
+// in the language of msgs.
+func (msgs Messages) Collection() string {
+	return Catalog.Format(msgs.locale, "collection", nil)
+}
+
+// ProfileInfo says "Details"
+// in the language the app shows.
+func ProfileInfo() string { return In(i18n.Locale()).ProfileInfo() }
+
+// ProfileInfo says "Details"
+// in the language of msgs.
+func (msgs Messages) ProfileInfo() string {
+	return Catalog.Format(msgs.locale, "profileInfo", nil)
+}
+
+// TagsLabel says "Tags"
+// in the language the app shows.
+func TagsLabel() string { return In(i18n.Locale()).TagsLabel() }
+
+// TagsLabel says "Tags"
+// in the language of msgs.
+func (msgs Messages) TagsLabel() string {
+	return Catalog.Format(msgs.locale, "tagsLabel", nil)
+}
+
+// FieldType says "Type"
+// in the language the app shows.
+func FieldType() string { return In(i18n.Locale()).FieldType() }
+
+// FieldType says "Type"
+// in the language of msgs.
+func (msgs Messages) FieldType() string {
+	return Catalog.Format(msgs.locale, "fieldType", nil)
+}
+
+// FieldArea says "Region"
+// in the language the app shows.
+func FieldArea() string { return In(i18n.Locale()).FieldArea() }
+
+// FieldArea says "Region"
+// in the language of msgs.
+func (msgs Messages) FieldArea() string {
+	return Catalog.Format(msgs.locale, "fieldArea", nil)
+}
+
+// FieldYear says "Year"
+// in the language the app shows.
+func FieldYear() string { return In(i18n.Locale()).FieldYear() }
+
+// FieldYear says "Year"
+// in the language of msgs.
+func (msgs Messages) FieldYear() string {
+	return Catalog.Format(msgs.locale, "fieldYear", nil)
+}
+
+// FieldEpisodes says "Episodes"
+// in the language the app shows.
+func FieldEpisodes() string { return In(i18n.Locale()).FieldEpisodes() }
+
+// FieldEpisodes says "Episodes"
+// in the language of msgs.
+func (msgs Messages) FieldEpisodes() string {
+	return Catalog.Format(msgs.locale, "fieldEpisodes", nil)
+}
+
+// FieldDirectors says "Director"
+// in the language the app shows.
+func FieldDirectors() string { return In(i18n.Locale()).FieldDirectors() }
+
+// FieldDirectors says "Director"
+// in the language of msgs.
+func (msgs Messages) FieldDirectors() string {
+	return Catalog.Format(msgs.locale, "fieldDirectors", nil)
+}
+
+// FieldActors says "Cast"
+// in the language the app shows.
+func FieldActors() string { return In(i18n.Locale()).FieldActors() }
+
+// FieldActors says "Cast"
+// in the language of msgs.
+func (msgs Messages) FieldActors() string {
+	return Catalog.Format(msgs.locale, "fieldActors", nil)
+}
+
+// FieldStatus says "Status"
+// in the language the app shows.
+func FieldStatus() string { return In(i18n.Locale()).FieldStatus() }
+
+// FieldStatus says "Status"
+// in the language of msgs.
+func (msgs Messages) FieldStatus() string {
+	return Catalog.Format(msgs.locale, "fieldStatus", nil)
+}
+
+// FieldLanguage says "Language"
+// in the language the app shows.
+func FieldLanguage() string { return In(i18n.Locale()).FieldLanguage() }
+
+// FieldLanguage says "Language"
+// in the language of msgs.
+func (msgs Messages) FieldLanguage() string {
+	return Catalog.Format(msgs.locale, "fieldLanguage", nil)
+}
+
+// EmptyTab says "Nothing here yet"
+// in the language the app shows.
+func EmptyTab() string { return In(i18n.Locale()).EmptyTab() }
+
+// EmptyTab says "Nothing here yet"
+// in the language of msgs.
+func (msgs Messages) EmptyTab() string {
+	return Catalog.Format(msgs.locale, "emptyTab", nil)
+}
+
+// NowPlaying says "NOW PLAYING"
+// in the language the app shows.
+func NowPlaying() string { return In(i18n.Locale()).NowPlaying() }
+
+// NowPlaying says "NOW PLAYING"
+// in the language of msgs.
+func (msgs Messages) NowPlaying() string {
+	return Catalog.Format(msgs.locale, "nowPlaying", nil)
+}
+
+// ClosePlayer says "Close"
+// in the language the app shows.
+func ClosePlayer() string { return In(i18n.Locale()).ClosePlayer() }
+
+// ClosePlayer says "Close"
+// in the language of msgs.
+func (msgs Messages) ClosePlayer() string {
+	return Catalog.Format(msgs.locale, "closePlayer", nil)
+}
+
+// Share says "Share"
+// in the language the app shows.
+func Share() string { return In(i18n.Locale()).Share() }
+
+// Share says "Share"
+// in the language of msgs.
+func (msgs Messages) Share() string {
+	return Catalog.Format(msgs.locale, "share", nil)
+}
+
+// CastToDevice says "Cast to device"
+// in the language the app shows.
+func CastToDevice() string { return In(i18n.Locale()).CastToDevice() }
+
+// CastToDevice says "Cast to device"
+// in the language of msgs.
+func (msgs Messages) CastToDevice() string {
+	return Catalog.Format(msgs.locale, "castToDevice", nil)
+}
+
+// VolumeLabel says "Volume"
+// in the language the app shows.
+func VolumeLabel() string { return In(i18n.Locale()).VolumeLabel() }
+
+// VolumeLabel says "Volume"
+// in the language of msgs.
+func (msgs Messages) VolumeLabel() string {
+	return Catalog.Format(msgs.locale, "volumeLabel", nil)
+}
+
+// MuteLabel says "Mute"
+// in the language the app shows.
+func MuteLabel() string { return In(i18n.Locale()).MuteLabel() }
+
+// MuteLabel says "Mute"
+// in the language of msgs.
+func (msgs Messages) MuteLabel() string {
+	return Catalog.Format(msgs.locale, "muteLabel", nil)
+}
+
+// UnmuteLabel says "Unmute"
+// in the language the app shows.
+func UnmuteLabel() string { return In(i18n.Locale()).UnmuteLabel() }
+
+// UnmuteLabel says "Unmute"
+// in the language of msgs.
+func (msgs Messages) UnmuteLabel() string {
+	return Catalog.Format(msgs.locale, "unmuteLabel", nil)
+}
+
+// FullscreenLabel says "Fullscreen"
+// in the language the app shows.
+func FullscreenLabel() string { return In(i18n.Locale()).FullscreenLabel() }
+
+// FullscreenLabel says "Fullscreen"
+// in the language of msgs.
+func (msgs Messages) FullscreenLabel() string {
+	return Catalog.Format(msgs.locale, "fullscreenLabel", nil)
+}
+
+// ExitFullscreenLabel says "Exit fullscreen"
+// in the language the app shows.
+func ExitFullscreenLabel() string { return In(i18n.Locale()).ExitFullscreenLabel() }
+
+// ExitFullscreenLabel says "Exit fullscreen"
+// in the language of msgs.
+func (msgs Messages) ExitFullscreenLabel() string {
+	return Catalog.Format(msgs.locale, "exitFullscreenLabel", nil)
+}
+
+// PauseLabel says "Pause"
+// in the language the app shows.
+func PauseLabel() string { return In(i18n.Locale()).PauseLabel() }
+
+// PauseLabel says "Pause"
+// in the language of msgs.
+func (msgs Messages) PauseLabel() string {
+	return Catalog.Format(msgs.locale, "pauseLabel", nil)
+}
+
+// NextEpisode says "Next episode"
+// in the language the app shows.
+func NextEpisode() string { return In(i18n.Locale()).NextEpisode() }
+
+// NextEpisode says "Next episode"
+// in the language of msgs.
+func (msgs Messages) NextEpisode() string {
+	return Catalog.Format(msgs.locale, "nextEpisode", nil)
+}
+
+// PreviousEpisode says "Previous episode"
+// in the language the app shows.
+func PreviousEpisode() string { return In(i18n.Locale()).PreviousEpisode() }
+
+// PreviousEpisode says "Previous episode"
+// in the language of msgs.
+func (msgs Messages) PreviousEpisode() string {
+	return Catalog.Format(msgs.locale, "previousEpisode", nil)
+}
+
+// PlaybackSpeed says "Playback speed"
+// in the language the app shows.
+func PlaybackSpeed() string { return In(i18n.Locale()).PlaybackSpeed() }
+
+// PlaybackSpeed says "Playback speed"
+// in the language of msgs.
+func (msgs Messages) PlaybackSpeed() string {
+	return Catalog.Format(msgs.locale, "playbackSpeed", nil)
+}
+
+// SubtitlesLabel says "Subtitles"
+// in the language the app shows.
+func SubtitlesLabel() string { return In(i18n.Locale()).SubtitlesLabel() }
+
+// SubtitlesLabel says "Subtitles"
+// in the language of msgs.
+func (msgs Messages) SubtitlesLabel() string {
+	return Catalog.Format(msgs.locale, "subtitlesLabel", nil)
+}
+
+// EpisodesTab says "Episodes"
+// in the language the app shows.
+func EpisodesTab() string { return In(i18n.Locale()).EpisodesTab() }
+
+// EpisodesTab says "Episodes"
+// in the language of msgs.
+func (msgs Messages) EpisodesTab() string {
+	return Catalog.Format(msgs.locale, "episodesTab", nil)
+}
+
+// PlaybackSource says "Source"
+// in the language the app shows.
+func PlaybackSource() string { return In(i18n.Locale()).PlaybackSource() }
+
+// PlaybackSource says "Source"
+// in the language of msgs.
+func (msgs Messages) PlaybackSource() string {
+	return Catalog.Format(msgs.locale, "playbackSource", nil)
+}
+
+// CurrentPlaying says "Now: {title}"
+// in the language the app shows.
+func CurrentPlaying(title string) string { return In(i18n.Locale()).CurrentPlaying(title) }
+
+// CurrentPlaying says "Now: {title}"
+// in the language of msgs.
+func (msgs Messages) CurrentPlaying(title string) string {
+	return Catalog.Format(msgs.locale, "currentPlaying", map[string]any{"title": title})
+}
+
+// DurationLabel says "Duration"
+// in the language the app shows.
+func DurationLabel() string { return In(i18n.Locale()).DurationLabel() }
+
+// DurationLabel says "Duration"
+// in the language of msgs.
+func (msgs Messages) DurationLabel() string {
+	return Catalog.Format(msgs.locale, "durationLabel", nil)
+}
+
+// EpisodeUnavailable says "This episode has no playable address."
+// in the language the app shows.
+func EpisodeUnavailable() string { return In(i18n.Locale()).EpisodeUnavailable() }
+
+// EpisodeUnavailable says "This episode has no playable address."
+// in the language of msgs.
+func (msgs Messages) EpisodeUnavailable() string {
+	return Catalog.Format(msgs.locale, "episodeUnavailable", nil)
+}
+
+// VideoUnsupported says "This system cannot play video here."
+// in the language the app shows.
+func VideoUnsupported() string { return In(i18n.Locale()).VideoUnsupported() }
+
+// VideoUnsupported says "This system cannot play video here."
+// in the language of msgs.
+func (msgs Messages) VideoUnsupported() string {
+	return Catalog.Format(msgs.locale, "videoUnsupported", nil)
+}
+
+// PlaybackFailed says "Playback failed"
+// in the language the app shows.
+func PlaybackFailed() string { return In(i18n.Locale()).PlaybackFailed() }
+
+// PlaybackFailed says "Playback failed"
+// in the language of msgs.
+func (msgs Messages) PlaybackFailed() string {
+	return Catalog.Format(msgs.locale, "playbackFailed", nil)
+}
+
+// Buffering says "Buffering…"
+// in the language the app shows.
+func Buffering() string { return In(i18n.Locale()).Buffering() }
+
+// Buffering says "Buffering…"
+// in the language of msgs.
+func (msgs Messages) Buffering() string {
+	return Catalog.Format(msgs.locale, "buffering", nil)
+}
+
+// EpisodeNumber says "Episode {number}"
+// in the language the app shows.
+func EpisodeNumber(number string) string { return In(i18n.Locale()).EpisodeNumber(number) }
+
+// EpisodeNumber says "Episode {number}"
+// in the language of msgs.
+func (msgs Messages) EpisodeNumber(number string) string {
+	return Catalog.Format(msgs.locale, "episodeNumber", map[string]any{"number": number})
+}
+
+// CollapsePanel says "Hide panel"
+// in the language the app shows.
+func CollapsePanel() string { return In(i18n.Locale()).CollapsePanel() }
+
+// CollapsePanel says "Hide panel"
+// in the language of msgs.
+func (msgs Messages) CollapsePanel() string {
+	return Catalog.Format(msgs.locale, "collapsePanel", nil)
+}
+
+// ExpandPanel says "Show panel"
+// in the language the app shows.
+func ExpandPanel() string { return In(i18n.Locale()).ExpandPanel() }
+
+// ExpandPanel says "Show panel"
+// in the language of msgs.
+func (msgs Messages) ExpandPanel() string {
+	return Catalog.Format(msgs.locale, "expandPanel", nil)
+}
+
+// ListSeparator says ", "
+// in the language the app shows.
+func ListSeparator() string { return In(i18n.Locale()).ListSeparator() }
+
+// ListSeparator says ", "
+// in the language of msgs.
+func (msgs Messages) ListSeparator() string {
+	return Catalog.Format(msgs.locale, "listSeparator", nil)
+}

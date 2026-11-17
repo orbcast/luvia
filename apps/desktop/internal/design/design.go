@@ -229,3 +229,78 @@ func PosterStatus(updating bool) (bg, fg ui.Color) {
 	}
 	return ui.RGBA(10, 8, 14, 0.62), ui.RGBA(255, 255, 255, 0.96)
 }
+
+// Surfaces is the glass-and-chip dressing a title page (detail) draws over its
+// blurred artwork: quiet translucent chips, outlined tag pills, panel cards and
+// the tab rail. Values differ by theme so copy stays legible on both.
+type Surfaces struct {
+	Chip, ChipBorder, ChipInk        ui.Color
+	TagBg, TagBorder, TagInk         ui.Color
+	Card, CardBorder                 ui.Color
+	TabBg, TabSel, TabInk, TabSelInk ui.Color
+}
+
+// DetailSurfaces returns the title page's surface palette for this theme.
+func DetailSurfaces(t *ui.Theme) Surfaces {
+	if t.Dark {
+		return Surfaces{
+			Chip: ui.RGBA(18, 15, 24, 0.55), ChipBorder: ui.RGBA(255, 255, 255, 0.10), ChipInk: t.Text,
+			TagBg: ui.RGBA(255, 255, 255, 0.06), TagBorder: ui.RGBA(255, 255, 255, 0.22), TagInk: ui.RGBA(255, 255, 255, 0.80),
+			Card: ui.RGBA(20, 16, 26, 0.55), CardBorder: ui.RGBA(255, 255, 255, 0.08),
+			TabBg: ui.RGBA(255, 255, 255, 0.06), TabSel: ui.RGBA(255, 255, 255, 0.16), TabInk: t.TextMuted, TabSelInk: t.Text,
+		}
+	}
+	return Surfaces{
+		Chip: ui.RGBA(255, 255, 255, 0.72), ChipBorder: t.Border, ChipInk: t.Text,
+		TagBg: ui.RGBA(0, 0, 0, 0.03), TagBorder: t.Border, TagInk: t.TextMuted,
+		Card: ui.RGBA(255, 255, 255, 0.82), CardBorder: t.Border,
+		TabBg: ui.RGBA(0, 0, 0, 0.05), TabSel: ui.RGBA(255, 255, 255, 0.95), TabInk: t.TextMuted, TabSelInk: t.Text,
+	}
+}
+
+// DetailBackdrop is the wash painted over the blurred artwork behind a title
+// page: near-black in the dark theme, a light lift in the light one.
+func DetailBackdrop(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return ui.RGBA(8, 7, 11, 0.66)
+	}
+	return ui.RGBA(243, 238, 246, 0.80)
+}
+
+// EpisodeChip dresses one episode button in the selection grid: selected wears a
+// light outline and brighter ink, the rest sit on a quiet surface.
+func EpisodeChip(t *ui.Theme, selected bool) (bg, border, ink ui.Color) {
+	if t.Dark {
+		if selected {
+			return ui.RGBA(255, 255, 255, 0.04), ui.RGBA(255, 255, 255, 0.90), t.Text
+		}
+		return ui.RGBA(255, 255, 255, 0.06), ui.RGBA(255, 255, 255, 0.10), t.TextMuted
+	}
+	if selected {
+		return ui.RGBA(90, 72, 202, 0.08), ui.Hex("#5A48CA"), t.Text
+	}
+	return ui.RGBA(0, 0, 0, 0.04), t.Border, t.TextMuted
+}
+
+// PlayerStage is the near-black letterbox the video player sits in.
+func PlayerStage(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return ui.Hex("#050407")
+	}
+	return ui.Hex("#0B0A0F")
+}
+
+// PlayerPanel is the now-playing side panel background and its separating edge.
+func PlayerPanel(t *ui.Theme) (bg, border ui.Color) {
+	if t.Dark {
+		return ui.Hex("#1B1420"), ui.RGBA(255, 255, 255, 0.06)
+	}
+	return ui.Hex("#F6F1F8"), ui.RGBA(0, 0, 0, 0.06)
+}
+
+// ControlVeil dresses a control laid over the video: a dark translucent pill so
+// the icons read on any frame.
+func ControlVeil() ui.Color { return ui.RGBA(0, 0, 0, 0.38) }
+
+// PlayerTrack is the unfilled part of the player's scrub track.
+func PlayerTrack() ui.Color { return ui.RGBA(255, 255, 255, 0.28) }

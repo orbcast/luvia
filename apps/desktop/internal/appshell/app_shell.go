@@ -69,6 +69,9 @@ type Shell struct {
 	docked    bool
 	lastWidth float32
 	pending   bool
+	// navHidden hides the navigation chrome on immersive screens such as the
+	// title page and the player, which cover the whole window.
+	navHidden bool
 }
 
 func New() *Shell {
@@ -80,8 +83,9 @@ func New() *Shell {
 	}
 	return s
 }
-func (s *Shell) Selected() Page              { return s.selected }
-func (s *Shell) SetOnNavigate(fn func(Page)) { s.onNavigate = fn }
+func (s *Shell) Selected() Page                  { return s.selected }
+func (s *Shell) SetNavigationHidden(hidden bool) { s.navHidden = hidden }
+func (s *Shell) SetOnNavigate(fn func(Page))     { s.onNavigate = fn }
 
 // SetContent installs the page that fills the window behind the navigation
 // column. The navigation column and the window drag strip stay above it.
@@ -145,6 +149,9 @@ func (s *Shell) View(c *ui.Context) {
 		// and the transition carries it.
 		docked := s.columnOrDock(c, width)
 		panels := navPanels(docked, width, height, bar.Bottom)
+		if s.navHidden {
+			panels = nil
+		}
 		for _, panel := range panels {
 			ui.Box(c).Key(panel.key).Absolute().Left(panel.left).Top(panel.top).
 				Width(panel.width).Height(panel.height).Radius(design.ShellRadius).

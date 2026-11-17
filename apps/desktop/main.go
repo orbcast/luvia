@@ -19,6 +19,7 @@ import (
 	"luvia/apps/desktop/internal/media"
 	"luvia/apps/desktop/internal/playintro"
 	"luvia/apps/desktop/internal/preferences"
+	"luvia/apps/desktop/internal/screens"
 	"luvia/apps/desktop/internal/settings"
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/engine"
@@ -59,39 +60,52 @@ func main() {
 			SetTheme: func(source mygo.ThemeSource) { preferences.ChangeTheme(themePath, source, mygo.Theme.SetSource) },
 			Locale:   mygo.App.ChosenLocale, SetLocale: mygo.App.SetLocale,
 		}
-		onPlay := func(source.Ref) { introCtrl.Start(nil) }
+		var router *screens.Router
+		openTitle := func(ref source.Ref) { router.OpenDetail(ref) }
 		discover := home.New(home.Deps{
 			Source:   profile.source,
 			Library:  profile.library,
 			Images:   profile.images,
 			Interval: 6 * time.Second,
-			OnPlay:   onPlay,
+			OnPlay:   openTitle,
+			OnDetail: openTitle,
 			OnAll:    func() { shell.Navigate(appshell.Library) },
 		})
 		catalogPage := catalog.New(catalog.Deps{
-			Source:  profile.source,
-			Library: profile.library,
-			Images:  profile.images,
-			OnPlay:  onPlay,
+			Source:   profile.source,
+			Library:  profile.library,
+			Images:   profile.images,
+			OnPlay:   openTitle,
+			OnDetail: openTitle,
 		})
 		settingsPage := settings.New(settings.Deps{
 			Theme: actions.Theme, SetTheme: actions.SetTheme,
 			Locale: actions.Locale, SetLocale: actions.SetLocale,
 		})
 		profile.images.SetChanged(func() { window.Refresh() })
-		shell.SetContent(func(c *ui.Context) ui.Element {
-			switch shell.Selected() {
-			case appshell.Discover:
-				return discover.View(c)
-			case appshell.Library:
-				return catalogPage.View(c)
-			case appshell.Settings:
-				return settingsPage.View(c)
-			}
-			return placeholder(c, shell.Selected())
+		router = screens.New(screens.Deps{
+			Source:    profile.source,
+			Library:   profile.library,
+			Images:    profile.images,
+			Refresh:   window.Refresh,
+			Immersive: shell.SetNavigationHidden,
+			Intro:     func() { introCtrl.Start(nil) },
+			Base: func(c *ui.Context) ui.Element {
+				switch shell.Selected() {
+				case appshell.Discover:
+					return discover.View(c)
+				case appshell.Library:
+					return catalogPage.View(c)
+				case appshell.Settings:
+					return settingsPage.View(c)
+				}
+				return placeholder(c, shell.Selected())
+			},
 		})
+		shell.SetContent(router.View)
 		rebuildMenu := func() { mygo.App.SetMenu(shell.Menu(locales.In(mygo.App.Locale()), actions)) }
 		shell.SetOnNavigate(func(appshell.Page) {
+			router.Reset()
 			shell.SyncMenu(mygo.App.Menu())
 			window.Refresh()
 		})
