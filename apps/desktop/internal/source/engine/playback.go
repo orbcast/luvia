@@ -69,7 +69,7 @@ func (s *sourceImpl) Resolve(ctx context.Context, episode source.Episode, lineID
 			lines = append(lines, source.Line{
 				ID:      entry.id,
 				Label:   label,
-				URLKind: inferURLKind(firstNonEmpty(entry.urlKind, entry.lineURL)),
+				URLKind: playbackURLKind(entry.urlKind, entry.lineURL),
 				Default: entry.def,
 			})
 		}
@@ -159,7 +159,7 @@ func orderLines(options []lineOption, lineID string, site callSite, s *sourceImp
 func (s *sourceImpl) lineAddress(ctx context.Context, site callSite, block *rule.ResolveBlock, option lineOption, vars map[string]any) (string, string, error) {
 	lines := block.Lines
 	if isAbsoluteURL(option.lineURL) {
-		return option.lineURL, inferURLKind(firstNonEmpty(option.urlKind, option.lineURL)), nil
+		return option.lineURL, playbackURLKind(option.urlKind, option.lineURL), nil
 	}
 	ticket := option.ticket
 	if ticket == "" {
@@ -200,7 +200,7 @@ func (s *sourceImpl) lineAddress(ctx context.Context, site callSite, block *rule
 			declaredKind = toString(kindValue)
 		}
 	}
-	return address, inferURLKind(firstNonEmpty(declaredKind, address)), nil
+	return address, playbackURLKind(declaredKind, address), nil
 }
 
 func (s *sourceImpl) expires(lines rule.Lines, vars map[string]any) time.Duration {

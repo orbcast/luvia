@@ -213,6 +213,28 @@ func TestKindAndURLKindMapping(t *testing.T) {
 	}
 }
 
+func TestPlaybackURLKindPrefersAddressOverDeclared(t *testing.T) {
+	cases := []struct {
+		declared, address, want string
+	}{
+		// The bug this guards: an upstream marks a playlist as mp4.
+		{"mp4", "https://cdn.test/ep-hd.m3u8", "hls"},
+		{"mp4", "https://cdn.test/ep.m3u8?sign=x", "hls"},
+		{"hls", "https://cdn.test/ep.mp4", "mp4"},
+		{"hls", "https://cdn.test/ep", "hls"},
+		{"mp4", "https://cdn.test/ep", "mp4"},
+		{"", "https://cdn.test/ep.m3u8", "hls"},
+		{"", "", "mp4"},
+		// A resolve://ticket line carries no extension, so the declared kind wins.
+		{"hls", "resolve://ticket-hls", "hls"},
+	}
+	for _, tc := range cases {
+		if got := playbackURLKind(tc.declared, tc.address); got != tc.want {
+			t.Fatalf("playbackURLKind(%q, %q) = %q, want %q", tc.declared, tc.address, got, tc.want)
+		}
+	}
+}
+
 func TestEvalPrefersItemThenVars(t *testing.T) {
 	impl := &sourceImpl{}
 	sc := scope{

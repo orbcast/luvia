@@ -288,23 +288,40 @@ func mapKind(raw string) string {
 	}
 }
 
-// inferURLKind decides mp4 versus hls from a declared kind or an address.
-func inferURLKind(raw string) string {
+// kindSignal reads an mp4 or hls hint from a declared kind or an address and
+// returns "" when the text says neither. An HLS marker anywhere wins over an
+// mp4 one: an address that serves a playlist is HLS even when it also looks
+// like an mp4.
+func kindSignal(raw string) string {
 	text := strings.ToLower(strings.TrimSpace(raw))
 	switch {
 	case text == "":
-		return "mp4"
+		return ""
 	case strings.Contains(text, "hls"), strings.Contains(text, "m3u8"):
 		return "hls"
 	case strings.Contains(text, "mp4"):
 		return "mp4"
 	}
-	trimmed := text
-	if cut := strings.IndexAny(trimmed, "?#"); cut >= 0 {
-		trimmed = trimmed[:cut]
+	return ""
+}
+
+// inferURLKind decides mp4 versus hls from one string, defaulting to mp4.
+func inferURLKind(raw string) string {
+	if kind := kindSignal(raw); kind != "" {
+		return kind
 	}
-	if strings.HasSuffix(trimmed, ".m3u8") {
-		return "hls"
+	return "mp4"
+}
+
+// playbackURLKind decides the kind of a playable line. The address is the
+// authority: an upstream may declare "mp4" for a URL that actually serves an
+// HLS playlist, so a signal in the address always beats the declared kind.
+func playbackURLKind(declared, address string) string {
+	if kind := kindSignal(address); kind != "" {
+		return kind
+	}
+	if kind := kindSignal(declared); kind != "" {
+		return kind
 	}
 	return "mp4"
 }
