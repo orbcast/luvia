@@ -407,5 +407,47 @@
       "maxAttempts": 12,
       "preferUrlKind": "mp4"
     }
+  },
+  "comments": {
+    "steps": [
+      {
+        "op": "paginate",
+        "as": "pages",
+        "mode": "offset",
+        "size": 100,
+        "maxPages": 4,
+        "path": "/v1/comments",
+        "query": [
+          {
+            "key": "variant_id",
+            "value": "{id}"
+          },
+          {
+            "key": "limit",
+            "value": "100"
+          },
+          {
+            "key": "offset",
+            "value": "{offset}"
+          }
+        ],
+        "items": "results[*]",
+        "hasMore": "has_more"
+      }
+    ],
+    "output": {
+      "from": "pages[*]",
+      "fields": {
+        "at": {
+          "fn": "int",
+          "args": [
+            "metadata.playback_context.position_seconds"
+          ]
+        },
+        "text": "content",
+        "author": "author.nickname",
+        "episode": "metadata.playback_context.episode_id"
+      }
+    }
   }
 }

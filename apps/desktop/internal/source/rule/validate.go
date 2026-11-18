@@ -43,6 +43,7 @@ const (
 	outDetail   outputKind = "detail"
 	outEpisodes outputKind = "episodes"
 	outUpdates  outputKind = "updates"
+	outComments outputKind = "comments"
 )
 
 var cardFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "overview",
@@ -54,6 +55,7 @@ var sectionFields = fieldSet("id", "title", "subtitle")
 var updateFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "overview",
 	"posterUrl", "backdropUrl", "note")
 var lineFields = fieldSet("id", "label", "urlKind", "url", "ticket", "default")
+var commentFields = fieldSet("at", "text", "author", "color", "episode")
 
 var outputFields = map[outputKind]map[string]bool{
 	outSections: sectionFields,
@@ -61,6 +63,7 @@ var outputFields = map[outputKind]map[string]bool{
 	outDetail:   detailFields,
 	outEpisodes: episodeFields,
 	outUpdates:  updateFields,
+	outComments: commentFields,
 }
 
 var builtinVars = map[string][]string{
@@ -70,6 +73,7 @@ var builtinVars = map[string][]string{
 	"detail":   {"id"},
 	"episodes": {"id"},
 	"resolve":  {"id", "payload", "media", "lineId"},
+	"comments": {"id", "payload"},
 }
 
 func fieldSet(names ...string) map[string]bool {
@@ -100,7 +104,7 @@ func (r *Rule) Validate() error {
 			return err
 		}
 	}
-	if r.Home == nil && r.List == nil && r.Updates == nil && r.Detail == nil && r.Episodes == nil && r.Resolve == nil {
+	if r.Home == nil && r.List == nil && r.Updates == nil && r.Detail == nil && r.Episodes == nil && r.Resolve == nil && r.Comments == nil {
 		return fmt.Errorf("rule declares no operation block")
 	}
 	if r.Home != nil {
@@ -139,6 +143,11 @@ func (r *Rule) Validate() error {
 	}
 	if r.Resolve != nil {
 		if err := validateResolve(r.Resolve); err != nil {
+			return err
+		}
+	}
+	if r.Comments != nil {
+		if err := validateBlock("comments", r.Comments.Steps, r.Comments.Output, outComments); err != nil {
 			return err
 		}
 	}
@@ -389,7 +398,15 @@ func validateOutput(label string, out Output, kind outputKind, vars map[string]b
 		if !out.Page.IsZero() || !out.HasMore.IsZero() {
 			return fmt.Errorf("%s: %s must not declare page or hasMore", label, kind)
 		}
+		// Each mapping kind names the field it cannot do without: a detail
+		// without a title, an episode without an id, a comment without text.
 		required := "title"
+		switch kind {
+		case outEpisodes:
+			required = "id"
+		case outComments:
+			required = "text"
+		}
 		if _, ok := out.Fields[required]; !ok {
 			return fmt.Errorf("%s.fields: %s is required", label, required)
 		}

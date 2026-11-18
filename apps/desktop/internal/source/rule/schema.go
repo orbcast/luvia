@@ -22,6 +22,7 @@ type Rule struct {
 	Detail   *Block        `json:"detail,omitempty"`
 	Episodes *Block        `json:"episodes,omitempty"`
 	Resolve  *ResolveBlock `json:"resolve,omitempty"`
+	Comments *Block        `json:"comments,omitempty"`
 }
 
 // HTTP holds transport policy. Zero values are replaced by engine defaults

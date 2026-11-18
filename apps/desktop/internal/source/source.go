@@ -192,3 +192,26 @@ type Source interface {
 
 // Describe is a small helper for diagnostics.
 func Describe(s Source) string { return fmt.Sprintf("%s (%s)", s.Name(), s.ID()) }
+
+// Danmaku is one comment pinned to a moment of an episode.
+type Danmaku struct {
+	// At is the position in the episode the comment was sent at.
+	At time.Duration
+	// Text is what the viewer wrote, already trimmed for display.
+	Text string
+	// Author is the nickname the comment was sent under, when the source
+	// reports one.
+	Author string
+	// Color is the text color the comment asked for, as 0xRRGGBB, or zero
+	// when the source leaves it to the reader.
+	Color uint32
+}
+
+// Commenter is a Source that also reports the comments an episode carries, so
+// the player can lay them over the picture. A source without the capability
+// keeps the danmaku switch off and says so.
+type Commenter interface {
+	// Comments returns the comments of episode, oldest first, at most limit
+	// of them. An empty list is not an error: an episode may have none.
+	Comments(ctx context.Context, episode Episode, limit int) ([]Danmaku, error)
+}

@@ -4,12 +4,17 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/rule"
 )
+
+// defaultCommentLimit caps how many comments one episode hands the player,
+// enough to fill the picture without carrying a whole thread into memory.
+const defaultCommentLimit = 400
 
 // Options configures an engine instance. The zero value is usable.
 type Options struct {
@@ -287,6 +292,63 @@ func (s *sourceImpl) Episodes(ctx context.Context, ref source.Ref) ([]source.Epi
 		episodes = append(episodes, episode)
 	}
 	return episodes, nil
+}
+
+// Comments returns the comments an episode carries, oldest first, capped at
+// limit. A rule without a comments block does not offer them at all, which
+// leaves the danmaku switch off instead of claiming an empty layer.
+func (s *sourceImpl) Comments(ctx context.Context, episode source.Episode, limit int) ([]source.Danmaku, error) {
+	block := s.rule.Comments
+	if block == nil {
+		return nil, s.unsupported("comments")
+	}
+	if limit <= 0 {
+		limit = defaultCommentLimit
+	}
+	vars, err := s.runSteps(ctx, "comments", block.Steps, map[string]any{
+		"id": episode.Media.ID, "payload": episode.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.collect("comments", block.Output.From, vars)
+	if err != nil {
+		return nil, err
+	}
+	comments := make([]source.Danmaku, 0, len(items))
+	for _, item := range items {
+		if len(comments) >= limit {
+			break
+		}
+		sc := scope{item: item, vars: vars}
+		text := strings.TrimSpace(s.evalString(field(block.Output.Fields, "text"), sc))
+		if text == "" {
+			continue
+		}
+		// The upstream answers a whole title's comments, not one episode's,
+		// so a mapped episode keeps only the comments sent on it; a rule that
+		// maps none keeps everything it got.
+		if want := s.evalString(field(block.Output.Fields, "episode"), sc); want != "" && want != episode.ID {
+			continue
+		}
+		comment := source.Danmaku{
+			Text:   text,
+			Author: s.evalString(field(block.Output.Fields, "author"), sc),
+		}
+		if value, ok := s.eval(field(block.Output.Fields, "at"), sc); ok {
+			if seconds, ok := toInt(value); ok {
+				comment.At = time.Duration(seconds.(int)) * time.Second
+			}
+		}
+		if value, ok := s.eval(field(block.Output.Fields, "color"), sc); ok {
+			if color, ok := toInt(value); ok {
+				comment.Color = uint32(color.(int)) & 0xFFFFFF
+			}
+		}
+		comments = append(comments, comment)
+	}
+	sort.SliceStable(comments, func(i, j int) bool { return comments[i].At < comments[j].At })
+	return comments, nil
 }
 
 func (s *sourceImpl) runSteps(ctx context.Context, op string, steps []rule.Step, vars map[string]any) (map[string]any, error) {

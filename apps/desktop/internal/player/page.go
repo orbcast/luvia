@@ -82,6 +82,9 @@ type Page struct {
 	rate         float64
 	showSubtitle bool
 	danmaku      bool
+	comments     []source.Danmaku
+	commentGen   uint64
+	commentsNote bool
 	panelHidden  bool
 	cinema       bool
 	expanded     bool
@@ -188,6 +191,7 @@ func (p *Page) resolve() {
 				}
 				p.open(playback.URL)
 				p.record(episode, playback)
+				p.loadComments(ctx, episode, gen)
 			}
 			p.invalidate()
 		})
@@ -239,6 +243,76 @@ func firstPlayable(ctx context.Context, src source.Source, episode source.Episod
 		return next, nil
 	}
 	return current, nil
+}
+
+// loadComments asks the source for the comments an episode carries. A source
+// without the capability leaves the layer empty and the switch off, rather than
+// pretending to show one.
+func (p *Page) loadComments(ctx context.Context, episode source.Episode, gen uint64) {
+	commenter, ok := p.deps.Source.(source.Commenter)
+	if !ok {
+		p.comments, p.commentsNote = nil, true
+		return
+	}
+	p.commentGen++
+	epoch := p.commentGen
+	run := p.deps.Run
+	go func() {
+		got, err := commenter.Comments(ctx, episode, 0)
+		run(func() {
+			if epoch != p.commentGen || gen != p.gen {
+				return
+			}
+			if err != nil {
+				p.comments, p.commentsNote = nil, true
+			} else {
+				p.comments, p.commentsNote = got, false
+			}
+			p.invalidate()
+		})
+	}()
+}
+
+// flying is one comment crossing the picture: its text, the lane it takes and
+// the share of the crossing it has already made.
+type flying struct {
+	text  string
+	lane  int
+	slide float32
+}
+
+// danmakuLanes is how many rows of comments fit over the picture.
+const danmakuLanes = 8
+
+// danmakuWindow is how long a comment stays visible as it crosses.
+const danmakuWindow = 8 * time.Second
+
+// danmakuLead is how far ahead of its moment a comment starts to show, so it
+// reaches the middle of the crossing as the playhead passes its time.
+const danmakuLead = danmakuWindow / 2
+
+// flyingComments picks the comments crossing the picture at the playhead. Each
+// one owns a lane by its index, so the rows stay stable while they move.
+func (p *Page) flyingComments(now time.Duration) []flying {
+	if !p.danmaku || len(p.comments) == 0 {
+		return nil
+	}
+	var out []flying
+	for i, comment := range p.comments {
+		from := comment.At - danmakuLead
+		if now < from || now-from > danmakuWindow {
+			continue
+		}
+		out = append(out, flying{
+			text:  comment.Text,
+			lane:  i % danmakuLanes,
+			slide: float32(now-from) / float32(danmakuWindow),
+		})
+		if len(out) >= danmakuLanes {
+			break
+		}
+	}
+	return out
 }
 
 // open starts a system player for url, or records why it could not.
@@ -318,6 +392,7 @@ func (p *Page) SelectEpisode(i int) {
 	}
 	p.index = i
 	p.playback = source.Playback{}
+	p.comments, p.commentsNote = nil, false
 	p.notice, p.err = noticeNone, nil
 	p.playing = true
 	p.started = false

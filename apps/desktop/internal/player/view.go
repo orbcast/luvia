@@ -62,8 +62,31 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 			p.stageBuffering(c, m)
 		}
 	}
+	p.stageDanmaku(c, width)
 	p.stageTop(c, t, m)
 	p.stageControls(c, t, m)
+}
+
+// stageDanmaku lays the comments over the picture: each one crosses a lane from
+// the right edge to the left, at the pace of the playhead.
+func (p *Page) stageDanmaku(c *ui.Context, width float32) {
+	flying := p.flyingComments(p.position())
+	if len(flying) == 0 {
+		return
+	}
+	// The playhead moves on its own, so the layer keeps asking for frames
+	// while comments are in flight.
+	c.After(50 * time.Millisecond)
+	const laneHeight float32 = 30
+	top := float32(96)
+	for _, item := range flying {
+		left := width - (width+240)*item.slide
+		ui.Row(c).Absolute().Left(left).Top(top + float32(item.lane)*laneHeight).
+			Height(laneHeight).Children(func() {
+			ui.Text(c, item.text).FontSize(16).Bold().MaxLines(1).
+				TextColor(ui.RGBA(255, 255, 255, 0.95)).TextShadow(0, 1, 3, ui.RGBA(0, 0, 0, 0.75))
+		})
+	}
 }
 
 // stageBuffering shows a quiet marker while the system player has opened the
