@@ -51,6 +51,9 @@ func (f *fakeSource) Episodes(context.Context, source.Ref) ([]source.Episode, er
 func (f *fakeSource) Resolve(context.Context, source.Episode, string) (source.Playback, error) {
 	return source.Playback{}, errors.New("unused")
 }
+func (f *fakeSource) Updates(context.Context, source.Day) ([]source.Update, error) {
+	return nil, &source.Error{Kind: source.ErrUnsupported, Source: "fake", Op: "updates"}
+}
 
 func (f *fakeSource) answer(page source.Page, err error) {
 	f.mu.Lock()

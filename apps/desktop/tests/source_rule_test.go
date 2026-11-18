@@ -12,7 +12,8 @@ import (
 )
 
 func TestSelectorFormsAndResolution(t *testing.T) {
-	valid := []string{"id", "res.sections[*]", "res.list[0].title", "res.paging.total"}
+	valid := []string{"id", "res.sections[*]", "res.list[0].title", "res.paging.total",
+		"res.days[*].groups.preview[*]", "res.days[weekday].preview[*]", "res.days[by:weekday].preview[*]"}
 	for _, text := range valid {
 		selector, err := rule.ParseSelector(text)
 		if err != nil {
@@ -22,7 +23,7 @@ func TestSelectorFormsAndResolution(t *testing.T) {
 			t.Fatalf("round trip %q -> %q", text, selector.String())
 		}
 	}
-	for _, text := range []string{"", "res[*].cards", "[*]", "res.", "res..id", "res[abc]"} {
+	for _, text := range []string{"", "[*]", "res.", "res..id", "res[1abc]", "res[by:]"} {
 		if _, err := rule.ParseSelector(text); err == nil {
 			t.Fatalf("ParseSelector(%q) must fail", text)
 		}

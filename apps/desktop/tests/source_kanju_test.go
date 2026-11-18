@@ -116,7 +116,7 @@ func TestKanjuHomeMapsSectionsAndCards(t *testing.T) {
 		t.Fatalf("want 1 request, got %d", len(requests))
 	}
 	record := requests[0]
-	if !strings.HasSuffix(record.URL, "/v1/feed/home?cards=12&mode=preview&scope=public&sections=6") {
+	if !strings.HasSuffix(record.URL, "/v1/feed/home?cards=8&mode=preview&scope=public&sections=11") {
 		t.Fatalf("home request = %s", record.URL)
 	}
 	if got := record.Header.Get("x-ai-movie-client-name"); got != "dianyingtiantang-frontend" {
@@ -161,12 +161,90 @@ func TestKanjuListSendsBrowseAndSearchQueries(t *testing.T) {
 	if browse.Get("kind") != "movie" || browse.Get("page") != "1" || browse.Get("limit") != "24" {
 		t.Fatalf("browse query = %v", browse)
 	}
-	if browse.Get("intent") != "latest_catalog" || browse.Has("q") {
-		t.Fatalf("browse query must carry intent and no keyword: %v", browse)
+	if browse.Has("q") {
+		t.Fatalf("browse query must not carry a keyword: %v", browse)
 	}
 	search := requests[1].Query
 	if search.Get("q") != "星际世界" || search.Get("page") != "2" || search.Has("kind") {
 		t.Fatalf("search query = %v", search)
+	}
+	// Browsing carries no intent at all: the upstream's default listing is
+	// what the catalog page wants, and the search intent is only added once a
+	// keyword arrives.
+	if browse.Has("intent") {
+		t.Fatalf("browse must not send an intent: %v", browse["intent"])
+	}
+	if intents := search["intent"]; len(intents) != 1 || intents[0] != "search" {
+		t.Fatalf("search intent = %v", intents)
+	}
+}
+
+func TestKanjuUpdatesMapDayGroupsAndSendWeekday(t *testing.T) {
+	body := kanjuFixture(t, "updates.json")
+	stub, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+		return http.StatusOK, body
+	})
+	kanju := kanjuSource(t, client)
+
+	updates, err := kanju.Updates(context.Background(), source.Day{Weekday: 3})
+	if err != nil {
+		t.Fatalf("updates: %v", err)
+	}
+	// The calendar answers the whole week; the rule indexes the requested
+	// day, so only that day's titles come back.
+	if len(updates) != 6 {
+		t.Fatalf("want the six series of day 3, got %d", len(updates))
+	}
+	first := updates[0]
+	if first.Ref.Source != "kanju" || first.ID != "av_TtKIVe2dt577SiDSbLVOX4u2rMhPMc4VtGHBtiesmc6HXtExyHPunOjNU7OZ7XA9yPkmCWXDcx4uPXg" {
+		t.Fatalf("update = %+v", first)
+	}
+	if first.Title != "走马上任" || first.Note != "更新至第35集" || first.Kind != source.Series {
+		t.Fatalf("update fields = %+v", first)
+	}
+	if !strings.Contains(first.PosterURL, "77db6c8f") {
+		t.Fatalf("poster = %q", first.PosterURL)
+	}
+
+	requests := stub.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("want 1 request, got %d", len(requests))
+	}
+	query := requests[0].Query
+	if query.Get("weekday") != "3" || query.Get("week") != "current" || query.Get("kind") != "all" {
+		t.Fatalf("calendar query = %v", query)
+	}
+	if requests[0].Path != "/v1/watch-calendar" {
+		t.Fatalf("calendar path = %s", requests[0].Path)
+	}
+	verifyKanjuSignature(t, requests[0], kanjuSecret(t))
+}
+
+func TestKanjuUpdatesKeepAnotherDaySeparate(t *testing.T) {
+	body := kanjuFixture(t, "updates.json")
+	_, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+		return http.StatusOK, body
+	})
+	kanju := kanjuSource(t, client)
+
+	tuesday, err := kanju.Updates(context.Background(), source.Day{Weekday: 2})
+	if err != nil {
+		t.Fatalf("updates: %v", err)
+	}
+	if len(tuesday) != 6 || tuesday[0].ID != "av_bHsT4Byd4DtKoC2SuzrKZAdGpJTrIz3o513nByE_1oxzUk01xUP7wJzuxEaMy2lb2k3fWVr7okk72Zk" {
+		t.Fatalf("day 2 must read its own entries, got %d: %+v", len(tuesday), tuesday)
+	}
+}
+
+func TestKanjuUpdatesRejectAnImpossibleWeekday(t *testing.T) {
+	_, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+		return http.StatusOK, `{"days":[]}`
+	})
+	kanju := kanjuSource(t, client)
+
+	_, err := kanju.Updates(context.Background(), source.Day{})
+	if kind, ok := source.KindOf(err); !ok || kind != source.ErrInvalidRule {
+		t.Fatalf("weekday 0 must be a rule error, got %v (%v)", kind, err)
 	}
 }
 

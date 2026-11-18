@@ -9,15 +9,42 @@
     "concurrency": 4,
     "maxPages": 20,
     "headers": [
-      { "name": "Accept", "value": "application/json" },
-      { "name": "Origin", "value": "https://kanju1.com" },
-      { "name": "Referer", "value": "https://kanju1.com/" },
-      { "name": "User-Agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" },
-      { "name": "x-ai-movie-client-name", "value": "dianyingtiantang-frontend" },
-      { "name": "x-ai-movie-client-version", "value": "1.0.0" },
-      { "name": "x-ai-movie-build-version", "value": "dianyingtiantang-v2026.11.06.2-search-header-f6f73501a448-web" },
-      { "name": "x-ai-movie-protocol-version", "value": "2026-07-05.library-v2.playback-v1" },
-      { "name": "x-ai-movie-site-host", "value": "kanju1.com" }
+      {
+        "name": "Accept",
+        "value": "application/json"
+      },
+      {
+        "name": "Origin",
+        "value": "https://kanju1.com"
+      },
+      {
+        "name": "Referer",
+        "value": "https://kanju1.com/"
+      },
+      {
+        "name": "User-Agent",
+        "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+      },
+      {
+        "name": "x-ai-movie-client-name",
+        "value": "dianyingtiantang-frontend"
+      },
+      {
+        "name": "x-ai-movie-client-version",
+        "value": "1.0.0"
+      },
+      {
+        "name": "x-ai-movie-build-version",
+        "value": "dianyingtiantang-v2026.11.06.2-search-header-f6f73501a448-web"
+      },
+      {
+        "name": "x-ai-movie-protocol-version",
+        "value": "2026-07-05.library-v2.playback-v1"
+      },
+      {
+        "name": "x-ai-movie-site-host",
+        "value": "kanju1.com"
+      }
     ]
   },
   "sign": {
@@ -26,9 +53,18 @@
     "timestampUnit": "ms",
     "nonceBytes": 16,
     "headers": [
-      { "name": "x-ai-movie-timestamp", "value": "{timestamp}" },
-      { "name": "x-ai-movie-nonce", "value": "{nonce}" },
-      { "name": "x-ai-movie-signature", "value": "{signature}" }
+      {
+        "name": "x-ai-movie-timestamp",
+        "value": "{timestamp}"
+      },
+      {
+        "name": "x-ai-movie-nonce",
+        "value": "{nonce}"
+      },
+      {
+        "name": "x-ai-movie-signature",
+        "value": "{signature}"
+      }
     ]
   },
   "home": {
@@ -38,10 +74,22 @@
         "as": "res",
         "path": "/v1/feed/home",
         "query": [
-          { "key": "scope", "value": "public" },
-          { "key": "mode", "value": "preview" },
-          { "key": "sections", "value": "6" },
-          { "key": "cards", "value": "12" }
+          {
+            "key": "scope",
+            "value": "public"
+          },
+          {
+            "key": "mode",
+            "value": "preview"
+          },
+          {
+            "key": "sections",
+            "value": "11"
+          },
+          {
+            "key": "cards",
+            "value": "8"
+          }
         ]
       }
     ],
@@ -57,14 +105,31 @@
         "fields": {
           "id": "id",
           "title": "title",
-          "kind": "content_kind",
+          "kind": {
+            "fn": "kind",
+            "args": [
+              "content_kind"
+            ]
+          },
           "year": "year",
           "area": "area",
           "tags": "genres",
           "remarks": "remarks",
           "overview": "description",
-          "posterUrl": "poster_url",
-          "backdropUrl": "backdrop_url"
+          "posterUrl": {
+            "fn": "coalesce",
+            "args": [
+              "poster_url",
+              "carousel_url"
+            ]
+          },
+          "backdropUrl": {
+            "fn": "coalesce",
+            "args": [
+              "backdrop_url",
+              "carousel_url"
+            ]
+          }
         }
       }
     }
@@ -82,11 +147,26 @@
         "as": "res",
         "path": "/v1/browse/catalog",
         "query": [
-          { "key": "q", "value": "{keyword}" },
-          { "key": "page", "value": "{page}" },
-          { "key": "limit", "value": "24" },
-          { "key": "kind", "value": "{kind}" },
-          { "key": "intent", "value": "latest_catalog" }
+          {
+            "key": "q",
+            "value": "{keyword}"
+          },
+          {
+            "key": "page",
+            "value": "{page}"
+          },
+          {
+            "key": "limit",
+            "value": "24"
+          },
+          {
+            "key": "kind",
+            "value": "{kind}"
+          },
+          {
+            "key": "intent",
+            "value": "latest_catalog"
+          }
         ]
       }
     ],
@@ -99,14 +179,105 @@
         "fields": {
           "id": "id",
           "title": "title",
-          "kind": "content_kind",
+          "kind": {
+            "fn": "kind",
+            "args": [
+              "content_kind"
+            ]
+          },
           "year": "year",
           "area": "area",
           "tags": "genres",
           "remarks": "remarks",
           "overview": "description",
-          "posterUrl": "poster_url",
-          "backdropUrl": "backdrop_url"
+          "posterUrl": {
+            "fn": "coalesce",
+            "args": [
+              "poster_url",
+              "carousel_url"
+            ]
+          },
+          "backdropUrl": {
+            "fn": "coalesce",
+            "args": [
+              "backdrop_url",
+              "carousel_url"
+            ]
+          }
+        }
+      }
+    },
+    "searchIntent": "search"
+  },
+  "updates": {
+    "kindValues": {},
+    "days": "skip",
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/v1/watch-calendar",
+        "query": [
+          {
+            "key": "view",
+            "value": "weekly"
+          },
+          {
+            "key": "week",
+            "value": "current"
+          },
+          {
+            "key": "sort",
+            "value": "heat"
+          },
+          {
+            "key": "kind",
+            "value": "all"
+          },
+          {
+            "key": "weekday",
+            "value": "{weekday}"
+          },
+          {
+            "key": "limit",
+            "value": "9"
+          }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res.days",
+      "cards": {
+        "from": "res.days[by:weekday].groups.series.preview[*]",
+        "fields": {
+          "id": "id",
+          "title": "title",
+          "kind": {
+            "fn": "kind",
+            "args": [
+              "content_kind"
+            ]
+          },
+          "year": "year",
+          "area": "area",
+          "tags": "genres",
+          "remarks": "remarks",
+          "overview": "description",
+          "posterUrl": {
+            "fn": "coalesce",
+            "args": [
+              "poster_url",
+              "carousel_url"
+            ]
+          },
+          "backdropUrl": {
+            "fn": "coalesce",
+            "args": [
+              "backdrop_url",
+              "carousel_url"
+            ]
+          },
+          "note": "latest_episode_label"
         }
       }
     }
@@ -134,7 +305,18 @@
         "remarks": "remarks",
         "actors": "actors",
         "directors": "directors",
-        "episodeCount": { "fn": "int", "args": [{ "fn": "coalesce", "args": ["total_episode_count", "episode_count"] }] }
+        "episodeCount": {
+          "fn": "int",
+          "args": [
+            {
+              "fn": "coalesce",
+              "args": [
+                "total_episode_count",
+                "episode_count"
+              ]
+            }
+          ]
+        }
       }
     }
   },
@@ -148,8 +330,14 @@
         "maxPages": 20,
         "path": "/v1/catalog/{id}/episodes",
         "query": [
-          { "key": "limit", "value": "200" },
-          { "key": "offset", "value": "{offset}" }
+          {
+            "key": "limit",
+            "value": "200"
+          },
+          {
+            "key": "offset",
+            "value": "{offset}"
+          }
         ],
         "items": "episodes[*]",
         "hasMore": "episode_pagination.has_more"
@@ -176,8 +364,21 @@
     "lines": {
       "from": "res.line_options[*]",
       "fields": {
-        "id": { "fn": "coalesce", "args": ["playback_source_id", "id"] },
-        "label": { "fn": "coalesce", "args": ["label", "display_label", "provider_name"] },
+        "id": {
+          "fn": "coalesce",
+          "args": [
+            "playback_source_id",
+            "id"
+          ]
+        },
+        "label": {
+          "fn": "coalesce",
+          "args": [
+            "label",
+            "display_label",
+            "provider_name"
+          ]
+        },
         "urlKind": "url_kind",
         "url": "url",
         "ticket": "resolve_ticket",
@@ -188,8 +389,17 @@
         "request": {
           "method": "POST",
           "path": "/v1/playback/resolve-line",
-          "query": [{ "key": "view", "value": "compact" }],
-          "body": { "ticket": { "template": "{ticket}" } }
+          "query": [
+            {
+              "key": "view",
+              "value": "compact"
+            }
+          ],
+          "body": {
+            "ticket": {
+              "template": "{ticket}"
+            }
+          }
         },
         "url": "line.url",
         "urlKind": "line.url_kind"

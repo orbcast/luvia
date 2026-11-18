@@ -42,6 +42,7 @@ const (
 	outPage     outputKind = "page"
 	outDetail   outputKind = "detail"
 	outEpisodes outputKind = "episodes"
+	outUpdates  outputKind = "updates"
 )
 
 var cardFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "overview",
@@ -50,6 +51,8 @@ var detailFields = fieldSet("id", "title", "kind", "year", "area", "tags", "over
 	"backdropUrl", "remarks", "actors", "directors", "episodeCount")
 var episodeFields = fieldSet("id", "number", "title", "payload")
 var sectionFields = fieldSet("id", "title", "subtitle")
+var updateFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "overview",
+	"posterUrl", "backdropUrl", "note")
 var lineFields = fieldSet("id", "label", "urlKind", "url", "ticket", "default")
 
 var outputFields = map[outputKind]map[string]bool{
@@ -57,11 +60,13 @@ var outputFields = map[outputKind]map[string]bool{
 	outPage:     cardFields,
 	outDetail:   detailFields,
 	outEpisodes: episodeFields,
+	outUpdates:  updateFields,
 }
 
 var builtinVars = map[string][]string{
 	"home":     nil,
 	"list":     {"page", "keyword", "kind"},
+	"updates":  {"weekday", "kind"},
 	"detail":   {"id"},
 	"episodes": {"id"},
 	"resolve":  {"id", "payload", "media", "lineId"},
@@ -95,7 +100,7 @@ func (r *Rule) Validate() error {
 			return err
 		}
 	}
-	if r.Home == nil && r.List == nil && r.Detail == nil && r.Episodes == nil && r.Resolve == nil {
+	if r.Home == nil && r.List == nil && r.Updates == nil && r.Detail == nil && r.Episodes == nil && r.Resolve == nil {
 		return fmt.Errorf("rule declares no operation block")
 	}
 	if r.Home != nil {
@@ -108,6 +113,17 @@ func (r *Rule) Validate() error {
 			return err
 		}
 		if err := validateBlock("list", r.List.Steps, r.List.Output, outPage); err != nil {
+			return err
+		}
+	}
+	if r.Updates != nil {
+		if err := validateKindValues(r.Updates.KindValues); err != nil {
+			return err
+		}
+		if r.Updates.Days.IsZero() {
+			return fmt.Errorf("updates.days is required")
+		}
+		if err := validateBlock("updates", r.Updates.Steps, r.Updates.Output, outUpdates); err != nil {
 			return err
 		}
 	}
@@ -269,6 +285,11 @@ func validateRequest(label string, req Request, vars map[string]bool) error {
 		if err := checkTemplate(fmt.Sprintf("%s.query[%d]", label, i), pair.Value, vars); err != nil {
 			return err
 		}
+		if !pair.OmitWhen.IsZero() {
+			if err := validateValue(fmt.Sprintf("%s.query[%d].omitWhen", label, i), pair.OmitWhen, vars); err != nil {
+				return err
+			}
+		}
 	}
 	for _, header := range req.Headers {
 		if strings.TrimSpace(header.Name) == "" {
@@ -331,7 +352,7 @@ func validateOutput(label string, out Output, kind outputKind, vars map[string]b
 		if !out.Page.IsZero() || !out.HasMore.IsZero() {
 			return fmt.Errorf("%s: sections must not declare page or hasMore", label)
 		}
-		return validateShape(label+".cards", out.Cards)
+		return validateShape(label+".cards", out.Cards, cardFields)
 	case outPage:
 		if out.Cards == nil {
 			return fmt.Errorf("%s: page needs a cards mapping", label)
@@ -349,7 +370,18 @@ func validateOutput(label string, out Output, kind outputKind, vars map[string]b
 				return err
 			}
 		}
-		return validateShape(label+".cards", out.Cards)
+		return validateShape(label+".cards", out.Cards, cardFields)
+	case outUpdates:
+		if out.Cards == nil {
+			return fmt.Errorf("%s: updates need a cards mapping", label)
+		}
+		if len(out.Fields) > 0 {
+			return fmt.Errorf("%s.fields: updates map cards, so fields belong under cards", label)
+		}
+		if !out.Page.IsZero() || !out.HasMore.IsZero() {
+			return fmt.Errorf("%s: updates must not declare page or hasMore", label)
+		}
+		return validateShape(label+".cards", out.Cards, updateFields)
 	default:
 		if out.Cards != nil {
 			return fmt.Errorf("%s: %s must not declare cards", label, kind)
@@ -365,7 +397,7 @@ func validateOutput(label string, out Output, kind outputKind, vars map[string]b
 	}
 }
 
-func validateShape(label string, shape *Shape) error {
+func validateShape(label string, shape *Shape, allowed map[string]bool) error {
 	if shape == nil {
 		return fmt.Errorf("%s: mapping is required", label)
 	}
@@ -376,7 +408,7 @@ func validateShape(label string, shape *Shape) error {
 		return fmt.Errorf("%s.fields must not be empty", label)
 	}
 	for key, value := range shape.Fields {
-		if !cardFields[key] {
+		if !allowed[key] {
 			return fmt.Errorf("%s.fields: %q is not a card field", label, key)
 		}
 		if err := validateValue(label+".fields."+key, value, nil); err != nil {

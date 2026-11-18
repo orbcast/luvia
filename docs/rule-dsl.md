@@ -1,6 +1,6 @@
 # 源规则格式（Rule DSL）
 
-本文件是 `apps/luvia-rules/` 与 `apps/desktop` 解析层之间的正式契约：规则用 JSON 描述一个上游站点的 HTTP 交互，desktop 的解释引擎按固定步骤词表执行，把它们映射成播放器需要的五个操作。规则是纯数据，不含脚本、不依赖宿主语言；引擎只实现词表内的行为，不为单个上游开后门。
+本文件是 `apps/luvia-rules/` 与 `apps/desktop` 解析层之间的正式契约：规则用 JSON 描述一个上游站点的 HTTP 交互，desktop 的解释引擎按固定步骤词表执行，把它们映射成播放器需要的六个操作。规则是纯数据，不含脚本、不依赖宿主语言；引擎只实现词表内的行为，不为单个上游开后门。
 
 ## 分层
 
@@ -14,12 +14,13 @@
 
 依赖方向单向下行，`luvia-rules` 不引用 desktop 的任何 Go 类型，因此可以随时拆成独立仓库。
 
-## 五个操作与能力声明
+## 六个操作与能力声明
 
 | 操作 | 方法 | 块的键 |
 | --- | --- | --- |
 | 首页推荐 | `Home(ctx)` | `home` |
 | 列表与搜索 | `List(ctx, ListQuery{Keyword, Kind, Page})` | `list` |
+| 当日更新 | `Updates(ctx, Day{Weekday, Kind})` | `updates` |
 | 详情 | `Detail(ctx, Ref)` | `detail` |
 | 选集 | `Episodes(ctx, Ref)` | `episodes` |
 | 解析播放地址 | `Resolve(ctx, Episode, lineID)` | `resolve` |
@@ -54,7 +55,8 @@ apps/luvia-rules/
            "timestampUnit": "ms", "nonceBytes": 16,
            "headers": [{"name": "x-signature", "value": "{signature}"}]},
   "home": {"steps": [], "output": {}},
-  "list": {"kindValues": {"movie": "1"}, "steps": [], "output": {}},
+  "list": {"kindValues": {"movie": "1"}, "searchIntent": "search", "steps": [], "output": {}},
+  "updates": {"kindValues": {"series": "series"}, "days": "weekday", "steps": [], "output": {}},
   "detail": {"steps": [], "output": {}},
   "episodes": {"steps": [], "output": {}},
   "resolve": {"steps": [], "lines": {}}
@@ -75,13 +77,16 @@ apps/luvia-rules/
 
 ```json
 {"op": "request", "as": "res", "method": "GET", "path": "/v1/catalog/{id}",
- "query": [{"key": "limit", "value": "24"}],
+ "query": [{"key": "limit", "value": "24"},
+           {"key": "intent", "value": "search", "omitWhen": {"template": "{keyword}"}}],
  "headers": [{"name": "x-locale", "value": "{kind}"}],
  "body": {"ticket": {"template": "{ticket}"}},
  "sign": false}
 ```
 
-`path` 必填且以 `/` 开头；`method` 缺省 GET；query 渲染后为空或未解析则跳过；body 按键排序后输出 JSON 并自动带 `Content-Type: application/json`。
+`path` 必填且以 `/` 开头；`method` 缺省 GET；body 按键排序后输出 JSON 并自动带 `Content-Type: application/json`。
+
+query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest_catalog"`），只有模板里解析不出的洞或空值才会丢掉这个参数，所以上游把空关键字当作“不过滤”时，那个参数照样会发出去。需要“这次不发”的参数用 `omitWhen` 声明：它求值为真时跳过该参数；同名参数写两条、用相反的 `omitWhen`，就能在同一次调用里二选一。
 
 `paginate`：在同一步内翻页，并把每页 `items` 合并成一个数组变量。
 
@@ -96,9 +101,32 @@ apps/luvia-rules/
 
 变量作用域：块内所有已绑定的 `as` 名字可被后续步骤与输出引用；`paginate` 绑定的是合并后的数组。同一块内不允许重复绑定同一个名字。
 
+## 当日更新（updates）
+
+`updates` 把某一天的更新单映射成卡片，播放器据它画首页的周表；缺这个块时周表只用本地追剧记录。
+
+```json
+"updates": {
+  "kindValues": {"series": "series", "anime": "anime"},
+  "days": "weekday",
+  "steps": [{"op": "request", "as": "res", "path": "/v1/watch-calendar",
+             "query": [{"key": "weekday", "value": "{weekday}"},
+                       {"key": "kind", "value": "all"}]}],
+  "output": {"from": "res.days[*]", "cards": {"from": "res.days[by:weekday].groups.series.preview[*]",
+    "fields": {"id": "id", "title": "title", "note": "latest_episode_label",
+               "posterUrl": "poster_url", "kind": {"fn": "kind", "args": ["content_kind"]}}}}
+}
+```
+
+- 内建变量 `weekday`（周一为 1，周一至周日 1–7）与 `kind`（经 `kindValues` 映射，未列出的分类不发送）。
+- 卡片字段是列表卡片的全部字段再加 `note`，用来说明当天为什么在这里（如“更新至第 26 集”），由上游文案直出，不做翻译。
+- `days` 指定这一次调用取哪一天：上游一次只答一天时，请求参数已经限定了日期，`days` 可以写成任意可解析的选择器（例如 `"weekday"`）而不影响结果；上游一次返回整周时，用 `days` 比较每一天的字段，也可以用 `[by:字段]` 在映射里按字段挑出那一天。
+- 卡片选择器的 `from` 允许在中间出现 `[*]`：它逐级展开并合并成一层列表，`res.days[*].groups.series.preview[*]` 即“所有天的所有预览”。`[字段名]` 取调用方给的位置（例如 `res.days[weekday]`），`[by:字段]` 按字段值匹配数组中的一项（例如 `res.days[by:weekday]`）；两者都只能读播放器传进来的内建变量。
+- 首页周表的每天一次请求，播放器会缓存当天结果；某一天失败只影响那一天。
+
 ## 选择器、模板与函数
 
-选择器是受限的点路径：`a.b`、`res.cards[0].title`、`res.cards[*]`。`[n]` 取下标，`[*]` 展开成数组且只能出现在最后一段。根名是变量名（内建变量见下）。
+选择器是受限的点路径：`a.b`、`res.cards[0].title`、`res.cards[*]`。`[n]` 取下标，`[*]` 展开成数组，根名是变量名（内建变量见下）。`[*]` 在最后一段时就是该数组本身；出现在中间时逐级展开并合并成一层，`res.days[*].groups.preview[*]` 是所有天合并后的预览列表。`[字段名]` 取调用方传入的位置（如 `res.days[weekday]`），`[by:字段]` 按字段值匹配数组中的一项（如 `res.days[by:weekday]`），两者都只读播放器传入的内建变量，其他情况加载规则时报错。
 
 模板是带花括号的插值串：`/v1/playback/resolve/{payload}`、`{method}\n{path}`。任一洞解析失败，整个模板失败。
 
@@ -211,6 +239,8 @@ apps/luvia-rules/
 引用未声明的变量是规则错误，加载时即被拒绝，不会拖到运行时。
 
 `list.kindValues` 把播放器的分类折叠成该站点的取值，例如 `{"movie": "1", "series": "2"}`；未列出的分类不发送 `kind`。
+
+`list.searchIntent` 声明该站点匹配关键词时要求的 `intent` 之类的取值：填了它，带关键词的列表请求把同名查询参数换成这个值，不带关键词的列表请求则完全不发该参数；不填则查询原样发送。一个上游只有一个列表模式时不需要它。
 
 `${env:NAME}` 会在请求头、密钥与常量位置替换成环境变量，缺失时保留原文。
 

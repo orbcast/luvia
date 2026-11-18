@@ -18,6 +18,7 @@ type Rule struct {
 
 	Home     *Block        `json:"home,omitempty"`
 	List     *ListBlock    `json:"list,omitempty"`
+	Updates  *UpdatesBlock `json:"updates,omitempty"`
 	Detail   *Block        `json:"detail,omitempty"`
 	Episodes *Block        `json:"episodes,omitempty"`
 	Resolve  *ResolveBlock `json:"resolve,omitempty"`
@@ -70,8 +71,26 @@ type Block struct {
 // upstream's own category values.
 type ListBlock struct {
 	KindValues map[string]string `json:"kindValues,omitempty"`
-	Steps      []Step            `json:"steps"`
-	Output     Output            `json:"output"`
+	// SearchIntent is the intent value the upstream needs before it matches a
+	// keyword. It replaces the query parameter of that name for a search and
+	// disappears from a browse, so the two modes never carry both.
+	SearchIntent string `json:"searchIntent,omitempty"`
+	Steps        []Step `json:"steps"`
+	Output       Output `json:"output"`
+}
+
+// UpdatesBlock is the weekday schedule: the titles a source reports as
+// updating on one day of the current week.
+type UpdatesBlock struct {
+	// KindValues maps the player kinds onto the upstream's own day filter,
+	// exactly as ListBlock does for listings.
+	KindValues map[string]string `json:"kindValues,omitempty"`
+	// Days maps a card onto the weekday it belongs to, 1 being Monday. An
+	// upstream that answers one day per request keeps it constant through a
+	// literal so its selector vocabulary stays unchanged.
+	Days   Value  `json:"days"`
+	Steps  []Step `json:"steps"`
+	Output Output `json:"output"`
 }
 
 // ResolveBlock turns an episode into playback addresses. Lines is mandatory:
@@ -114,11 +133,13 @@ type Request struct {
 	Sign    *bool            `json:"sign,omitempty"`
 }
 
-// Pair is one ordered query parameter. Pairs whose value renders empty are
-// omitted, which is how optional filters such as keyword and kind disappear.
+// Pair is one ordered query parameter. Values are templates so a constant
+// cannot be mistaken for a selector; pairs that render empty are omitted,
+// which is how optional filters such as keyword and kind disappear.
 type Pair struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key      string `json:"key"`
+	Value    string `json:"value"`
+	OmitWhen Value  `json:"omitWhen,omitempty"`
 }
 
 // Step is one element of a pipeline. Exactly one operation is chosen by Op.

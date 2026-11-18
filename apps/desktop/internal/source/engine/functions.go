@@ -14,6 +14,8 @@ import (
 type scope struct {
 	item any
 	vars map[string]any
+	// overrides replace a declared query value for this call, by key.
+	overrides map[string]string
 }
 
 func (s *sourceImpl) resolveSelector(sel rule.Selector, sc scope) (any, bool) {

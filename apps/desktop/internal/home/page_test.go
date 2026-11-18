@@ -3,6 +3,8 @@ package home
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,12 +14,20 @@ import (
 	"luvia/apps/desktop/internal/source"
 )
 
-// fakeSource answers Home with a fixed document and fails the rest.
+// fakeSource answers Home with a fixed document, answers Updates from its
+// handler and fails the rest.
 type fakeSource struct {
 	home  source.Home
 	err   error
 	calls int
 	done  chan struct{}
+
+	// updates answers one weekday; a nil handler reports ErrUnsupported, as a
+	// source without an updates block does. Requests records every weekday
+	// asked for, in order, and mu guards both across the request goroutines.
+	mu       sync.Mutex
+	handler  func(day source.Day) ([]source.Update, error)
+	requests []int
 }
 
 func (f *fakeSource) ID() string   { return "fake" }
@@ -41,17 +51,42 @@ func (f *fakeSource) Episodes(context.Context, source.Ref) ([]source.Episode, er
 func (f *fakeSource) Resolve(context.Context, source.Episode, string) (source.Playback, error) {
 	return source.Playback{}, unsupported("resolve")
 }
+func (f *fakeSource) Updates(_ context.Context, day source.Day) ([]source.Update, error) {
+	f.mu.Lock()
+	f.requests = append(f.requests, day.Weekday)
+	handler := f.handler
+	f.mu.Unlock()
+	if handler == nil {
+		return nil, unsupported("updates")
+	}
+	return handler(day)
+}
+
+// setHandler replaces the Updates answer, so a test can fail one day after the
+// page started.
+func (f *fakeSource) setHandler(handler func(day source.Day) ([]source.Update, error)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.handler = handler
+}
+
+// asked returns the weekdays the page requested, in the order it asked.
+func (f *fakeSource) asked() []int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]int(nil), f.requests...)
+}
 
 func unsupported(op string) error {
 	return &source.Error{Kind: source.ErrUnsupported, Source: "fake", Op: op}
 }
 
 // newPage builds a page whose main-thread callbacks run inline. The returned
-// channel reports that a callback finished, so a test reads state only after
-// the page applied it.
+// channel holds one token per callback the page applied, so a test can tell
+// when an answer has landed.
 func newPage(t *testing.T, deps Deps) (*Page, chan struct{}) {
 	t.Helper()
-	finished := make(chan struct{}, 8)
+	finished := make(chan struct{}, 256)
 	if deps.Run == nil {
 		deps.Run = func(fn func()) { fn() }
 	}
@@ -71,7 +106,7 @@ func newPage(t *testing.T, deps Deps) (*Page, chan struct{}) {
 		deps.Library = store
 	}
 	page := New(deps)
-	page.redraw = func() {}
+	page.setRedraw(func() {})
 	return page, finished
 }
 
@@ -341,5 +376,358 @@ func TestHeroShows4kBadgeWhenFlagged(t *testing.T) {
 	}
 	if tt.HasText("1080P") {
 		t.Fatalf("HD badge shown for a 4K title: %v", tt.Texts())
+	}
+}
+
+// weekSource answers every weekday with a fixed number of titles, each one
+// named after its weekday and numbered so a test can tell them apart.
+func weekSource(counts map[int]int) *fakeSource {
+	src := &fakeSource{home: sampleHome()}
+	src.handler = func(day source.Day) ([]source.Update, error) {
+		var found []source.Update
+		for i := 0; i < counts[day.Weekday]; i++ {
+			title := fmt.Sprintf("Day %d Show %d", day.Weekday, i+1)
+			found = append(found, source.Update{
+				Card: source.Card{
+					Ref:       source.Ref{Source: "fake", ID: fmt.Sprintf("d%d-%d", day.Weekday, i)},
+					Title:     title,
+					Kind:      source.Series,
+					PosterURL: fmt.Sprintf("https://cdn.example/d%d-%d.jpg", day.Weekday, i),
+				},
+				Note: fmt.Sprintf("Status %d-%d", day.Weekday, i+1),
+			})
+		}
+		return found, nil
+	}
+	return src
+}
+
+// drain waits for one answer the page applied through Deps.Run.
+func drain(t *testing.T, finished chan struct{}) {
+	t.Helper()
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("page callback never finished")
+	}
+}
+
+// settleWeek waits until the page asked its source for every day of the week
+// and applied every answer. Counting callbacks cannot stand in for this: the
+// days answer in any order, and the page records a request before it starts the
+// goroutine, so this reads the page state after each callback instead.
+func settleWeek(t *testing.T, page *Page, src *fakeSource, finished chan struct{}) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		if !page.weekPending() && len(src.asked()) == weekdayCount {
+			return
+		}
+		select {
+		case <-finished:
+		case <-deadline:
+			t.Fatal("week requests never finished")
+		}
+	}
+}
+
+// followedOn stores a follow updated on the given date, so the local library
+// has something for the strip to count.
+func followedOn(t *testing.T, store *library.Store, id, title string, at time.Time) {
+	t.Helper()
+	err := store.Follow(library.Follow{
+		Media: source.Ref{Source: "fake", ID: id}, Title: title, UpdatedAt: at,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUpdatesOffKeepsEarliestWeekForFollows(t *testing.T) {
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The page's clock reads Sunday 15 November 2026; two follows land on
+	// Thursday the 12th and one on Monday the 9th.
+	followedOn(t, store, "a", "Alpha", time.Date(2026, 11, 12, 9, 0, 0, 0, time.Local))
+	followedOn(t, store, "b", "Beta", time.Date(2026, 11, 12, 21, 0, 0, 0, time.Local))
+	followedOn(t, store, "c", "Gamma", time.Date(2026, 11, 9, 7, 0, 0, 0, time.Local))
+	src := weekSource(nil)
+	page, finished := newPage(t, Deps{Source: src, Library: store})
+	load(t, page, finished)
+
+	if asked := src.asked(); len(asked) != 0 {
+		t.Fatalf("Updates=false requested weekdays %v", asked)
+	}
+	if len(page.days) != 0 || page.dayLoading(page.selected) {
+		t.Fatalf("cache %v loading=%v", page.days, page.dayLoading(page.selected))
+	}
+
+	// Thursday is selected through the strip and still counts the library.
+	page.selectDay(3)
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+	for _, want := range []string{"Alpha", "Beta", "2 updates"} {
+		if !tt.HasText(want) {
+			t.Fatalf("missing %q in %v", want, tt.Texts())
+		}
+	}
+	if tt.HasText("Gamma") {
+		t.Fatalf("monday follow leaked into thursday: %v", tt.Texts())
+	}
+	if asked := src.asked(); len(asked) != 0 {
+		t.Fatalf("clicking a day with Updates=false requested %v", asked)
+	}
+}
+
+func TestUpdatesOnFillsWeekAndListsSelectedDay(t *testing.T) {
+	counts := map[int]int{5: 3, 7: 2}
+	src := weekSource(counts)
+	page, finished := newPage(t, Deps{Source: src, Updates: true})
+	load(t, page, finished)
+	settleWeek(t, page, src, finished)
+
+	if asked := src.asked(); len(asked) != weekdayCount {
+		t.Fatalf("requested weekdays %v", asked)
+	}
+	for weekday := 1; weekday <= weekdayCount; weekday++ {
+		found, ok := page.dayUpdates(weekday - 1)
+		if !ok || len(found) != counts[weekday] {
+			t.Fatalf("weekday %d cached %d updates (asked %v)", weekday, len(found), ok)
+		}
+	}
+
+	// Sunday 15 November is the last day of the week and carries two titles.
+	page.selectDay(6)
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+	for _, want := range []string{
+		"Day 7 Show 1", "Status 7-1", "Day 7 Show 2", "Status 7-2", "2 updates",
+	} {
+		if !tt.HasText(want) {
+			t.Fatalf("missing %q in %v", want, tt.Texts())
+		}
+	}
+	if tt.HasText("Status 5-1") {
+		t.Fatalf("another day's titles leaked into the panel: %v", tt.Texts())
+	}
+
+	// The strip counts what the source reported, not the empty library.
+	page.selectDay(4)
+	tt.Frame()
+	if !tt.HasText("Day 5 Show 1") || !tt.HasText("3 updates") {
+		t.Fatalf("friday panel missing in %v", tt.Texts())
+	}
+}
+
+func TestSelectingNewDayAsksOnceAndCacheAnswers(t *testing.T) {
+	src := weekSource(map[int]int{1: 1, 3: 2})
+	page, finished := newPage(t, Deps{Source: src, Updates: true})
+	load(t, page, finished)
+	settleWeek(t, page, src, finished)
+	before := len(src.asked())
+
+	for i := 0; i < 3; i++ {
+		page.selectDay(2)
+		if page.selected != 2 {
+			t.Fatalf("selection %d", page.selected)
+		}
+	}
+	if asked := src.asked(); len(asked) != before {
+		t.Fatalf("cached day was requested: %v", asked)
+	}
+
+	// A day that failed counts as answered, so it is not asked again either.
+	page.acceptDay(4, nil, errors.New("boom"))
+	if page.loadDay(4); len(src.asked()) != before {
+		t.Fatalf("failed day was requested again: %v", src.asked())
+	}
+	if !page.dayFailed(4) {
+		t.Fatal("day failure not recorded")
+	}
+}
+
+func TestDayFailureFallsBackToFollowsWithoutTouchingOtherDays(t *testing.T) {
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	followedOn(t, store, "fallback", "Fallback Show", time.Date(2026, 11, 13, 8, 0, 0, 0, time.Local))
+	src := weekSource(map[int]int{1: 1, 3: 2, 5: 4})
+	src.setHandler(func(day source.Day) ([]source.Update, error) {
+		if day.Weekday == 5 {
+			return nil, &source.Error{Kind: source.ErrNetwork, Source: "fake", Op: "updates"}
+		}
+		found, _ := weekSource(map[int]int{1: 1, 3: 2, 5: 4}).handler(day)
+		return found, nil
+	})
+	page, finished := newPage(t, Deps{Source: src, Library: store, Updates: true})
+	load(t, page, finished)
+	settleWeek(t, page, src, finished)
+
+	// The failing Friday shows the follow recorded that day, and the other
+	// days keep their answer.
+	page.selectDay(4)
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+	if !tt.HasText("Fallback Show") {
+		t.Fatalf("friday fallback missing in %v", tt.Texts())
+	}
+	page.selectDay(2)
+	tt.Frame()
+	if !tt.HasText("Day 3 Show 1") {
+		t.Fatalf("wednesday lost its answer: %v", tt.Texts())
+	}
+	if _, ok := page.dayUpdates(0); !ok {
+		t.Fatal("monday answer dropped")
+	}
+}
+
+func TestDayPanelShowsWaitingStateWhileADayIsOutstanding(t *testing.T) {
+	// The runner holds the answers, so the page cannot finish the week before
+	// the test has seen what it shows in the meantime.
+	held := make(chan func(), 32)
+	src := weekSource(map[int]int{7: 1})
+	page, _ := newPage(t, Deps{
+		Source: src, Updates: true,
+		Run: func(fn func()) { held <- fn },
+	})
+	page.selectDay(6)
+	page.Start()
+	// The home answer is the one the page applies synchronously; the day
+	// answers stay in the queue.
+	if !page.dayLoading(6) {
+		t.Fatal("an unanswered day must report a loading state")
+	}
+	if !page.weekPending() {
+		t.Fatal("the week must still be pending while its answers wait")
+	}
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+	if tt.HasText("Day 7 Show 1") {
+		t.Fatalf("an unanswered day must not list titles: %v", tt.Texts())
+	}
+
+	// Applying the answers fills the panel and retires the waiting state.
+	for page.weekPending() {
+		select {
+		case fn := <-held:
+			fn()
+		case <-time.After(5 * time.Second):
+			t.Fatal("a day answer never reached the page")
+		}
+	}
+	if page.dayLoading(6) || page.weekPending() {
+		t.Fatal("answered week still reports waiting")
+	}
+	tt.Frame()
+	for _, want := range []string{"Day 7 Show 1", "Status 7-1"} {
+		if !tt.HasText(want) {
+			t.Fatalf("missing %q in %v", want, tt.Texts())
+		}
+	}
+}
+
+func TestDayPostersCapAtSixAndKeepTheNarrowShape(t *testing.T) {
+	var scheduled []source.Update
+	for i := 0; i < 10; i++ {
+		scheduled = append(scheduled, source.Update{
+			Card: source.Card{
+				Ref:   source.Ref{Source: "fake", ID: fmt.Sprintf("cap-%d", i)},
+				Title: fmt.Sprintf("Cap Show %d", i+1),
+			},
+		})
+	}
+	src := weekSource(nil)
+	page, finished := newPage(t, Deps{Source: src, Updates: true})
+	load(t, page, finished)
+	settleWeek(t, page, src, finished)
+	page.acceptDay(3, scheduled, nil)
+
+	for _, tc := range []struct {
+		width int
+		want  int
+	}{{width: 1100, want: 6}, {width: 460, want: 4}} {
+		page.selectDay(3)
+		tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, tc.width, 720)
+		tt.SetLocale("en")
+		tt.Frame()
+		shown := 0
+		for i := 0; i < len(scheduled); i++ {
+			if tt.HasText(fmt.Sprintf("Cap Show %d", i+1)) {
+				shown++
+			}
+		}
+		if shown != tc.want {
+			t.Fatalf("width %d showed %d posters, want %d", tc.width, shown, tc.want)
+		}
+	}
+}
+
+func TestUpdateCardOpensTheDetailPage(t *testing.T) {
+	var opened source.Ref
+	src := weekSource(nil)
+	page, finished := newPage(t, Deps{
+		Source:   src,
+		Updates:  true,
+		OnDetail: func(ref source.Ref) { opened = ref },
+	})
+	load(t, page, finished)
+	settleWeek(t, page, src, finished)
+	card := source.Card{Ref: source.Ref{Source: "fake", ID: "clicked"}, Title: "Clicked Show"}
+	page.acceptDay(0, []source.Update{{Card: card, Note: "Status"}}, nil)
+	page.selectDay(0)
+
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 1400)
+	tt.SetLocale("en")
+	tt.Frame()
+	if err := tt.Click("Clicked Show"); err != nil {
+		t.Fatalf("click: %v", err)
+	}
+	if opened != card.Ref {
+		t.Fatalf("detail opened for %v", opened)
+	}
+}
+
+func TestEmptyWeekKeepsTheEmptyPanel(t *testing.T) {
+	src := weekSource(nil)
+	page, finished := newPage(t, Deps{Source: src, Updates: true})
+	load(t, page, finished)
+	settleWeek(t, page, src, finished)
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+	for _, want := range []string{
+		"Follow a series to see its weekly updates here.",
+		"Your progress waits here once playback starts.",
+	} {
+		if !tt.HasText(want) {
+			t.Fatalf("missing %q in %v", want, tt.Texts())
+		}
+	}
+}
+
+func TestSelectDayIgnoresOutOfRangeIndex(t *testing.T) {
+	page, _ := newPage(t, Deps{Source: &fakeSource{home: sampleHome()}, Updates: true})
+	page.selectDay(9)
+	page.selectDay(-1)
+	if page.selected != weekdayIndex(page.deps.Now()) {
+		t.Fatalf("selection moved to %d", page.selected)
+	}
+}
+
+func TestWeekPendingWithoutAnUpdatesBlock(t *testing.T) {
+	page, finished := newPage(t, Deps{Source: &fakeSource{home: sampleHome()}})
+	load(t, page, finished)
+	if page.weekPending() {
+		t.Fatal("a page without an updates block has nothing pending")
+	}
+	if page.dayLoading(0) {
+		t.Fatal("a page without an updates block is never waiting")
 	}
 }

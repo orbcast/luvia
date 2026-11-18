@@ -140,3 +140,6 @@ func (failingSource) Episodes(context.Context, source.Ref) ([]source.Episode, er
 func (failingSource) Resolve(context.Context, source.Episode, string) (source.Playback, error) {
 	return source.Playback{}, errors.New("boom")
 }
+func (failingSource) Updates(context.Context, source.Day) ([]source.Update, error) {
+	return nil, &source.Error{Kind: source.ErrUnsupported, Source: "fake", Op: "updates"}
+}

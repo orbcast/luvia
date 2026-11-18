@@ -42,6 +42,9 @@ func (s *catalogSource) Episodes(context.Context, source.Ref) ([]source.Episode,
 func (s *catalogSource) Resolve(context.Context, source.Episode, string) (source.Playback, error) {
 	return source.Playback{}, &source.Error{Kind: source.ErrUnsupported, Source: "fake", Op: "resolve"}
 }
+func (s *catalogSource) Updates(context.Context, source.Day) ([]source.Update, error) {
+	return nil, &source.Error{Kind: source.ErrUnsupported, Source: "fake", Op: "updates"}
+}
 
 func catalogCards() []source.Card {
 	return []source.Card{

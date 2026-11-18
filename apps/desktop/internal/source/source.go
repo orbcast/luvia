@@ -102,6 +102,22 @@ type Page struct {
 	HasMore bool
 }
 
+// Day asks for the titles a source reports as updating on one weekday of the
+// week in progress. Weekday is Monday-based, 1 through 7; a zero value means
+// "every day", which the engine reports as ErrInvalidRule because no rule can
+// answer it.
+type Day struct {
+	Weekday int
+	Kind    Kind
+}
+
+// Update is one title a source schedules for a day, with the status line that
+// explains why it is there ("updated to episode 26" and the like).
+type Update struct {
+	Card
+	Note string
+}
+
 // Detail is the full record for one media item.
 type Detail struct {
 	Ref
@@ -160,6 +176,10 @@ type Source interface {
 	Home(ctx context.Context) (Home, error)
 	// List returns one page of browse or search results.
 	List(ctx context.Context, query ListQuery) (Page, error)
+	// Updates returns the titles a source reports as updating on day. A
+	// source without an updates block returns ErrUnsupported, and a caller
+	// then shows nothing rather than making a calendar up.
+	Updates(ctx context.Context, day Day) ([]Update, error)
 	// Detail returns the full record for ref.
 	Detail(ctx context.Context, ref Ref) (Detail, error)
 	// Episodes returns every episode of ref, already flattened.

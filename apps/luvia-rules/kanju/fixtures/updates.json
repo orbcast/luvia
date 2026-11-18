@@ -1,0 +1,1073 @@
+{
+  "object": "aimovie.watch_calendar",
+  "profile": "aimovie_following_weekly_v2",
+  "history_start_date": "2026-06-15",
+  "title": "追剧周表",
+  "prediction_only": false,
+  "schedule_mode": "weekday_only",
+  "exact_time_available": false,
+  "response_hash": "8197938accdf715d5faf5feebab62995fde78dcd",
+  "snapshot": {
+    "id": "watch-calendar-snapshot:9eb97446-94b6-42b0-82ad-4206aebb9e09",
+    "week_start_date": "2026-11-16",
+    "status": "published",
+    "generated_at": "2026-11-18T03:46:49.413Z",
+    "published_at": "2026-11-18T03:46:49.413Z",
+    "event_watermark": "2026-11-18T03:45:55.324Z",
+    "content_hash": "721cfb1683fc0f36abbf1c4f28759c84ac63b7fd13cdcfc0297eed9e038061ef",
+    "item_count": 3551
+  },
+  "filters": {
+    "view": "weekly",
+    "week": "current",
+    "kind": "all",
+    "sort": "heat"
+  },
+  "categories": [
+    {
+      "key": "all",
+      "label": "全部"
+    },
+    {
+      "key": "series",
+      "label": "电视剧"
+    },
+    {
+      "key": "anime",
+      "label": "动漫"
+    },
+    {
+      "key": "variety",
+      "label": "综艺"
+    },
+    {
+      "key": "movie",
+      "label": "电影"
+    }
+  ],
+  "days": [
+    {
+      "date": "2026-11-17",
+      "weekday": 2,
+      "weekday_label": "周二",
+      "groups": {
+        "series": {
+          "total": 63,
+          "preview": [
+            {
+              "id": "av_bHsT4Byd4DtKoC2SuzrKZAdGpJTrIz3o513nByE_1oxzUk01xUP7wJzuxEaMy2lb2k3fWVr7okk72Zk",
+              "variant_id": "av_bHsT4Byd4DtKoC2SuzrKZAdGpJTrIz3o513nByE_1oxzUk01xUP7wJzuxEaMy2lb2k3fWVr7okk72Zk",
+              "title": "谷雨",
+              "year": 2026,
+              "heat_score": 323.07,
+              "available_at": "2026-11-17T14:04:24.874Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/ae/aed33e845fca2d45699380788b382a931ed0dffa685cc2a1064f8f2f9cb93bb7.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第30集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_IO2_-jwPjGj3NGT0Gm81Kdk3Jk2J9UpnKihqNqkod1FEXMwvIuTE-VtbozeC7jtrwkHHSXo4RDI2_wc",
+              "variant_id": "av_IO2_-jwPjGj3NGT0Gm81Kdk3Jk2J9UpnKihqNqkod1FEXMwvIuTE-VtbozeC7jtrwkHHSXo4RDI2_wc",
+              "title": "今天是太阳雨",
+              "year": 2026,
+              "heat_score": 319.1,
+              "available_at": "2026-11-17T10:28:53.326Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/b4/b4618f7d8db80c79a36ce52ece998654fde323e05635c1c54c903edb11854853.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第24集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_TtKIVe2dt577SiDSbLVOX4u2rMhPMc4VtGHBtiesmc6HXtExyHPunOjNU7OZ7XA9yPkmCWXDcx4uPXg",
+              "variant_id": "av_TtKIVe2dt577SiDSbLVOX4u2rMhPMc4VtGHBtiesmc6HXtExyHPunOjNU7OZ7XA9yPkmCWXDcx4uPXg",
+              "title": "走马上任",
+              "year": 2026,
+              "heat_score": 297.11,
+              "available_at": "2026-11-17T05:33:00.604Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/77/77db6c8fd84f23d4e3f3915429376b0cb0027224b46aa620e88e54c28c9fac21.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第35集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_EfDIjeHWvm_py2WemiZ98FjboaxeiIxTWsWsFfVJK1BQ0irZ2JaVCSRnbvU32EzW07lBdR6Iw2kv-YY",
+              "variant_id": "av_EfDIjeHWvm_py2WemiZ98FjboaxeiIxTWsWsFfVJK1BQ0irZ2JaVCSRnbvU32EzW07lBdR6Iw2kv-YY",
+              "title": "我的有罪之人",
+              "year": 2026,
+              "heat_score": 261.43,
+              "available_at": "2026-11-17T15:09:11.083Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/ec/ec495791e9bd383769355a2705bfb1a2056a4c28fb8855946d4a5c296b97acfc.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第10集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_h2Th8sZys33kUVr6lqjPW1zd6vNQ-RICJh1Ss1xJmQbEOM_reGtK4drp_HVq-5uNKH4bIZptnGHhwFo",
+              "variant_id": "av_h2Th8sZys33kUVr6lqjPW1zd6vNQ-RICJh1Ss1xJmQbEOM_reGtK4drp_HVq-5uNKH4bIZptnGHhwFo",
+              "title": "十万狂花入梦来",
+              "year": 2026,
+              "heat_score": 239.48,
+              "available_at": "2026-11-17T08:07:58.118Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/47/47700a54b6e90368048b31b9c6bb49331f3eaf645b405e9a754628bb65899815.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第9集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_TCic7TwnyjaK4B7ynZtjxvipPKTgwku47LQJAuxNDjRdHst_0iDJ75iQl1ZA9J2O6xpxh-KwBlh5hwk",
+              "variant_id": "av_TCic7TwnyjaK4B7ynZtjxvipPKTgwku47LQJAuxNDjRdHst_0iDJ75iQl1ZA9J2O6xpxh-KwBlh5hwk",
+              "title": "多喜一家人",
+              "year": 2026,
+              "heat_score": 221.75,
+              "available_at": "2026-11-17T12:56:45.556Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/eb/eb5f38968adedc18f3536cc54383e1255dd77dd45d8bd779eb9f44de7fbb8486.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第6集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            }
+          ],
+          "more_url": "/v1/watch-calendar?view=weekly&week=current&sort=heat&kind=series&weekday=2&limit=20"
+        },
+        "anime": {
+          "total": 59,
+          "preview": [
+            {
+              "id": "av_POVmIKQoTp-FflOzvM07ElU3vubaDBWp5Syyy_LtIeCkxNgocoW6R1E49C4MdOyffgnQmwg06UYZ4QM",
+              "variant_id": "av_POVmIKQoTp-FflOzvM07ElU3vubaDBWp5Syyy_LtIeCkxNgocoW6R1E49C4MdOyffgnQmwg06UYZ4QM",
+              "title": "遮天",
+              "year": 2023,
+              "heat_score": 238.36,
+              "available_at": "2026-11-17T13:43:20.300Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/c9/c97c2d1d9250b6c71e53db1f38f38d150585d74dd9cec9c324e4d4a3df9c3e71.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第191集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_IfMsENz8gvf1coV2WiLknouFA2Mlhu5eU8tNlavBhqYWSrpYfotoVAT6LryOEsLJ64i773E6LQpgsLA",
+              "variant_id": "av_IfMsENz8gvf1coV2WiLknouFA2Mlhu5eU8tNlavBhqYWSrpYfotoVAT6LryOEsLJ64i773E6LQpgsLA",
+              "title": "一斩苍穹",
+              "year": null,
+              "heat_score": 214.92,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/4f/4f5a36d76be3e8ad4cede907bbf75f6617817f1bada643ba02c46bcd3820325b.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第18集",
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_ECYovrRnvhbHQ4VDQR5mkGSc7MIXWDHjmTK1Nvq150ZLVNBgRsleGmRfRG5A1W6O6gewDGpxH33oeNA",
+              "variant_id": "av_ECYovrRnvhbHQ4VDQR5mkGSc7MIXWDHjmTK1Nvq150ZLVNBgRsleGmRfRG5A1W6O6gewDGpxH33oeNA",
+              "title": "一念永恒 完结季 第4季",
+              "year": 2026,
+              "heat_score": 212.1,
+              "available_at": "2026-11-17T13:00:15.097Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/84/84b5d761eb13c8e8bed09c6966938d8a30404fdff96c5168844c4c323ec22f2e.webp",
+              "season_label": "第4季",
+              "latest_episode_label": "更新至第20集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_3Ur6z8z55QU82X_5BNyBuj_BEx6Qc4IU7OQcAAq4s-FHcqW60az41EdwrJyqxmKUv6BG7tOAxAqmAhw",
+              "variant_id": "av_3Ur6z8z55QU82X_5BNyBuj_BEx6Qc4IU7OQcAAq4s-FHcqW60az41EdwrJyqxmKUv6BG7tOAxAqmAhw",
+              "title": "全职法师特别篇帕特农神庙",
+              "year": 2026,
+              "heat_score": 132.02,
+              "available_at": "2026-11-17T02:04:59.979Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/e8/e80dde0ceab184035593425d40521008a14a2060c27a013fcc4e6679eed3f7e6.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第100集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_d8NieW0kCz4gvTvSN7Rz_ghd18qc2O0IRoIuVcdZn_AMR5xR8zR21stg6nYW8TdZ53X2QoHZIpY4iZ0",
+              "variant_id": "av_d8NieW0kCz4gvTvSN7Rz_ghd18qc2O0IRoIuVcdZn_AMR5xR8zR21stg6nYW8TdZ53X2QoHZIpY4iZ0",
+              "title": "万界独尊",
+              "year": 2021,
+              "heat_score": 115.92,
+              "available_at": "2026-11-17T04:57:13.320Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/e4/e4be4345aabe1d35a4cb904d931b6d1c8a485bf6c0d65c0bbd29ff425311dfd1.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第501集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_vYItITNI8O58wFptrSb0CHELNZrZ10FdxCp-CQEcMIGzpsP5L0dxkS_WNAF-RVt4HzADO5Ny4lNdenc",
+              "variant_id": "av_vYItITNI8O58wFptrSb0CHELNZrZ10FdxCp-CQEcMIGzpsP5L0dxkS_WNAF-RVt4HzADO5Ny4lNdenc",
+              "title": "逆天至尊",
+              "year": 2021,
+              "heat_score": 105.88,
+              "available_at": "2026-11-17T04:42:13.583Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/2d/2d7d994761351ccbb5af7e164067691591bd546e0ecf8b5c28cd666de13f2047.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第567集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            }
+          ],
+          "more_url": "/v1/watch-calendar?view=weekly&week=current&sort=heat&kind=anime&weekday=2&limit=20"
+        },
+        "movie": {
+          "total": 1229,
+          "preview": [
+            {
+              "id": "av_qiMAZXLo49iYnQ_-NlijAsMD3sU0NsmtSM9JMdV7OaoqT5VMNNUgMszZzNu0qsZPSA1DrwdWpXofkPc",
+              "variant_id": "av_qiMAZXLo49iYnQ_-NlijAsMD3sU0NsmtSM9JMdV7OaoqT5VMNNUgMszZzNu0qsZPSA1DrwdWpXofkPc",
+              "title": "蜘蛛侠:崭新之日",
+              "year": 2026,
+              "heat_score": 211.17,
+              "available_at": "2026-11-17T11:19:03.611Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/54/5467d66b06b9e3bdfc843d99e25c1054f4f319d6b7997a3472831de2a7364f61.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_tjTpuU6TfuUhn2pOmS7agsC4lKlxMmcwdYL4UKSa-AuMrHLKhxtRsCtq48YLL88j99tu5pbArjQpuy8",
+              "variant_id": "av_tjTpuU6TfuUhn2pOmS7agsC4lKlxMmcwdYL4UKSa-AuMrHLKhxtRsCtq48YLL88j99tu5pbArjQpuy8",
+              "title": "奥德赛",
+              "year": 2026,
+              "heat_score": 205.76,
+              "available_at": "2026-11-17T13:04:56.232Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/f8/f8ebd3e05634e4fcf85ae0dcd4878e37efb5322c21541ab22e260807d2690ad4.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_h6Xy8fDsGf6j0UKQZufPBBszzSi6Gd3RWT3D__J5ApS928gbD5O9Y7RgRb_g2L15qk4RY4lHNT2IZhs",
+              "variant_id": "av_h6Xy8fDsGf6j0UKQZufPBBszzSi6Gd3RWT3D__J5ApS928gbD5O9Y7RgRb_g2L15qk4RY4lHNT2IZhs",
+              "title": "生化危机:爆发夜",
+              "year": 2026,
+              "heat_score": 192.18,
+              "available_at": "2026-11-17T10:09:35.432Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/77/775b90191cd3be44591abb82054762eb469988927edb34282b15ed3e5896cb96.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_NwwqjErIGv66Qo1yB8PykHI1NHmndskK93Vb2htv4Z7yJvnbHZilw4A2Pd_XfiLhHENI1PW0v1_1tRU",
+              "variant_id": "av_NwwqjErIGv66Qo1yB8PykHI1NHmndskK93Vb2htv4Z7yJvnbHZilw4A2Pd_XfiLhHENI1PW0v1_1tRU",
+              "title": "可能的爱",
+              "year": 2026,
+              "heat_score": 172.46,
+              "available_at": "2026-11-17T14:05:29.295Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/eb/eb1ee83f172472a9217128a1decf227ac8ca0faf0f4a15cdb0dfe2550ba9c370.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_h4garcIMtuYBXgxxOAh9jQrn3f6uk1I7nuPX1T70z5NwqHxO6H1obsKNRI36bgKkgfWrazbGja7Pbrc",
+              "variant_id": "av_h4garcIMtuYBXgxxOAh9jQrn3f6uk1I7nuPX1T70z5NwqHxO6H1obsKNRI36bgKkgfWrazbGja7Pbrc",
+              "title": "野兽之心",
+              "year": 2026,
+              "heat_score": 170.44,
+              "available_at": "2026-11-17T14:05:29.295Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/6f/6f63291053ea3dbb872d59c6f72c5620cd242ea262842e65104cea5d21505b5a.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_hbXvD6mZt51rJbgZHEhNt7SFLxIOZ0Lb6AX_e0yLPQp_PXk2VlUA9iDAkit-eUL9rOnMc86bw6otnQY",
+              "variant_id": "av_hbXvD6mZt51rJbgZHEhNt7SFLxIOZ0Lb6AX_e0yLPQp_PXk2VlUA9iDAkit-eUL9rOnMc86bw6otnQY",
+              "title": "生死制暴",
+              "year": 2026,
+              "heat_score": 159.86,
+              "available_at": "2026-11-17T08:49:22.308Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/34/348f8fe99189fc03b51fb6595a88c2bebdfff42b6e0a695a869d304b245326ff.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            }
+          ],
+          "more_url": "/v1/watch-calendar?view=weekly&week=current&sort=heat&kind=movie&weekday=2&limit=20"
+        },
+        "variety": {
+          "total": 51,
+          "preview": [
+            {
+              "id": "av_skkXhxCjWXlnPW1TqzUvMXk1Wt9kM4OegeHFraY8_0NbO6_dYgTy1qyqugPNlLsASa51pSjrF10aKpY",
+              "variant_id": "av_skkXhxCjWXlnPW1TqzUvMXk1Wt9kM4OegeHFraY8_0NbO6_dYgTy1qyqugPNlLsASa51pSjrF10aKpY",
+              "title": "现在就出发 第4季",
+              "year": 2026,
+              "heat_score": 305.62,
+              "available_at": "2026-11-16T16:00:00.000Z",
+              "date_basis": "published_variety_air_date_v1",
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/39/395f51655ac5559d3e06f1800cf8f468577e0d98dab315b979bdc8c0b48a60c0.webp",
+              "season_label": "第4季",
+              "latest_episode_label": "更新至2026-11-17 第6期 加更",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_GT9kiHqf11Z4gToQ2XpHD4MG2Ud43h-9gZJ0HbrOPz6XK-mceCTgxr0APvy09DFLxwEFX5TNSVbkCGk",
+              "variant_id": "av_GT9kiHqf11Z4gToQ2XpHD4MG2Ud43h-9gZJ0HbrOPz6XK-mceCTgxr0APvy09DFLxwEFX5TNSVbkCGk",
+              "title": "一起淋场太阳雨",
+              "year": 2026,
+              "heat_score": 177.53,
+              "available_at": "2026-11-16T16:00:00.000Z",
+              "date_basis": "published_variety_air_date_v1",
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/de/dec0839d06224d387fa99cfc1b752445b4744ce384ccf354bb1dbedc90acf997.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至20261117",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_TxqN5yoaAx4awqAbeyPHXuSAMgemNnYHHfKocoHgLZS6ABmTpcWSaR64fsMvbg0EFt_-YEW8zr5MAq8",
+              "variant_id": "av_TxqN5yoaAx4awqAbeyPHXuSAMgemNnYHHfKocoHgLZS6ABmTpcWSaR64fsMvbg0EFt_-YEW8zr5MAq8",
+              "title": "音乐缘计划 第3季",
+              "year": 2026,
+              "heat_score": 157.07,
+              "available_at": "2026-11-16T16:00:00.000Z",
+              "date_basis": "published_variety_air_date_v1",
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/1d/1dcce9b3b3964bdbfe093666b3ff10d0efe375fedee747e86831937ae1ee8110.webp",
+              "season_label": "第3季",
+              "latest_episode_label": "更新至20261117",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_f2qg2MdujFGzHdXt6ZC5Qvy8GltcUdVlAlMHmRaCUKaa-KER9UFJ65c6ZVgs41pHnXlyY-G8z0R24uo",
+              "variant_id": "av_f2qg2MdujFGzHdXt6ZC5Qvy8GltcUdVlAlMHmRaCUKaa-KER9UFJ65c6ZVgs41pHnXlyY-G8z0R24uo",
+              "title": "非诚勿扰2026",
+              "year": null,
+              "heat_score": 153.44,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/80/80ede6c0b2f43472aaaeeea8047ccaa937f6ceaa7b35972dc97b0dcf08e0c08f.webp",
+              "season_label": null,
+              "latest_episode_label": null,
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_9ufSXIC88qf73gyyyiPVXRwDTRll5BINUcfZEtFx88HdVsU6hn7b0R031Ar8-WJk9F8_RBbm34yjftg",
+              "variant_id": "av_9ufSXIC88qf73gyyyiPVXRwDTRll5BINUcfZEtFx88HdVsU6hn7b0R031Ar8-WJk9F8_RBbm34yjftg",
+              "title": "日落时分说爱你 第2季",
+              "year": 2026,
+              "heat_score": 153.4,
+              "available_at": "2026-11-16T16:00:00.000Z",
+              "date_basis": "published_variety_air_date_v1",
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/cd/cd081ba73a9f9d18cebc3f967f345130cf4a9daadcb0bc88638b2579171e78df.webp",
+              "season_label": "第2季",
+              "latest_episode_label": "更新至20261117 第1期 下",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_1jEVIfA2JDjiw2dYF6SBFoFA4LyXQtQSz7tvseUrX3-rb5qnD_6Dn1uxt5gYdExcHdft2nwzFIN8O7w",
+              "variant_id": "av_1jEVIfA2JDjiw2dYF6SBFoFA4LyXQtQSz7tvseUrX3-rb5qnD_6Dn1uxt5gYdExcHdft2nwzFIN8O7w",
+              "title": "五十公里桃花坞 第6季",
+              "year": null,
+              "heat_score": 152.53,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/bc/bcb3ac81f1da49e2abf8b2b5fb6a1fcd2b032a72877a0606798341ae61473579.webp",
+              "season_label": "第6季",
+              "latest_episode_label": null,
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-17",
+                "predicted": false
+              }
+            }
+          ],
+          "more_url": "/v1/watch-calendar?view=weekly&week=current&sort=heat&kind=variety&weekday=2&limit=20"
+        }
+      }
+    },
+    {
+      "date": "2026-11-18",
+      "weekday": 3,
+      "weekday_label": "周三",
+      "groups": {
+        "series": {
+          "total": 49,
+          "preview": [
+            {
+              "id": "av_TtKIVe2dt577SiDSbLVOX4u2rMhPMc4VtGHBtiesmc6HXtExyHPunOjNU7OZ7XA9yPkmCWXDcx4uPXg",
+              "variant_id": "av_TtKIVe2dt577SiDSbLVOX4u2rMhPMc4VtGHBtiesmc6HXtExyHPunOjNU7OZ7XA9yPkmCWXDcx4uPXg",
+              "title": "走马上任",
+              "year": null,
+              "heat_score": 297.11,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/77/77db6c8fd84f23d4e3f3915429376b0cb0027224b46aa620e88e54c28c9fac21.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第35集",
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_1nWitwNQoxJnu9-aVKBuh7_3oHZeGvhhECLRZgFJ7LqIIScLCevALMB6lqTthO3z6UW5iDMYYWKXyFc",
+              "variant_id": "av_1nWitwNQoxJnu9-aVKBuh7_3oHZeGvhhECLRZgFJ7LqIIScLCevALMB6lqTthO3z6UW5iDMYYWKXyFc",
+              "title": "再婚皇后",
+              "year": null,
+              "heat_score": 214.6,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/4a/4aae61dbf8704a24b334bcb3b7db9d79f964ae4ec8e2b34e6011af9958480ea9.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第6集",
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "low",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_vvWIEIYt-XmS-_aS1FuA-qDwP19jbZ1zbxZQphUpBM_B__bP7uzzB7WORjjiAWBW-tm7WL4k8ALOqEk",
+              "variant_id": "av_vvWIEIYt-XmS-_aS1FuA-qDwP19jbZ1zbxZQphUpBM_B__bP7uzzB7WORjjiAWBW-tm7WL4k8ALOqEk",
+              "title": "午夜法则",
+              "year": null,
+              "heat_score": 197.5,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/61/6128bf7bb8c674ffa4bb6fe671468ff9e04126a19ff57e8f7205c233112c2e14.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第4集",
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "low",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_Fy6bwOOjaLvIGw2KmdBwATW0EF7YPsmjCngY8w88vpon8aOshqShld8z3_03pCGU_-v-FScDhXmArR4",
+              "variant_id": "av_Fy6bwOOjaLvIGw2KmdBwATW0EF7YPsmjCngY8w88vpon8aOshqShld8z3_03pCGU_-v-FScDhXmArR4",
+              "title": "指环王:力量之戒 第3季",
+              "year": null,
+              "heat_score": 178.93,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/ce/cec72eba193dad79b3a19c74b389ad064c12ac79e5ce227701372118a79c2fc7.webp",
+              "season_label": "第3季",
+              "latest_episode_label": "更新至第4集",
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "low",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_XtOU1wiHEY6V90Y1Prrxdb-05izRTaL9Z73YRkqk20pYArs6KB-EmN5-D_U-VMZGlRBbpOs42M65mkU",
+              "variant_id": "av_XtOU1wiHEY6V90Y1Prrxdb-05izRTaL9Z73YRkqk20pYArs6KB-EmN5-D_U-VMZGlRBbpOs42M65mkU",
+              "title": "深夜食堂 第6季",
+              "year": null,
+              "heat_score": 157.26,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/94/9410bcb6913ad3fd3515be3ced4515dcdd73ce8f5bca87961797c6a40a164b4d.webp",
+              "season_label": "第6季",
+              "latest_episode_label": "更新至第4集",
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_gRgKpdWm1VMPnip3u8arzYSEa80lKmLVTNHOyBPener3PP2GG41qMPmfaYJUq3ddkLjGr2dfwXi_Z20",
+              "variant_id": "av_gRgKpdWm1VMPnip3u8arzYSEa80lKmLVTNHOyBPener3PP2GG41qMPmfaYJUq3ddkLjGr2dfwXi_Z20",
+              "title": "碰撞搜查线 第2季",
+              "year": 2026,
+              "heat_score": 153.75,
+              "available_at": "2026-11-18T01:22:36.977Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "series",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/75/75c038e7f7bfaeda85ab3c0bfdbbf04d51cb0fc0f9368503f0a1a9d39a1c50e4.webp",
+              "season_label": "第2季",
+              "latest_episode_label": "更新至第2集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            }
+          ],
+          "more_url": "/v1/watch-calendar?view=weekly&week=current&sort=heat&kind=series&weekday=3&limit=20"
+        },
+        "anime": {
+          "total": 57,
+          "preview": [
+            {
+              "id": "av_MdS2akdiL98LF8MWtWzXTGK6XmRpLKwdtskjVWaG_aSqRzWw1TUFamGu6Q8nHBrEc1FPTizXSBFdwBM",
+              "variant_id": "av_MdS2akdiL98LF8MWtWzXTGK6XmRpLKwdtskjVWaG_aSqRzWw1TUFamGu6Q8nHBrEc1FPTizXSBFdwBM",
+              "title": "师兄啊师兄",
+              "year": 2023,
+              "heat_score": 238.39,
+              "available_at": "2026-11-18T02:26:54.535Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/84/846b37e89d7b51318a6f975dfafee95ae0f0fa1e66404eb67cc90d4153a78890.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第168集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av__2-5ZCJhIjJJwRnTli9GypXxHp70ML9XnDangDfBAop9B4AgesmmIrOiVjYb98wRCjTLuDcu3egkt7s",
+              "variant_id": "av__2-5ZCJhIjJJwRnTli9GypXxHp70ML9XnDangDfBAop9B4AgesmmIrOiVjYb98wRCjTLuDcu3egkt7s",
+              "title": "灵境行者",
+              "year": null,
+              "heat_score": 217.95,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/c5/c5320f7163aac7f5b64051662830c5d78e5f15f1e11cbc31f8c3070631f8b113.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第12集",
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_EP3_mdwRs37Tj4JVIwVCrFbKPT6dTalB2MFbvPvNjZlK2i9LmRTuaJ5f6smF4PuRUaaIFXhApXeXhxc",
+              "variant_id": "av_EP3_mdwRs37Tj4JVIwVCrFbKPT6dTalB2MFbvPvNjZlK2i9LmRTuaJ5f6smF4PuRUaaIFXhApXeXhxc",
+              "title": "大夏守墓人",
+              "year": 2026,
+              "heat_score": 178.2,
+              "available_at": "2026-11-18T02:13:58.472Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/86/86b59e243f2b91e0dc1f94cc726b7a1496aaf0ae00dd6914fd70af3a2c83dc2b.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第17集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_wAFCArsLw5SP45Oe6s_zvD8w1AAntxQTOUt6VLPZx9vxDtWcRuqUSn0EbO4n2CPuCyjjfLxHygZkpvk",
+              "variant_id": "av_wAFCArsLw5SP45Oe6s_zvD8w1AAntxQTOUt6VLPZx9vxDtWcRuqUSn0EbO4n2CPuCyjjfLxHygZkpvk",
+              "title": "被流放的开挂魔术师讴歌随心所欲第二人生",
+              "year": 2026,
+              "heat_score": 146.41,
+              "available_at": "2026-11-18T01:04:55.773Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/40/40963b33c7af94a6fc82f3def7386b239169053565f4139860d69473b228a557.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第7集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_HyC3hK7z52DLcv8-YODoFRppcTTHWnMOZilgjbyEYjAoovjicw22lyWCf96YmNVs3AphkLu_8y5ysNQ",
+              "variant_id": "av_HyC3hK7z52DLcv8-YODoFRppcTTHWnMOZilgjbyEYjAoovjicw22lyWCf96YmNVs3AphkLu_8y5ysNQ",
+              "title": "大理寺日志 第3季",
+              "year": 2026,
+              "heat_score": 132.09,
+              "available_at": "2026-11-18T03:43:06.617Z",
+              "date_basis": "playback_source_first_seen_consensus_v2",
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/39/39113807996067160f3710d8bf98043f534da0823ca164802e51c5ea6960dc70.webp",
+              "season_label": "第3季",
+              "latest_episode_label": "更新至第13集",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_d8NieW0kCz4gvTvSN7Rz_ghd18qc2O0IRoIuVcdZn_AMR5xR8zR21stg6nYW8TdZ53X2QoHZIpY4iZ0",
+              "variant_id": "av_d8NieW0kCz4gvTvSN7Rz_ghd18qc2O0IRoIuVcdZn_AMR5xR8zR21stg6nYW8TdZ53X2QoHZIpY4iZ0",
+              "title": "万界独尊",
+              "year": null,
+              "heat_score": 115.92,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "anime",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/e4/e4be4345aabe1d35a4cb904d931b6d1c8a485bf6c0d65c0bbd29ff425311dfd1.webp",
+              "season_label": null,
+              "latest_episode_label": "更新至第501集",
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            }
+          ],
+          "more_url": "/v1/watch-calendar?view=weekly&week=current&sort=heat&kind=anime&weekday=3&limit=20"
+        },
+        "movie": {
+          "total": 133,
+          "preview": [
+            {
+              "id": "av_hbXvD6mZt51rJbgZHEhNt7SFLxIOZ0Lb6AX_e0yLPQp_PXk2VlUA9iDAkit-eUL9rOnMc86bw6otnQY",
+              "variant_id": "av_hbXvD6mZt51rJbgZHEhNt7SFLxIOZ0Lb6AX_e0yLPQp_PXk2VlUA9iDAkit-eUL9rOnMc86bw6otnQY",
+              "title": "生死制暴",
+              "year": 2026,
+              "heat_score": 159.86,
+              "available_at": "2026-11-17T17:02:27.565Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/34/348f8fe99189fc03b51fb6595a88c2bebdfff42b6e0a695a869d304b245326ff.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_ZPrn2hyLTfDSDfKCgOV_u5IBgNUIGah1zXZG0a20gDQAE09z9JvBWId8qrXrxI8HmZfUPxm_-wVJJPY",
+              "variant_id": "av_ZPrn2hyLTfDSDfKCgOV_u5IBgNUIGah1zXZG0a20gDQAE09z9JvBWId8qrXrxI8HmZfUPxm_-wVJJPY",
+              "title": "天空之城",
+              "year": 1986,
+              "heat_score": 134.15,
+              "available_at": "2026-11-17T16:31:30.227Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/40/40f994d5746e0df1248925f015ffd0907062ee3537636da5f58f68d34683d03b.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_usdbbAuLl-5FNyca1YM-b2DaVD4c6f8TJIb1l9kdiqEAV0mKGTWWuUPV4subeDUKfA8hiphNCdzJbsQ",
+              "variant_id": "av_usdbbAuLl-5FNyca1YM-b2DaVD4c6f8TJIb1l9kdiqEAV0mKGTWWuUPV4subeDUKfA8hiphNCdzJbsQ",
+              "title": "黑太阳731",
+              "year": 1988,
+              "heat_score": 133.21,
+              "available_at": "2026-11-17T16:31:33.841Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/1e/1ee4e558554f9167cbf48b2de59bca4f5a121295525343a8a6204f0aa3df9b38.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_kw1GpiWnABMbVg-X5D-Yjiy2ws7GaUFNl2RTrPChimpzDr6m7seaYIDq-tjbUDzT-rOmXoxoNspyLvU",
+              "variant_id": "av_kw1GpiWnABMbVg-X5D-Yjiy2ws7GaUFNl2RTrPChimpzDr6m7seaYIDq-tjbUDzT-rOmXoxoNspyLvU",
+              "title": "公民义警",
+              "year": 2026,
+              "heat_score": 114.26,
+              "available_at": "2026-11-17T23:34:42.256Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/a2/a21dc537eb2bcd72f6b36d7c8ca922c717e5949cbba87340d33d7095da75a771.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_AehbhKmb3fhqW7X4UttMfVW4s3Ot9ImUUZD9D4Afk1uaKfXExNQS4TvYwq3SzJ4dAmqNyAIrFas0uPY",
+              "variant_id": "av_AehbhKmb3fhqW7X4UttMfVW4s3Ot9ImUUZD9D4Afk1uaKfXExNQS4TvYwq3SzJ4dAmqNyAIrFas0uPY",
+              "title": "四针.来自地下的音乐",
+              "year": 2022,
+              "heat_score": 63.98,
+              "available_at": "2026-11-17T16:31:18.721Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/4d/4d0b1b2e161b13944de57f02915d97f7fbf027cccbe31716f45fb49712757cbb.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_t8FziYxqAfY_x9QzNwuRRj8bOkTzN1Tk52S6VSLOGZ4sT86oQGjYZZkHydDxWvUuj773XiSwkvdERo0",
+              "variant_id": "av_t8FziYxqAfY_x9QzNwuRRj8bOkTzN1Tk52S6VSLOGZ4sT86oQGjYZZkHydDxWvUuj773XiSwkvdERo0",
+              "title": "天气之子",
+              "year": 2019,
+              "heat_score": 60.1,
+              "available_at": "2026-11-17T18:30:35.043Z",
+              "date_basis": "center_playable_resource_update_v1",
+              "content_kind": "movie",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/ef/efbbd6b189cb3a42ebf4383813ef91342b6586a7232a3ce059d44c03a40e09f2.webp",
+              "season_label": null,
+              "latest_episode_label": "资源更新",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            }
+          ],
+          "more_url": "/v1/watch-calendar?view=weekly&week=current&sort=heat&kind=movie&weekday=3&limit=20"
+        },
+        "variety": {
+          "total": 21,
+          "preview": [
+            {
+              "id": "av_f2qg2MdujFGzHdXt6ZC5Qvy8GltcUdVlAlMHmRaCUKaa-KER9UFJ65c6ZVgs41pHnXlyY-G8z0R24uo",
+              "variant_id": "av_f2qg2MdujFGzHdXt6ZC5Qvy8GltcUdVlAlMHmRaCUKaa-KER9UFJ65c6ZVgs41pHnXlyY-G8z0R24uo",
+              "title": "非诚勿扰2026",
+              "year": null,
+              "heat_score": 153.44,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/80/80ede6c0b2f43472aaaeeea8047ccaa937f6ceaa7b35972dc97b0dcf08e0c08f.webp",
+              "season_label": null,
+              "latest_episode_label": null,
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_9ufSXIC88qf73gyyyiPVXRwDTRll5BINUcfZEtFx88HdVsU6hn7b0R031Ar8-WJk9F8_RBbm34yjftg",
+              "variant_id": "av_9ufSXIC88qf73gyyyiPVXRwDTRll5BINUcfZEtFx88HdVsU6hn7b0R031Ar8-WJk9F8_RBbm34yjftg",
+              "title": "日落时分说爱你 第2季",
+              "year": 2026,
+              "heat_score": 153.4,
+              "available_at": "2026-11-17T16:00:00.000Z",
+              "date_basis": "published_variety_air_date_v1",
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/cd/cd081ba73a9f9d18cebc3f967f345130cf4a9daadcb0bc88638b2579171e78df.webp",
+              "season_label": "第2季",
+              "latest_episode_label": "更新至20261118 第1期 加更",
+              "forecast": {
+                "kind": "actual",
+                "label": "当日新增",
+                "confidence": "high",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_1jEVIfA2JDjiw2dYF6SBFoFA4LyXQtQSz7tvseUrX3-rb5qnD_6Dn1uxt5gYdExcHdft2nwzFIN8O7w",
+              "variant_id": "av_1jEVIfA2JDjiw2dYF6SBFoFA4LyXQtQSz7tvseUrX3-rb5qnD_6Dn1uxt5gYdExcHdft2nwzFIN8O7w",
+              "title": "五十公里桃花坞 第6季",
+              "year": null,
+              "heat_score": 152.53,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/bc/bcb3ac81f1da49e2abf8b2b5fb6a1fcd2b032a72877a0606798341ae61473579.webp",
+              "season_label": "第6季",
+              "latest_episode_label": null,
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_G3X3s2qHOSb6EjWXgMJLIgZ18T_mroFiRpt2u7jMRy58sozCTiMM6kpx7DX6kf2dnDricXXVPePX-B0",
+              "variant_id": "av_G3X3s2qHOSb6EjWXgMJLIgZ18T_mroFiRpt2u7jMRy58sozCTiMM6kpx7DX6kf2dnDricXXVPePX-B0",
+              "title": "听,谁在唱歌 第2季",
+              "year": null,
+              "heat_score": 133.75,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/30/3053bd5dc62c49ef3e66048ab73d3ad040d45162e6a30d0c93df67086faa1c29.webp",
+              "season_label": "第2季",
+              "latest_episode_label": null,
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_MWHFbas_in8YYmj7yn_hlQe6ifl0FIhOPpf4G92RRleJFFGiEaIKGOYPFtokRFGwS-bfIMN-uNmhzLQ",
+              "variant_id": "av_MWHFbas_in8YYmj7yn_hlQe6ifl0FIhOPpf4G92RRleJFFGiEaIKGOYPFtokRFGwS-bfIMN-uNmhzLQ",
+              "title": "只要有空 第5季",
+              "year": null,
+              "heat_score": 100.36,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/a3/a309c1b7fd03a937ecbd1dfb0e1775c0154662b63e06f5fda0577bef0859daae.webp",
+              "season_label": "第5季",
+              "latest_episode_label": null,
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            },
+            {
+              "id": "av_4_lfn3RZUgrh5MYnCQrcXRBnmozZkfOKunZ3w3LsSZ0v9Oum_3gMC9lNzIlZnbARN5bQLbe_F6MuysI",
+              "variant_id": "av_4_lfn3RZUgrh5MYnCQrcXRBnmozZkfOKunZ3w3LsSZ0v9Oum_3gMC9lNzIlZnbARN5bQLbe_F6MuysI",
+              "title": "美食强人",
+              "year": null,
+              "heat_score": 99.56,
+              "available_at": null,
+              "date_basis": null,
+              "content_kind": "variety",
+              "poster_url": "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=webp&src=img.baipiaozhe.com/assets/images/64/64d7c1a531a81593cea822795d79801f8da8e015d4292f4a45f97da635486f95.webp",
+              "season_label": null,
+              "latest_episode_label": null,
+              "forecast": {
+                "kind": "weekday",
+                "label": "本周更新",
+                "confidence": "medium",
+                "target_date": "2026-11-18",
+                "predicted": false
+              }
+            }
+          ],
+          "more_url": "/v1/watch-calendar?view=weekly&week=current&sort=heat&kind=variety&weekday=3&limit=20"
+        }
+      }
+    }
+  ],
+  "detail": null
+}

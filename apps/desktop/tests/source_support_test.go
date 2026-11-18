@@ -24,6 +24,7 @@ const rulesDir = "../../luvia-rules"
 type recordedRequest struct {
 	Method string
 	URL    string
+	Path   string
 	Query  url.Values
 	Header http.Header
 	Body   string
@@ -66,6 +67,7 @@ func (s *stubUpstream) RoundTrip(request *http.Request) (*http.Response, error) 
 	record := recordedRequest{
 		Method: request.Method,
 		URL:    request.URL.String(),
+		Path:   request.URL.Path,
 		Query:  request.URL.Query(),
 		Header: request.Header.Clone(),
 		Body:   body,

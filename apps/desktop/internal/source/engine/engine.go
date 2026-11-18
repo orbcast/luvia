@@ -103,11 +103,12 @@ func (s *sourceImpl) List(ctx context.Context, query source.ListQuery) (source.P
 	if query.Kind != "" {
 		kindValue = block.KindValues[string(query.Kind)]
 	}
-	vars, err := s.runSteps(ctx, "list", block.Steps, map[string]any{
+	keyword := strings.TrimSpace(query.Keyword)
+	vars, err := s.runStepsWith(ctx, "list", block.Steps, map[string]any{
 		"page":    page,
-		"keyword": strings.TrimSpace(query.Keyword),
+		"keyword": keyword,
 		"kind":    kindValue,
-	})
+	}, intentOverride(block.SearchIntent, keyword))
 	if err != nil {
 		return source.Page{}, err
 	}
@@ -130,6 +131,84 @@ func (s *sourceImpl) List(ctx context.Context, query source.ListQuery) (source.P
 		}
 	}
 	return result, nil
+}
+
+// dayItems resolves the cards of one weekday. Cards carry no day of their own,
+// so a rule that maps a schedule the upstream sent in full indexes the day it
+// wants: "res.days[weekday].groups.series.preview[*]", where the bracket takes
+// its position from the call's weekday. A rule that asks for one day per
+// request names no index and gets the answer as it is.
+func (s *sourceImpl) dayItems(selector rule.Selector, vars map[string]any, weekday int) []any {
+	for _, field := range selector.ByFields() {
+		// The schedule is looked up by the weekday it carries rather than by
+		// its position, so a payload that leaves out a day with nothing
+		// scheduled still maps every remaining day to the right one.
+		values := make(map[string]int, len(selector.ByFields()))
+		values[field] = weekday
+		items := s.resolveItems(selector.WithValues(values), vars)
+		if len(items) > 0 {
+			return items
+		}
+	}
+	if len(selector.KeyNames()) > 0 {
+		keys := make(map[string]int, len(selector.KeyNames()))
+		for index, name := range selector.KeyNames() {
+			if index == 0 {
+				keys[name] = weekday - 1
+				continue
+			}
+			keys[name] = 0
+		}
+		return s.resolveItems(selector.WithKeys(keys), vars)
+	}
+	return s.resolveItems(selector, vars)
+}
+
+func (s *sourceImpl) Updates(ctx context.Context, day source.Day) ([]source.Update, error) {
+	block := s.rule.Updates
+	if block == nil {
+		return nil, s.unsupported("updates")
+	}
+	if day.Weekday < 1 || day.Weekday > 7 {
+		return nil, s.fail(callSite{op: "updates"}, source.ErrInvalidRule,
+			fmt.Sprintf("weekday %d is not 1 through 7", day.Weekday), nil)
+	}
+	kindValue := ""
+	if day.Kind != "" {
+		kindValue = block.KindValues[string(day.Kind)]
+	}
+	vars, err := s.runSteps(ctx, "updates", block.Steps, map[string]any{
+		"weekday": day.Weekday,
+		"kind":    kindValue,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if block.Output.Cards == nil {
+		return nil, s.fail(callSite{op: "updates", step: "updates.output"},
+			source.ErrInvalidRule, "updates output has no cards mapping", nil)
+	}
+
+	selector, err := rule.ParseSelector(block.Output.Cards.From)
+	if err != nil {
+		return nil, s.fail(callSite{op: "updates", step: "updates.output"},
+			source.ErrInvalidRule, "bad cards selector", err)
+	}
+	// A day with nothing scheduled resolves to nothing, which is an empty
+	// answer rather than a broken rule: the player shows the day as empty.
+	items := s.dayItems(selector, vars, day.Weekday)
+	updates := make([]source.Update, 0, len(items))
+	for _, item := range items {
+		sc := scope{item: item, vars: vars}
+		shape := block.Output.Cards
+		update := source.Update{Note: s.evalString(field(shape.Fields, "note"), sc)}
+		update.Card = cardOf(s.rule.ID, shape.Fields, sc, s)
+		if update.ID == "" {
+			continue
+		}
+		updates = append(updates, update)
+	}
+	return updates, nil
 }
 
 func (s *sourceImpl) Detail(ctx context.Context, ref source.Ref) (source.Detail, error) {
@@ -211,6 +290,12 @@ func (s *sourceImpl) Episodes(ctx context.Context, ref source.Ref) ([]source.Epi
 }
 
 func (s *sourceImpl) runSteps(ctx context.Context, op string, steps []rule.Step, vars map[string]any) (map[string]any, error) {
+	return s.runStepsWith(ctx, op, steps, vars, nil)
+}
+
+// runStepsWith runs a step pipeline with query values this call overrides,
+// such as the listing intent a keyword turns from browse to search.
+func (s *sourceImpl) runStepsWith(ctx context.Context, op string, steps []rule.Step, vars map[string]any, overrides map[string]string) (map[string]any, error) {
 	if vars == nil {
 		vars = map[string]any{}
 	}
@@ -218,13 +303,13 @@ func (s *sourceImpl) runSteps(ctx context.Context, op string, steps []rule.Step,
 		site := callSite{op: op, step: fmt.Sprintf("%s.steps[%d]", op, index)}
 		switch step.Op {
 		case rule.OpRequest:
-			result, err := s.fetch(ctx, site, step.Request, scope{vars: vars})
+			result, err := s.fetch(ctx, site, step.Request, scope{vars: vars, overrides: overrides})
 			if err != nil {
 				return nil, err
 			}
 			vars[step.As] = result
 		case rule.OpPaginate:
-			items, err := s.runPaginate(ctx, site, step, vars)
+			items, err := s.runPaginate(ctx, site, step, vars, overrides)
 			if err != nil {
 				return nil, err
 			}
@@ -236,7 +321,7 @@ func (s *sourceImpl) runSteps(ctx context.Context, op string, steps []rule.Step,
 	return vars, nil
 }
 
-func (s *sourceImpl) runPaginate(ctx context.Context, site callSite, step rule.Step, vars map[string]any) ([]any, error) {
+func (s *sourceImpl) runPaginate(ctx context.Context, site callSite, step rule.Step, vars map[string]any, overrides map[string]string) ([]any, error) {
 	var all []any
 	start := step.Start
 	if start < 1 {
@@ -254,11 +339,11 @@ func (s *sourceImpl) runPaginate(ctx context.Context, site callSite, step rule.S
 			local["offset"] = index * step.Size
 			local["page"] = start + index
 		}
-		response, err := s.fetch(ctx, site, step.Request, scope{vars: local})
+		response, err := s.fetch(ctx, site, step.Request, scope{vars: local, overrides: overrides})
 		if err != nil {
 			return nil, err
 		}
-		items := s.resolveItems(step.Items, response)
+		items := s.resolveText(step.Items, response)
 		if len(items) == 0 {
 			break
 		}
@@ -304,10 +389,27 @@ func (s *sourceImpl) collectOne(op, from string, vars map[string]any) (any, erro
 }
 
 // asItems accepts either an array or a single object; rules should not need a
-// wrapper type to say which one the upstream sent.
+// wrapper type to say which one the upstream sent. An array of arrays is
+// flattened one level, which is what a wildcard that collected one list per
+// branch yields.
 func asItems(value any) []any {
 	if list, ok := value.([]any); ok {
-		return list
+		nested := false
+		for _, entry := range list {
+			if _, isList := entry.([]any); !isList {
+				nested = false
+				break
+			}
+			nested = true
+		}
+		if !nested {
+			return list
+		}
+		flat := make([]any, 0, len(list))
+		for _, entry := range list {
+			flat = append(flat, entry.([]any)...)
+		}
+		return flat
 	}
 	if value == nil {
 		return nil
@@ -315,11 +417,20 @@ func asItems(value any) []any {
 	return []any{value}
 }
 
-func (s *sourceImpl) resolveItems(selectorText string, root any) []any {
+// resolveText resolves selector text. Rules that carry no call-time index, such
+// as the lines of a resolve block, name their list plainly and go through here.
+func (s *sourceImpl) resolveText(selectorText string, root any) []any {
 	selector, err := rule.ParseSelector(selectorText)
 	if err != nil {
 		return nil
 	}
+	return s.resolveItems(selector, root)
+}
+
+// resolveItems resolves a selector into the list its mapping walks: an array
+// survives as itself, and a nested result (when the selector ends on a wildcard
+// that collected a list per branch) is flattened one level into that list.
+func (s *sourceImpl) resolveItems(selector rule.Selector, root any) []any {
 	value, ok := selector.Resolve(root)
 	if !ok {
 		return nil
@@ -328,32 +439,38 @@ func (s *sourceImpl) resolveItems(selectorText string, root any) []any {
 }
 
 func (s *sourceImpl) mapCards(shape *rule.Shape, root any, vars map[string]any) []source.Card {
-	items := s.resolveItems(shape.From, root)
+	items := s.resolveText(shape.From, root)
 	cards := make([]source.Card, 0, len(items))
 	for _, item := range items {
-		sc := scope{item: item, vars: vars}
-		card := source.Card{
-			Ref:         source.Ref{Source: s.rule.ID, ID: s.evalString(field(shape.Fields, "id"), sc)},
-			Title:       s.evalString(field(shape.Fields, "title"), sc),
-			Kind:        kindOf(s.evalString(field(shape.Fields, "kind"), sc)),
-			Area:        s.evalString(field(shape.Fields, "area"), sc),
-			Tags:        s.evalList(field(shape.Fields, "tags"), sc),
-			Remarks:     s.evalString(field(shape.Fields, "remarks"), sc),
-			Overview:    s.evalString(field(shape.Fields, "overview"), sc),
-			PosterURL:   s.evalString(field(shape.Fields, "posterUrl"), sc),
-			BackdropURL: s.evalString(field(shape.Fields, "backdropUrl"), sc),
-		}
-		if value, ok := s.eval(field(shape.Fields, "year"), sc); ok {
-			if number, ok := toInt(value); ok {
-				card.Year = number.(int)
-			}
-		}
+		card := cardOf(s.rule.ID, shape.Fields, scope{item: item, vars: vars}, s)
 		if card.ID == "" {
 			continue
 		}
 		cards = append(cards, card)
 	}
 	return cards
+}
+
+// cardOf maps one upstream item onto a card. Listings, home sections and day
+// schedules share the mapping, so a field means the same thing everywhere.
+func cardOf(id string, fields map[string]rule.Value, sc scope, s *sourceImpl) source.Card {
+	card := source.Card{
+		Ref:         source.Ref{Source: id, ID: s.evalString(field(fields, "id"), sc)},
+		Title:       s.evalString(field(fields, "title"), sc),
+		Kind:        kindOf(s.evalString(field(fields, "kind"), sc)),
+		Area:        s.evalString(field(fields, "area"), sc),
+		Tags:        s.evalList(field(fields, "tags"), sc),
+		Remarks:     s.evalString(field(fields, "remarks"), sc),
+		Overview:    s.evalString(field(fields, "overview"), sc),
+		PosterURL:   s.evalString(field(fields, "posterUrl"), sc),
+		BackdropURL: s.evalString(field(fields, "backdropUrl"), sc),
+	}
+	if value, ok := s.eval(field(fields, "year"), sc); ok {
+		if number, ok := toInt(value); ok {
+			card.Year = number.(int)
+		}
+	}
+	return card
 }
 
 func (s *sourceImpl) evalList(value rule.Value, sc scope) []string {
@@ -383,4 +500,20 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// intentOverride decides the intent a listing sends. A rule that declares no
+// search intent keeps whatever its query says, which is how an upstream with a
+// single listing mode stays untouched. With one declared, a keyword swaps the
+// browse intent for the search intent and a browse drops the parameter, since
+// the upstream only matches keywords under its search intent and rejects both
+// values at once.
+func intentOverride(searchIntent, keyword string) map[string]string {
+	if searchIntent == "" {
+		return nil
+	}
+	if keyword == "" {
+		return map[string]string{"intent": ""}
+	}
+	return map[string]string{"intent": searchIntent}
 }

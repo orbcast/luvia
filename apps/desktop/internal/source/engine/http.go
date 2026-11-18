@@ -53,6 +53,24 @@ func (s *sourceImpl) fetch(ctx context.Context, site callSite, req rule.Request,
 	}
 	values := url.Values{}
 	for _, pair := range req.Query {
+		if value, ok := sc.overrides[pair.Key]; ok {
+			// A call may swap a declared value for its own, or drop it, which
+			// is how a listing switches between its browse and search intents.
+			if value == "" {
+				continue
+			}
+			values.Set(pair.Key, value)
+			continue
+		}
+		if !pair.OmitWhen.IsZero() {
+			// A pair may declare itself absent for this call, which is how an
+			// exact-match filter stays off until the viewer types something.
+			if value, ok := s.eval(pair.OmitWhen, sc); ok && toBool(value) {
+				continue
+			}
+		}
+		// Templates render constants as well as variables, so a value is sent
+		// exactly as written; only an unresolved or empty hole drops the pair.
 		text, resolved := s.render(pair.Value, sc)
 		if !resolved || text == "" {
 			continue

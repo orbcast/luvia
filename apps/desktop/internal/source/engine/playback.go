@@ -104,7 +104,7 @@ func (s *sourceImpl) Resolve(ctx context.Context, episode source.Episode, lineID
 // mapLines maps the upstream line array onto options, keeping declaration order
 // and dropping duplicates by id.
 func (s *sourceImpl) mapLines(lines rule.Lines, vars map[string]any) []lineOption {
-	items := s.resolveItems(lines.From, vars)
+	items := s.resolveText(lines.From, vars)
 	seen := make(map[string]bool, len(items))
 	options := make([]lineOption, 0, len(items))
 	for _, item := range items {

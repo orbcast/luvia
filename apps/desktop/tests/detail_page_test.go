@@ -40,6 +40,9 @@ func (s *titleSource) Resolve(context.Context, source.Episode, string) (source.P
 	s.resolves.Add(1)
 	return s.playback, nil
 }
+func (s *titleSource) Updates(context.Context, source.Day) ([]source.Update, error) {
+	return nil, &source.Error{Kind: source.ErrUnsupported, Source: "fake", Op: "updates"}
+}
 
 func sampleTitle() (*titleSource, source.Ref) {
 	ref := source.Ref{Source: "fake", ID: "d1"}
