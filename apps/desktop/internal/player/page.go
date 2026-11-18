@@ -7,9 +7,6 @@ package player
 import (
 	"context"
 	"errors"
-	"net/url"
-	"path"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -168,11 +165,11 @@ func (p *Page) resolve() {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
 		playback, err := src.Resolve(ctx, episode, line)
-		if err == nil && !playableURL(playback.URL) {
+		if err == nil && !mediaOffers(ctx, playback.URL) {
 			// Some lines answer with a poster image or an empty address while
-			// claiming mp4; playableURL catches that, and the first other line
-			// that answers with media takes over so the viewer sees a picture
-			// instead of buffering forever.
+			// claiming mp4. Their URLs often look plain, so the first bytes are
+			// fetched to tell; the next line that answers with media takes over
+			// so the viewer sees a picture instead of buffering forever.
 			playback, err = firstPlayable(ctx, src, episode, playback)
 		}
 		p.deps.Run(func() {
@@ -196,53 +193,6 @@ func (p *Page) resolve() {
 			p.invalidate()
 		})
 	}()
-}
-
-// playableURL reports whether a resolved address is a media stream the player
-// can open: an HLS playlist, a progressive file, or a plainly ranged endpoint.
-// A poster image, a blank address and a web page all fail here.
-func playableURL(raw string) bool {
-	if raw == "" {
-		return false
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return false
-	}
-	full := strings.ToLower(parsed.Path)
-	switch {
-	case strings.HasSuffix(full, ".m3u8"), strings.Contains(strings.ToLower(parsed.RawQuery), "m3u8"):
-		return true
-	case strings.HasSuffix(full, ".mp4"), strings.HasSuffix(full, ".m4v"), strings.HasSuffix(full, ".ts"):
-		return true
-	}
-	switch path.Ext(full) {
-	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".avif":
-		return false
-	}
-	// Signed CDN endpoints carry no extension; a picture CDN does, and its
-	// host names the image pipeline.
-	host := strings.ToLower(parsed.Host)
-	if strings.Contains(host, "image") || strings.Contains(host, "img") || strings.Contains(host, "pic") {
-		return false
-	}
-	return true
-}
-
-// firstPlayable walks the lines the source reported and resolves the first one
-// that answers with media, keeping the original playback when none does.
-func firstPlayable(ctx context.Context, src source.Source, episode source.Episode, current source.Playback) (source.Playback, error) {
-	for _, line := range current.Lines {
-		if line.ID == "" || line.ID == current.Line.ID {
-			continue
-		}
-		next, err := src.Resolve(ctx, episode, line.ID)
-		if err != nil || !playableURL(next.URL) {
-			continue
-		}
-		return next, nil
-	}
-	return current, nil
 }
 
 // loadComments asks the source for the comments an episode carries. A source
