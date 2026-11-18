@@ -61,13 +61,25 @@ func newHeroPage(t *testing.T, images *media.Loader) *home.Page {
 		{ID: "featured", Title: "Featured", Cards: []source.Card{card, other}},
 		{ID: "latest", Title: "Latest", Cards: []source.Card{other}},
 	}}, done: make(chan struct{})}
+	settled := make(chan struct{}, 8)
 	page := home.New(home.Deps{
 		Source:  src,
 		Library: store,
 		Images:  images,
-		Run:     func(fn func()) { fn() },
-		Now:     func() time.Time { return time.Date(2026, 11, 16, 20, 0, 0, 0, time.Local) },
+		Run: func(fn func()) {
+			fn()
+			settled <- struct{}{}
+		},
+		Now: func() time.Time { return time.Date(2026, 11, 16, 20, 0, 0, 0, time.Local) },
 	})
+	// The page loads its source on the first frame; finish that answer before
+	// the test observes the window, as the app's main thread would.
+	page.Start()
+	select {
+	case <-settled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("home request never finished")
+	}
 	return page
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"luvia/apps/desktop/internal/playintro"
 	"luvia/apps/desktop/internal/preferences"
 	"luvia/apps/desktop/internal/screens"
+	"luvia/apps/desktop/internal/search"
 	"luvia/apps/desktop/internal/settings"
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/engine"
@@ -43,7 +45,9 @@ func main() {
 		themePath := filepath.Join(userData, "theme.json")
 		preferences.RestoreTheme(themePath, mygo.Theme.SetSource)
 
-		profile := openProfile(userData, cache)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		profile := openProfile(ctx, userData, cache)
 		videoCache = profile.video
 		var introCtrl *playintro.Controller
 		window := appwindow.New(func() appwindow.Window {
@@ -66,15 +70,25 @@ func main() {
 		var router *screens.Router
 		openTitle := func(ref source.Ref) { router.OpenDetail(ref) }
 		discover := home.New(home.Deps{
-			Source:   profile.source,
-			Library:  profile.library,
-			Images:   profile.images,
+			Source:  profile.source,
+			Library: profile.library,
+			Images:  profile.images,
+			// The week strip reads the source's own schedule when the rule
+			// has one; without it the page counts the viewer's follows only.
+			Updates:  profile.updates,
 			Interval: 6 * time.Second,
 			OnPlay:   openTitle,
 			OnDetail: openTitle,
 			OnAll:    func() { shell.Navigate(appshell.Library) },
 		})
 		catalogPage := catalog.New(catalog.Deps{
+			Source:   profile.source,
+			Library:  profile.library,
+			Images:   profile.images,
+			OnPlay:   openTitle,
+			OnDetail: openTitle,
+		})
+		searchPage := search.New(search.Deps{
 			Source:   profile.source,
 			Library:  profile.library,
 			Images:   profile.images,
@@ -100,6 +114,8 @@ func main() {
 					return discover.View(c)
 				case appshell.Library:
 					return catalogPage.View(c)
+				case appshell.Search:
+					return searchPage.View(c)
 				case appshell.Settings:
 					return settingsPage.View(c)
 				}
@@ -139,11 +155,14 @@ type profile struct {
 	library *library.Store
 	images  *media.Loader
 	video   *videocache.Cache
+	// updates reports whether the chosen source carries an updates block, so
+	// the Discover page knows whether the week strip can ask it for a day.
+	updates bool
 }
 
 // openProfile opens the configured rule directory, the local library and the
 // artwork cache. A missing source is not fatal: the Discover page explains it.
-func openProfile(userData, cache string) profile {
+func openProfile(ctx context.Context, userData, cache string) profile {
 	libraryPath := filepath.Join(userData, "library.json")
 	store, err := library.Open(libraryPath)
 	if err != nil {
@@ -164,7 +183,8 @@ func openProfile(userData, cache string) profile {
 	for _, diagnostic := range set.Diagnostics() {
 		log.Printf("rule skipped: %v", diagnostic)
 	}
-	return profile{source: preferredSource(set), library: store, images: images, video: video}
+	chosen := preferredSource(set)
+	return profile{source: chosen, library: store, images: images, video: video, updates: hasUpdates(ctx, chosen)}
 }
 
 func preferredSource(set *loader.Set) source.Source {
@@ -175,6 +195,22 @@ func preferredSource(set *loader.Set) source.Source {
 		return sources[0]
 	}
 	return nil
+}
+
+// hasUpdates reports whether src answers Updates, which the engine decides by
+// whether its rule declares an updates block. Probing the first weekday costs
+// one request and tells a source without a schedule apart from one whose
+// schedule failed.
+func hasUpdates(ctx context.Context, src source.Source) bool {
+	if src == nil {
+		return false
+	}
+	_, err := src.Updates(ctx, source.Day{Weekday: 1})
+	if err == nil {
+		return true
+	}
+	kind, ok := source.KindOf(err)
+	return ok && kind != source.ErrUnsupported
 }
 
 func resourceDir() string {

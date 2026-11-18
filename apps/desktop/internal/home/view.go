@@ -29,12 +29,19 @@ const (
 	slideWidth    = 66
 	slideHeight   = 38
 	posterGap     = 14
+
+	// dayPosterRows caps what one day shows: two rows of posters, which is six
+	// cards in the wide layout's three columns.
+	dayPosterRows = 2
+	// dayPosterMinWidth is the narrowest artwork a title stays recognizable
+	// at, and what decides how many columns a day's row takes.
+	dayPosterMinWidth = 110
 )
 
 // View builds the Discover page inside the AppShell's content area.
 func (p *Page) View(c *ui.Context) ui.Element {
 	p.Start()
-	p.redraw = c.Invalidate
+	p.setRedraw(c.Invalidate)
 	t := c.Theme()
 	m := locales.In(c.Locale())
 	width, height := c.Size()
@@ -464,6 +471,8 @@ func (p *Page) weekSection(c *ui.Context, t *ui.Theme, m locales.Messages, snap 
 	}
 	day := days[p.selected]
 	updates := updatesOn(snap.Follows, day)
+	scheduled, asked := p.dayUpdates(p.selected)
+	loading := p.dayLoading(p.selected)
 
 	ui.Column(c).FillWidth().Gap(16).Children(func() {
 		p.sectionHeader(c, t, m.ThisWeek(), func() {
@@ -490,14 +499,26 @@ func (p *Page) weekSection(c *ui.Context, t *ui.Theme, m locales.Messages, snap 
 			ui.Text(c, i18n.FormatDate(c.Locale(), day, i18n.DateOptions{Skeleton: "MMMMd"})).
 				FontSize(12).TextColor(t.TextMuted)
 			ui.Spacer(c)
-			if len(updates) > 0 {
+			if loading {
+				ui.Text(c, m.LibraryLoading()).FontSize(12).TextColor(t.TextMuted)
+			} else if count := len(scheduled); asked && count > 0 {
+				ui.Text(c, m.Updates(count)).FontSize(12).TextColor(t.TextMuted)
+			} else if len(updates) > 0 {
 				ui.Text(c, m.Updates(len(updates))).FontSize(12).TextColor(t.TextMuted)
 			}
 		})
 
 		switch {
-		case len(snap.Follows) == 0:
+		case len(snap.Follows) == 0 && len(scheduled) == 0 && !loading:
 			p.emptyPanel(c, t, m.EmptyWeek(), m.EmptyContinueHint())
+		case len(scheduled) > 0:
+			columns := float32(3)
+			if design.Docked(width) {
+				columns = 2
+			}
+			p.dayPosters(c, t, m, scheduled, available, columns)
+		case loading:
+			p.emptyPanel(c, t, m.LibraryLoading(), m.EmptyContinueHint())
 		case len(updates) > 0:
 			columns := float32(3)
 			if design.Docked(width) {
@@ -513,8 +534,35 @@ func (p *Page) weekSection(c *ui.Context, t *ui.Theme, m locales.Messages, snap 
 	})
 }
 
+// dayPosters lays out one day's scheduled titles, as narrow as the column count
+// allows: a busy day then shows six posters in the room three wide ones take,
+// and a quiet one stays legible. The column count is the widest the width fits,
+// capped so one day never floods the page.
+func (p *Page) dayPosters(c *ui.Context, t *ui.Theme, m locales.Messages, scheduled []source.Update, available, maxColumns float32) {
+	columns := float32(1)
+	for candidate := maxColumns; candidate > 1; candidate-- {
+		if fit := (available - (candidate-1)*posterGap) / candidate; fit >= dayPosterMinWidth {
+			columns = candidate
+			break
+		}
+	}
+	limit := int(columns) * dayPosterRows
+	if limit > len(scheduled) {
+		limit = len(scheduled)
+	}
+	posterW := clamp((available-(columns-1)*posterGap)/columns, 96, 220)
+	ui.Row(c).FillWidth().Gap(posterGap).AlignItems(ui.Start).Wrap().Children(func() {
+		for i := 0; i < limit; i++ {
+			p.updateCard(c, t, m, scheduled[i], posterW)
+		}
+	})
+}
+
 func (p *Page) dayCell(c *ui.Context, t *ui.Theme, m locales.Messages, day time.Time, index, today int, w float32, snap library.Snapshot) {
 	count := len(updatesOn(snap.Follows, day))
+	if scheduled, ok := p.dayUpdates(index); ok && len(scheduled) > 0 {
+		count = len(scheduled)
+	}
 	cell := ui.ButtonBase(c).Width(w).Radius(14).Padding(10, 12).Label(m.Updates(count))
 	ink := t.TextMuted
 	switch {
@@ -547,9 +595,48 @@ func (p *Page) dayCell(c *ui.Context, t *ui.Theme, m locales.Messages, day time.
 		})
 	})
 	if cell.Clicked() {
-		p.selected = index
-		p.invalidate()
+		p.selectDay(index)
 	}
+}
+
+// updateCard is one title the source schedules for a day: its poster, its title
+// and the status line the source states, e.g. how far the episodes have come.
+func (p *Page) updateCard(c *ui.Context, t *ui.Theme, m locales.Messages, update source.Update, w float32) {
+	button := ui.ButtonBase(c).Width(w).Radius(12).Label(update.Title).Background(ui.Transparent)
+	button.Children(func() {
+		ui.Column(c).FillWidth().Gap(7).Children(func() {
+			p.updatedPoster(c, t, m, update.PosterURL, w)
+			ui.Text(c, update.Title).FontSize(13).Bold().TextColor(t.Text).MaxLines(1)
+			if update.Note != "" {
+				// The note is the source's own status line, data rather than
+				// interface copy, so it shows as reported, in whatever
+				// language the source states it.
+				ui.Text(c, update.Note).FontSize(12).TextColor(t.TextMuted).MaxLines(1)
+			}
+		})
+	})
+	if button.Clicked() {
+		p.detail(update.Card)
+	}
+}
+
+// updatedPoster paints a followed title's artwork, or a quiet surface while it
+// downloads and after it fails.
+func (p *Page) updatedPoster(c *ui.Context, t *ui.Theme, m locales.Messages, posterURL string, w float32) {
+	frame := ui.Box(c).FillWidth().Height(w * 1.5).Radius(12).Clip().Background(t.Surface)
+	frame.Children(func() {
+		if p.deps.Images != nil {
+			if bitmap := p.deps.Images.Bitmap(posterURL); bitmap != nil {
+				ui.Image(c, bitmap).Fill().Fit(ui.Cover)
+			}
+		}
+		// These cards are the week's fresh updates, so they wear the
+		// updating status pill.
+		bg, fg := design.PosterStatus(true)
+		ui.Row(c).Absolute().Left(8).Top(8).Radius(5).Padding(2, 7).Background(bg).Children(func() {
+			ui.Text(c, m.StatusUpdating()).FontSize(10).Bold().TextColor(fg)
+		})
+	})
 }
 
 func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, follow library.Follow, w float32) {
@@ -557,20 +644,9 @@ func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, follow
 	button := ui.ButtonBase(c).Width(w).Radius(12).Label(follow.Title).Background(ui.Transparent)
 	button.Children(func() {
 		ui.Column(c).FillWidth().Gap(7).Children(func() {
-			frame := ui.Box(c).FillWidth().Height(w * 1.5).Radius(12).Clip().Background(t.Surface)
-			frame.Children(func() {
-				if p.deps.Images != nil {
-					if bitmap := p.deps.Images.Bitmap(follow.PosterURL); bitmap != nil {
-						ui.Image(c, bitmap).Fill().Fit(ui.Cover)
-					}
-				}
-				// These cards are the week's fresh updates, so they wear the
-				// updating status pill; the update date follows under the title.
-				bg, fg := design.PosterStatus(true)
-				ui.Row(c).Absolute().Left(8).Top(8).Radius(5).Padding(2, 7).Background(bg).Children(func() {
-					ui.Text(c, m.StatusUpdating()).FontSize(10).Bold().TextColor(fg)
-				})
-			})
+			// The update date follows under the title, the one fact the
+			// library keeps about a follow besides its artwork.
+			p.updatedPoster(c, t, m, follow.PosterURL, w)
 			ui.Text(c, follow.Title).FontSize(13).Bold().TextColor(t.Text).MaxLines(1)
 			if meta := p.followMeta(c, follow); meta != "" {
 				ui.Text(c, meta).FontSize(11).TextColor(t.TextMuted).MaxLines(1)

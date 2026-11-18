@@ -39,6 +39,9 @@ func (h *homeSource) Episodes(context.Context, source.Ref) ([]source.Episode, er
 func (h *homeSource) Resolve(context.Context, source.Episode, string) (source.Playback, error) {
 	return source.Playback{}, &source.Error{Kind: source.ErrUnsupported, Source: "fake", Op: "resolve"}
 }
+func (h *homeSource) Updates(context.Context, source.Day) ([]source.Update, error) {
+	return nil, &source.Error{Kind: source.ErrUnsupported, Source: "fake", Op: "updates"}
+}
 
 func discoverSource() *homeSource {
 	movie := source.Card{Ref: source.Ref{Source: "fake", ID: "dune"}, Title: "Dune", Kind: source.Movie,

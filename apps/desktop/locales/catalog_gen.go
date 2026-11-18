@@ -1533,3 +1533,23 @@ func ListSeparator() string { return In(i18n.Locale()).ListSeparator() }
 func (msgs Messages) ListSeparator() string {
 	return Catalog.Format(msgs.locale, "listSeparator", nil)
 }
+
+// SearchPlaceholder says "Search titles, cast"
+// in the language the app shows.
+func SearchPlaceholder() string { return In(i18n.Locale()).SearchPlaceholder() }
+
+// SearchPlaceholder says "Search titles, cast"
+// in the language of msgs.
+func (msgs Messages) SearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "searchPlaceholder", nil)
+}
+
+// SearchIdle says "Search the catalog"
+// in the language the app shows.
+func SearchIdle() string { return In(i18n.Locale()).SearchIdle() }
+
+// SearchIdle says "Search the catalog"
+// in the language of msgs.
+func (msgs Messages) SearchIdle() string {
+	return Catalog.Format(msgs.locale, "searchIdle", nil)
+}

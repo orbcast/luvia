@@ -123,5 +123,7 @@
   "episodeNumber": "第 {number} 集",
   "collapsePanel": "收起侧栏",
   "expandPanel": "展开侧栏",
-  "listSeparator": "、"
+  "listSeparator": "、",
+  "searchPlaceholder": "搜索片名、演员",
+  "searchIdle": "搜索资源库"
 }

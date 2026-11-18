@@ -333,5 +333,7 @@
   "episodeNumber": "Episode {number}",
   "collapsePanel": "Hide panel",
   "expandPanel": "Show panel",
-  "listSeparator": ", "
+  "listSeparator": ", ",
+  "searchPlaceholder": "Search titles, cast",
+  "searchIdle": "Search the catalog"
 }
