@@ -65,8 +65,9 @@ type Cache struct {
 
 // call is one in-flight download shared by every request for the same URL.
 type call struct {
-	done chan struct{}
-	err  error
+	done   chan struct{}
+	err    error
+	stream *http.Response
 }
 
 // New opens the cache in dir and starts its loopback proxy.
@@ -163,7 +164,9 @@ func (c *Cache) handle(w http.ResponseWriter, r *http.Request) {
 	c.inflight[key] = job
 	c.mu.Unlock()
 
-	job.err = c.download(r.Context(), raw, parsed, path)
+	var stream *http.Response
+	stream, job.err = c.download(raw, parsed, path)
+	job.stream = stream
 
 	c.mu.Lock()
 	delete(c.inflight, key)
@@ -171,8 +174,8 @@ func (c *Cache) handle(w http.ResponseWriter, r *http.Request) {
 	close(job.done)
 
 	if job.err != nil {
-		if errors.Is(job.err, errTooLarge) {
-			c.passthrough(w, r, raw)
+		if errors.Is(job.err, errTooLarge) && job.stream != nil {
+			c.serveStream(w, r, job.stream)
 			return
 		}
 		c.fail(w, job.err)
@@ -186,67 +189,72 @@ func (c *Cache) fail(w http.ResponseWriter, err error) {
 	http.Error(w, "videocache: "+err.Error(), http.StatusBadGateway)
 }
 
-// download fetches raw whole into path, rewriting a playlist, then records its
-// size. It returns errTooLarge before reading the body when the object is too
-// big to cache.
-func (c *Cache) download(ctx context.Context, raw string, parsed *url.URL, path string) error {
-	if size := c.headSize(ctx, raw); size > c.maxObject {
-		return errTooLarge
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
+// download fetches raw and stores it in path, rewriting a playlist. An object
+// larger than MaxObject is not cached: stream reports its upstream response so
+// the caller can serve it to the player as it arrives, and the header it
+// already read is passed back through head.
+func (c *Cache) download(raw string, parsed *url.URL, path string) (*http.Response, error) {
+	request, err := http.NewRequest(http.MethodGet, raw, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	request.Header.Set("User-Agent", defaultUserAgent)
 	request.Header.Set("Accept", "*/*")
 	response, err := c.client.Do(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("upstream %s: %d", parsed.Host, response.StatusCode)
+		response.Body.Close()
+		return nil, fmt.Errorf("upstream %s: %d", parsed.Host, response.StatusCode)
+	}
+	if response.ContentLength > c.maxObject {
+		return response, errTooLarge
 	}
 
 	temp := path + ".tmp"
 	file, err := os.Create(temp)
 	if err != nil {
-		return err
+		response.Body.Close()
+		return nil, err
 	}
 	written, copyErr := io.Copy(file, io.LimitReader(response.Body, c.maxObject+1))
 	closeErr := file.Close()
+	response.Body.Close()
 	if copyErr != nil {
 		os.Remove(temp)
-		return copyErr
+		return nil, copyErr
 	}
 	if closeErr != nil {
 		os.Remove(temp)
-		return closeErr
+		return nil, closeErr
 	}
 	if written > c.maxObject {
+		// The object outgrew what this cache keeps; the player still gets it,
+		// streamed from upstream, on its next request.
 		os.Remove(temp)
-		return errTooLarge
+		return nil, errTooLarge
 	}
 
 	if isPlaylist(raw, response.Header.Get("Content-Type"), temp) {
 		body, readErr := os.ReadFile(temp)
 		if readErr != nil {
 			os.Remove(temp)
-			return readErr
+			return nil, readErr
 		}
 		rewritten := c.rewritePlaylist(body, parsed)
 		if writeErr := os.WriteFile(temp, rewritten, 0o644); writeErr != nil {
 			os.Remove(temp)
-			return writeErr
+			return nil, writeErr
 		}
 		written = int64(len(rewritten))
 	}
 	if err := os.Rename(temp, path); err != nil {
 		os.Remove(temp)
-		return err
+		return nil, err
 	}
 	c.addSize(path, written)
-	return nil
+	return nil, nil
 }
 
 // headSize asks upstream for the object size, returning -1 when it cannot tell.
@@ -265,6 +273,21 @@ func (c *Cache) headSize(ctx context.Context, raw string) int64 {
 		return -1
 	}
 	return response.ContentLength
+}
+
+// serveStream hands the player a response already opened upstream, for an
+// object too large to cache. It reads from the start, which is what a player
+// asks for first; a seek arrives as its own request.
+func (c *Cache) serveStream(w http.ResponseWriter, r *http.Request, response *http.Response) {
+	defer response.Body.Close()
+	for name, values := range response.Header {
+		for _, value := range values {
+			w.Header().Add(name, value)
+		}
+	}
+	w.Header().Del("Content-Length")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, response.Body)
 }
 
 // passthrough streams the original request upstream without caching, preserving

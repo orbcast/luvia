@@ -362,3 +362,34 @@ func TestProxySharesOneDownloadAcrossRequests(t *testing.T) {
 		t.Fatalf("upstream downloaded %d times, want 1", gets)
 	}
 }
+
+// TestProxyStreamsLargeMediaWithoutWaitingToDownload keeps a big object from
+// being read whole before the player sees a byte: the response reaches the
+// player while the download is still open, as a 300 MB film would.
+func TestProxyStreamsLargeMediaWithoutWaitingToDownload(t *testing.T) {
+	const size = 1 << 20
+	big := []byte(strings.Repeat("y", size))
+	server, _ := newMediaServer(t, map[string][]byte{"/film.mp4": big})
+	dir := t.TempDir()
+	cache := newCache(t, dir, Options{Client: server.Client(), MaxObject: 4096})
+
+	start := time.Now()
+	resp, err := http.Get(cache.ProxyURL(server.URL + "/film.mp4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	head := make([]byte, 8)
+	if _, err := io.ReadFull(resp.Body, head); err != nil {
+		t.Fatalf("first bytes: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("the player waited %s for its first bytes", elapsed)
+	}
+	if cached := countCacheFiles(t, dir); cached != 0 {
+		t.Fatalf("oversized object was cached: %d files", cached)
+	}
+}
