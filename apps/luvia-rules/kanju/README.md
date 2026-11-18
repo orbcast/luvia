@@ -4,7 +4,8 @@
 
 ## 来源与覆盖
 
-- 站点：`kanju1.com`，接口带 HMAC-SHA256 请求签名（`x-ai-movie-*` 头），签名消息为 `METHOD\n路径与查询\n时间戳\n随机数`，密钥与客户端头写在 `rule.json` 的 `sign` / `http.headers` 里。
+- 站点：`kanju1.com`，接口带 HMAC-SHA256 请求签名（`x-ai-movie-*` 头），签名消息为 `METHOD\n路径与查询\n时间戳\n随机数`；客户端头写在 `rule.json` 的 `http.headers` 里，签名密钥不落盘，`sign.secret` 用 `${env:KANJU_SECRET}` 从环境变量取。
+- 运行前把 `KANJU_SECRET` 导出到环境，否则签名头会带着未展开的占位符发出去，上游按签名失败处理；`${env:NAME}` 的替换规则见 [规则 DSL](../../../docs/rule-dsl.md)。
 - 首页：`/v1/feed/home`，取 11 个分区、每区 8 张卡；发现页的 Hero 挑横幅最全的分区。
 - 列表与搜索：`/v1/browse/catalog`，每页 24 条。不带关键词时按最新列表浏览；带关键词时通过 `searchIntent` 把 `intent` 换成 `search`——上游只在该取值下按关键词匹配，浏览时不发这个参数。
 - 当日更新：`/v1/watch-calendar`，按周取某一天的更新单。上游每天每类只给 6 条预览（`limit` 再大也是 6），超过的只有 `more_url` 游标，本规则暂不跟进；周表按 `[by:weekday]` 挑出请求的那一天，整周一起返回时也不会串天。
