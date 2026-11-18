@@ -4,9 +4,10 @@
 // URIs also travel through the proxy and are cached the same way.
 //
 // The player opens the proxy URL; the proxy is transparent at the HTTP level,
-// so mp4 and HLS both work without parsing media. An object is fetched whole
-// and stored before it is served; an object larger than MaxObject is streamed
-// straight through without being cached, keeping seeks on big files cheap.
+// so mp4 and HLS both work without parsing media. Only the bytes a playback asks
+// for are fetched, and a partial object is kept as a growing prefix that later
+// ranges are cut from. An object larger than the whole cache budget is passed
+// straight through, the player's own request and all.
 package videocache
 
 import (
@@ -24,35 +25,41 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	defaultMaxBytes  int64 = 2 << 30   // 2 GiB on disk
-	defaultMaxObject int64 = 512 << 20 // largest single object fetched whole
+	defaultMaxBytes  int64 = 2 << 30 // 2 GiB on disk
 	defaultUserAgent       = "Luvia/1.0 (+videocache)"
 )
 
-// errTooLarge reports an object bigger than MaxObject; the caller streams it
-// through instead of caching it.
-var errTooLarge = errors.New("videocache: object exceeds the cache object limit")
+// errTooLarge reports an object bigger than MaxBytes; it is passed through
+// without being cached.
+var errTooLarge = errors.New("videocache: object exceeds the cache byte budget")
+
+// errProbe marks an upstream that cannot be asked for a byte range; the player's
+// own request is passed through instead.
+var errProbe = errors.New("videocache: upstream cannot be probed")
+
+// errNotStored marks a transfer that ended without the bytes a request asked
+// for, so the request is answered from upstream instead.
+var errNotStored = errors.New("videocache: the transfer did not reach the requested bytes")
 
 // Options tune a Cache. The zero value of each field uses a default.
 type Options struct {
-	MaxBytes  int64
-	MaxObject int64
-	Client    *http.Client
+	MaxBytes int64
+	Client   *http.Client
 }
 
 // Cache is a loopback HTTP proxy over a bounded on-disk cache. Point a player at
 // ProxyURL and call Close when the app quits.
 type Cache struct {
-	dir       string
-	maxBytes  int64
-	maxObject int64
-	client    *http.Client
+	dir      string
+	maxBytes int64
+	client   *http.Client
 
 	listener net.Listener
 	server   *http.Server
@@ -65,9 +72,8 @@ type Cache struct {
 
 // call is one in-flight download shared by every request for the same URL.
 type call struct {
-	done   chan struct{}
-	err    error
-	stream *http.Response
+	done chan struct{}
+	err  error
 }
 
 // New opens the cache in dir and starts its loopback proxy.
@@ -79,14 +85,11 @@ func New(dir string, opts Options) (*Cache, error) {
 		return nil, fmt.Errorf("videocache: %w", err)
 	}
 	c := &Cache{
-		dir: dir, maxBytes: opts.MaxBytes, maxObject: opts.MaxObject,
+		dir: dir, maxBytes: opts.MaxBytes,
 		client: opts.Client, inflight: map[string]*call{},
 	}
 	if c.maxBytes <= 0 {
 		c.maxBytes = defaultMaxBytes
-	}
-	if c.maxObject <= 0 {
-		c.maxObject = defaultMaxObject
 	}
 	if c.client == nil {
 		c.client = &http.Client{Timeout: 60 * time.Second}
@@ -137,6 +140,7 @@ func (c *Cache) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	key := keyOf(raw)
 	path := c.pathOf(key)
+	part := c.partOf(key)
 
 	if info, statErr := os.Stat(path); statErr == nil && info.Size() > 0 {
 		c.touch(path)
@@ -157,104 +161,292 @@ func (c *Cache) handle(w http.ResponseWriter, r *http.Request) {
 			c.serveFile(w, r, path, raw)
 			return
 		}
-		http.Error(w, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
+		c.serveFromPart(w, r, part, raw)
+		return
+	}
+	// The player decides how much it needs; fetching more than that wastes
+	// the network without shortening its wait.
+	start, end, ranged, hadRange := requestedRange(r.Header.Get("Range"))
+	if hadRange && !ranged {
+		c.passthrough(w, r, raw)
 		return
 	}
 	job := &call{done: make(chan struct{})}
 	c.inflight[key] = job
 	c.mu.Unlock()
 
-	var stream *http.Response
-	stream, job.err = c.download(raw, parsed, path)
-	job.stream = stream
+	job.err = c.fetchRange(raw, parsed, path, part, start, end)
 
+	// Let the next request in before this one is answered: a player may want
+	// a second range from the object this request is writing.
 	c.mu.Lock()
 	delete(c.inflight, key)
 	c.mu.Unlock()
 	close(job.done)
 
 	if job.err != nil {
-		if errors.Is(job.err, errTooLarge) && job.stream != nil {
-			c.serveStream(w, r, job.stream)
+		if errors.Is(job.err, errNotStored) {
+			c.passthrough(w, r, raw)
+			return
+		}
+		if errors.Is(job.err, errTooLarge) || errors.Is(job.err, errProbe) {
+			c.passthrough(w, r, raw)
 			return
 		}
 		c.fail(w, job.err)
 		return
 	}
-	c.touch(path)
-	c.serveFile(w, r, path, raw)
+	if !c.serveFromPart(w, r, part, raw) {
+		if info, statErr := os.Stat(path); statErr == nil && info.Size() > 0 {
+			c.touch(path)
+			c.serveFile(w, r, path, raw)
+			return
+		}
+		// The transfer moved on to bytes this request did not ask for; the
+		// player gets its own request upstream instead of an empty answer.
+		c.passthrough(w, r, raw)
+	}
+}
+
+// serveFromPart answers from what the transfer has stored so far, when it can;
+// a playback that wants bytes the transfer does not hold yet is passed through.
+func (c *Cache) serveFromPart(w http.ResponseWriter, r *http.Request, part, raw string) bool {
+	start, end, ranged, present := requestedRange(r.Header.Get("Range"))
+	if !ranged {
+		return false
+	}
+	have := partialSize(part)
+	if !present {
+		start, end = 0, have-1
+	}
+	if start >= have {
+		return false
+	}
+	if end < 0 || end >= have {
+		end = have - 1
+	}
+	source, err := os.Open(part)
+	if err != nil {
+		return false
+	}
+	defer source.Close()
+	w.Header().Set("Content-Type", contentTypeOf(part, raw))
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, have))
+	w.Header().Set("Content-Length", strconv.FormatInt(end-start+1, 10))
+	w.WriteHeader(http.StatusPartialContent)
+	_, _ = io.Copy(w, io.NewSectionReader(source, start, end-start+1))
+	return true
 }
 
 func (c *Cache) fail(w http.ResponseWriter, err error) {
 	http.Error(w, "videocache: "+err.Error(), http.StatusBadGateway)
 }
 
-// download fetches raw and stores it in path, rewriting a playlist. An object
-// larger than MaxObject is not cached: stream reports its upstream response so
-// the caller can serve it to the player as it arrives, and the header it
-// already read is passed back through head.
-func (c *Cache) download(raw string, parsed *url.URL, path string) (*http.Response, error) {
+// fetchRange asks upstream for the bytes a playback needs. A complete object is
+// cached in file, with a playlist rewritten. A partial one is appended to the
+// transfer's part file, starting from its own beginning, so every range a player
+// asks for later comes out of the same growing prefix.
+func (c *Cache) fetchRange(raw string, parsed *url.URL, file, part string, start, end int64) error {
+	total, err := c.remoteSize(raw)
+	if err != nil {
+		return err
+	}
+	if total > 0 && total > c.maxBytes {
+		return errTooLarge
+	}
+	partial := start > 0 || (end >= 0 && total > 0 && end+1 < total)
+	if !partial {
+		return c.fetchWhole(raw, parsed, file)
+	}
+	// A later range is cut from the prefix the transfer stores; when the
+	// prefix does not reach it yet, the request is answered from upstream.
+	if end >= 0 && partialSize(part) < end+1 {
+		return errNotStored
+	}
+	return c.fetchPart(parsed, raw, part)
+}
+
+// fetchWhole stores the entire object in file.
+func (c *Cache) fetchWhole(raw string, parsed *url.URL, file string) error {
 	request, err := http.NewRequest(http.MethodGet, raw, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	request.Header.Set("User-Agent", defaultUserAgent)
 	request.Header.Set("Accept", "*/*")
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
 		response.Body.Close()
-		return nil, fmt.Errorf("upstream %s: %d", parsed.Host, response.StatusCode)
+		return fmt.Errorf("upstream %s: %d", parsed.Host, response.StatusCode)
 	}
-	if response.ContentLength > c.maxObject {
-		return response, errTooLarge
-	}
+	return c.store(response, parsed, raw, file, 0)
+}
 
-	temp := path + ".tmp"
-	file, err := os.Create(temp)
+// fetchPart continues the transfer stored in part. The first request stores the
+// object from its start, because a player that is handed a prefix asks for the
+// bytes after it next, not for the offset it asked first.
+func (c *Cache) fetchPart(parsed *url.URL, raw, part string) error {
+	have := partialSize(part)
+	request, err := http.NewRequest(http.MethodGet, raw, nil)
 	if err != nil {
-		response.Body.Close()
-		return nil, err
+		return err
 	}
-	written, copyErr := io.Copy(file, io.LimitReader(response.Body, c.maxObject+1))
-	closeErr := file.Close()
-	response.Body.Close()
+	request.Header.Set("User-Agent", defaultUserAgent)
+	request.Header.Set("Accept", "*/*")
+	if have > 0 {
+		request.Header.Set("Range", fmt.Sprintf("bytes=%d-", have))
+	}
+	response, err := c.client.Do(request)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusPartialContent && response.StatusCode != http.StatusOK {
+		response.Body.Close()
+		return fmt.Errorf("upstream %s: %d", parsed.Host, response.StatusCode)
+	}
+	return c.store(response, parsed, raw, part, have)
+}
+
+// store copies response into file at offset, adding what it wrote to the cache
+// budget.
+func (c *Cache) store(response *http.Response, parsed *url.URL, raw, file string, offset int64) error {
+	defer response.Body.Close()
+	flags := os.O_CREATE | os.O_WRONLY
+	if offset == 0 {
+		flags |= os.O_TRUNC
+	} else {
+		flags |= os.O_APPEND
+	}
+	target, err := os.OpenFile(file, flags, 0o644)
+	if err != nil {
+		return err
+	}
+	limit := c.maxBytes + 1
+	written, copyErr := io.Copy(target, io.LimitReader(response.Body, limit))
+	closeErr := target.Close()
 	if copyErr != nil {
-		os.Remove(temp)
-		return nil, copyErr
+		return copyErr
 	}
 	if closeErr != nil {
-		os.Remove(temp)
-		return nil, closeErr
+		return closeErr
 	}
-	if written > c.maxObject {
-		// The object outgrew what this cache keeps; the player still gets it,
-		// streamed from upstream, on its next request.
-		os.Remove(temp)
-		return nil, errTooLarge
-	}
-
-	if isPlaylist(raw, response.Header.Get("Content-Type"), temp) {
-		body, readErr := os.ReadFile(temp)
+	if offset == 0 && isPlaylist(raw, response.Header.Get("Content-Type"), file) {
+		body, readErr := os.ReadFile(file)
 		if readErr != nil {
-			os.Remove(temp)
-			return nil, readErr
+			return readErr
 		}
 		rewritten := c.rewritePlaylist(body, parsed)
-		if writeErr := os.WriteFile(temp, rewritten, 0o644); writeErr != nil {
-			os.Remove(temp)
-			return nil, writeErr
+		if writeErr := os.WriteFile(file, rewritten, 0o644); writeErr != nil {
+			return writeErr
 		}
 		written = int64(len(rewritten))
 	}
-	if err := os.Rename(temp, path); err != nil {
-		os.Remove(temp)
-		return nil, err
+	c.addSize(file, written)
+	return nil
+}
+
+// remoteSize asks upstream how large an object is. A server that will not say
+// gives zero, and the cache then decides from what it is handed.
+func (c *Cache) remoteSize(raw string) (int64, error) {
+	request, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return 0, err
 	}
-	c.addSize(path, written)
-	return nil, nil
+	request.Header.Set("User-Agent", defaultUserAgent)
+	request.Header.Set("Range", "bytes=0-0")
+	response, err := c.client.Do(request)
+	if err != nil {
+		return 0, err
+	}
+	response.Body.Close()
+	if response.StatusCode == http.StatusPartialContent {
+		return totalFromRange(response.Header.Get("Content-Range")), nil
+	}
+	if response.StatusCode == http.StatusOK {
+		return response.ContentLength, nil
+	}
+	return 0, fmt.Errorf("upstream %s: %d", hostOf(raw), response.StatusCode)
+}
+
+// requestedRange reads the byte range a playback asked for. end is -1 for an
+// open range, and ranged reports whether the header could be understood at all.
+func requestedRange(header string) (start, end int64, ranged, present bool) {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return 0, -1, true, false
+	}
+	spec, found := strings.CutPrefix(header, "bytes=")
+	if !found || strings.Contains(spec, ",") {
+		return 0, -1, false, true
+	}
+	from, to, found := strings.Cut(spec, "-")
+	if !found {
+		return 0, -1, false, true
+	}
+	if from == "" {
+		// A suffix range asks for the last bytes; it is passed through.
+		return 0, -1, false, true
+	}
+	start, err := strconv.ParseInt(strings.TrimSpace(from), 10, 64)
+	if err != nil || start < 0 {
+		return 0, -1, false, true
+	}
+	if strings.TrimSpace(to) == "" {
+		return start, -1, true, true
+	}
+	end, err = strconv.ParseInt(strings.TrimSpace(to), 10, 64)
+	if err != nil || end < start {
+		return 0, -1, false, true
+	}
+	return start, end, true, true
+}
+
+// totalFromRange reads the object size out of Content-Range.
+func totalFromRange(header string) int64 {
+	value, found := strings.CutPrefix(strings.TrimSpace(header), "bytes ")
+	if !found {
+		return 0
+	}
+	_, total, found := strings.Cut(value, "/")
+	if !found {
+		return 0
+	}
+	size, err := strconv.ParseInt(strings.TrimSpace(total), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return size
+}
+
+// partialSize reports how many bytes a path holds, or zero.
+func partialSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+// fileSize is partialSize with the error kept, for span validation.
+func fileSize(path string) (int64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
+}
+
+// hostOf names an upstream host without parsing a URL again.
+func hostOf(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	return parsed.Host
 }
 
 // headSize asks upstream for the object size, returning -1 when it cannot tell.
@@ -273,21 +465,6 @@ func (c *Cache) headSize(ctx context.Context, raw string) int64 {
 		return -1
 	}
 	return response.ContentLength
-}
-
-// serveStream hands the player a response already opened upstream, for an
-// object too large to cache. It reads from the start, which is what a player
-// asks for first; a seek arrives as its own request.
-func (c *Cache) serveStream(w http.ResponseWriter, r *http.Request, response *http.Response) {
-	defer response.Body.Close()
-	for name, values := range response.Header {
-		for _, value := range values {
-			w.Header().Add(name, value)
-		}
-	}
-	w.Header().Del("Content-Length")
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, response.Body)
 }
 
 // passthrough streams the original request upstream without caching, preserving
@@ -417,6 +594,12 @@ func keyOf(raw string) string {
 
 func (c *Cache) pathOf(key string) string {
 	return filepath.Join(c.dir, key+".cache")
+}
+
+// partOf is where an object still being transferred grows. Its name ends in
+// .part so the cache never mistakes it for a complete object on startup.
+func (c *Cache) partOf(key string) string {
+	return filepath.Join(c.dir, key+".cache.part")
 }
 
 // touch marks an object as recently used for the LRU order.

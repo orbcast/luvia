@@ -165,6 +165,13 @@ func (p *Page) resolve() {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
 		playback, err := src.Resolve(ctx, episode, line)
+		if source.IsKind(err, source.ErrNotFound) && line != "" {
+			// A line id is bound to one episode's listing, so the line the
+			// previous episode was watched on is gone here. Falls back to the
+			// episode's own default line instead of failing the switch.
+			playback, err = src.Resolve(ctx, episode, "")
+			line = ""
+		}
 		if err == nil && !mediaOffers(ctx, playback.URL) {
 			// Some lines answer with a poster image or an empty address while
 			// claiming mp4. Their URLs often look plain, so the first bytes are
@@ -183,7 +190,7 @@ func (p *Page) resolve() {
 			} else {
 				p.playback = playback
 				p.appliedLine = playback.Line.ID
-				if p.lineID == "" {
+				if line == "" {
 					p.lineID = playback.Line.ID
 				}
 				p.open(playback.URL)

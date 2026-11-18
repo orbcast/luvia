@@ -169,3 +169,80 @@ func TestPlayerSkipsTheAddressTheBytesDisown(t *testing.T) {
 		t.Fatalf("the player opened %q, want the next line %q", got, want)
 	}
 }
+
+// staleLineSource hands out a fresh set of line ids per episode, as the source
+// that binds a line id to one episode's listing does.
+type staleLineSource struct {
+	*posterSource
+	episodeLines map[string][]source.Line
+}
+
+func (s *staleLineSource) Resolve(_ context.Context, ep source.Episode, line string) (source.Playback, error) {
+	lines, ok := s.episodeLines[ep.ID]
+	if !ok {
+		lines = s.lines
+	}
+	offered := false
+	for _, entry := range lines {
+		if entry.ID == line {
+			offered = true
+		}
+	}
+	if line != "" && !offered {
+		return source.Playback{}, &source.Error{
+			Kind: source.ErrNotFound, Source: "fake", Op: "resolve",
+		}
+	}
+	chosen := lines[0]
+	if offered {
+		chosen = source.Line{ID: line, Label: line}
+	}
+	return source.Playback{
+		URL: s.urls[chosen.ID], Line: chosen, Lines: lines,
+	}, nil
+}
+
+// TestPlayerSwitchingEpisodeOnAStaleLineId covers the line the viewer is
+// watching disappearing from the next episode's listing: the switch must land
+// on that episode's own default line instead of failing with not_found.
+func TestPlayerSwitchingEpisodeOnAStaleLineId(t *testing.T) {
+	server := served(t)
+	src, _ := sampleTitle()
+	addresses := map[string]string{
+		"ep1line": server.URL + "/clip.mp4",
+		"ep2line": server.URL + "/clip.mp4",
+	}
+	box := &staleLineSource{
+		posterSource: &posterSource{
+			detail: src.detail, episodes: src.episodes,
+			lines: []source.Line{{ID: "ep1line", Label: "ep1line"}},
+			urls:  addresses,
+		},
+		episodeLines: map[string][]source.Line{
+			src.episodes[1].ID: {{ID: "ep2line", Label: "ep2line", Default: true}},
+		},
+	}
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := make(chan func(), 8)
+	var opened []string
+	page := player.New(player.Deps{
+		Source: box, Library: store, Run: func(fn func()) { run <- fn },
+		OpenVideo: func(url string) (*ui.VideoPlayer, error) {
+			opened = append(opened, url)
+			return newGIFPlayer(t), nil
+		},
+	})
+	page.Open(box.detail, box.episodes, 0)
+	apply(t, run)
+	page.Next()
+	apply(t, run)
+	if len(opened) != 2 {
+		t.Fatalf("the player opened %d videos, want the second episode too", len(opened))
+	}
+	if got := opened[1]; got != addresses["ep2line"] {
+		t.Fatalf("the second episode opened %q, want its own line", got)
+	}
+}

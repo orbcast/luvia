@@ -1,6 +1,7 @@
 package videocache
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -29,10 +30,12 @@ func newMediaServer(t *testing.T, routes map[string][]byte) (*httptest.Server, *
 
 func (m *mediaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
-	if r.Method == http.MethodGet {
+	body, ok := m.routes[r.URL.Path]
+	// The cache asks how large an object is before fetching it; that probe is
+	// not a fetch of the object.
+	if r.Method == http.MethodGet && !isSizeProbe(r.Header.Get("Range")) {
 		m.hits[r.URL.Path]++
 	}
-	body, ok := m.routes[r.URL.Path]
 	m.mu.Unlock()
 	if !ok {
 		http.NotFound(w, r)
@@ -42,7 +45,11 @@ func (m *mediaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodHead {
 		return
 	}
-	w.Write(body)
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(body))
+}
+
+func isSizeProbe(rangeHeader string) bool {
+	return rangeHeader == "bytes=0-0"
 }
 
 func (m *mediaServer) count(path string) int {
@@ -183,18 +190,45 @@ func firstURILine(playlist string) string {
 	return ""
 }
 
-func TestProxyStreamsTooLargeWithoutCaching(t *testing.T) {
+func TestProxyPassesTooLargeThroughWithoutCaching(t *testing.T) {
 	big := []byte(strings.Repeat("x", 64))
 	server, _ := newMediaServer(t, map[string][]byte{"/big.mp4": big})
 	dir := t.TempDir()
-	cache := newCache(t, dir, Options{Client: server.Client(), MaxObject: 16})
+	cache := newCache(t, dir, Options{Client: server.Client(), MaxBytes: 16})
 
 	status, _, body := get(t, cache.ProxyURL(server.URL+"/big.mp4"))
 	if status != http.StatusOK || len(body) != len(big) {
 		t.Fatalf("passthrough: %d len=%d", status, len(body))
 	}
 	if cached := countCacheFiles(t, dir); cached != 0 {
-		t.Fatalf("oversized object was cached: %d files", cached)
+		t.Fatalf("object over the budget was cached: %d files", cached)
+	}
+}
+
+// An oversized object must keep serving the player's byte ranges: a player that
+// asks for the first bytes and is handed the whole file instead stalls before
+// the first frame.
+func TestProxyKeepsRangeOnObjectOverBudget(t *testing.T) {
+	big := []byte(strings.Repeat("x", 64))
+	server, _ := newMediaServer(t, map[string][]byte{"/big.mp4": big})
+	dir := t.TempDir()
+	cache := newCache(t, dir, Options{Client: server.Client(), MaxBytes: 16})
+	proxy := cache.ProxyURL(server.URL + "/big.mp4")
+	get(t, proxy) // warms the size check the way a player's first request does
+
+	request, _ := http.NewRequest(http.MethodGet, proxy, nil)
+	request.Header.Set("Range", "bytes=0-7")
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusPartialContent || len(body) != 8 {
+		t.Fatalf("oversized range read: %d len=%d", resp.StatusCode, len(body))
+	}
+	if closeErr := cache.Close(); closeErr != nil {
+		t.Fatal(closeErr)
 	}
 }
 
@@ -358,38 +392,73 @@ func TestProxySharesOneDownloadAcrossRequests(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if gets != 1 {
-		t.Fatalf("upstream downloaded %d times, want 1", gets)
+	// Two requests open the object: the size probe and the transfer itself.
+	if gets != 2 {
+		t.Fatalf("upstream opened %d times, want 2", gets)
 	}
 }
 
-// TestProxyStreamsLargeMediaWithoutWaitingToDownload keeps a big object from
-// being read whole before the player sees a byte: the response reaches the
-// player while the download is still open, as a 300 MB film would.
-func TestProxyStreamsLargeMediaWithoutWaitingToDownload(t *testing.T) {
-	const size = 1 << 20
-	big := []byte(strings.Repeat("y", size))
+// A player asking for the first bytes of a large film must not wait for the
+// whole download: the response carries the prefix as it arrives, and the bytes
+// it was handed come from the start of the object, not from an offset upstream
+// answered at random.
+func TestProxyAnswersRangeFromTheGrowingPrefix(t *testing.T) {
+	big := []byte(strings.Repeat("y", 1<<16))
 	server, _ := newMediaServer(t, map[string][]byte{"/film.mp4": big})
 	dir := t.TempDir()
-	cache := newCache(t, dir, Options{Client: server.Client(), MaxObject: 4096})
+	cache := newCache(t, dir, Options{Client: server.Client()})
+	proxy := cache.ProxyURL(server.URL + "/film.mp4")
 
+	request, _ := http.NewRequest(http.MethodGet, proxy, nil)
+	request.Header.Set("Range", "bytes=0-63")
 	start := time.Now()
-	resp, err := http.Get(cache.ProxyURL(server.URL + "/film.mp4"))
+	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	head, _ := io.ReadAll(io.LimitReader(resp.Body, 64))
+	if resp.StatusCode != http.StatusPartialContent {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
-	head := make([]byte, 8)
-	if _, err := io.ReadFull(resp.Body, head); err != nil {
-		t.Fatalf("first bytes: %v", err)
+	if rangeHeader := resp.Header.Get("Content-Range"); !strings.HasPrefix(rangeHeader, "bytes 0-") {
+		t.Fatalf("range answered from %q", rangeHeader)
+	}
+	if len(head) != 64 || head[0] != 'y' {
+		t.Fatalf("first bytes: %d %q", len(head), head[:min(4, len(head))])
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("the player waited %s for its first bytes", elapsed)
 	}
-	if cached := countCacheFiles(t, dir); cached != 0 {
-		t.Fatalf("oversized object was cached: %d files", cached)
+}
+
+// A player that asks for a different part of the same film must be served from
+// the transfer already open, not from nowhere: the response carries the bytes it
+// asked for as soon as the prefix has reached them.
+func TestProxyServesLaterRangeWhileTheTransferGrows(t *testing.T) {
+	big := []byte(strings.Repeat("z", 1<<16))
+	server, _ := newMediaServer(t, map[string][]byte{"/film.mp4": big})
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client()})
+	proxy := cache.ProxyURL(server.URL + "/film.mp4")
+
+	first, _ := http.NewRequest(http.MethodGet, proxy, nil)
+	first.Header.Set("Range", "bytes=0-1023")
+	resp, err := http.DefaultClient.Do(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+
+	second, _ := http.NewRequest(http.MethodGet, proxy, nil)
+	second.Header.Set("Range", "bytes=0-511")
+	resp, err = http.DefaultClient.Do(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusPartialContent || len(body) != 512 {
+		t.Fatalf("second read: %d len=%d", resp.StatusCode, len(body))
 	}
 }
