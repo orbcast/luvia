@@ -4,7 +4,7 @@ go 1.27.4
 
 tool github.com/egoist/mygo/cmd/mygo
 
-require github.com/egoist/mygo v0.9.1
+require github.com/egoist/mygo v0.10.0
 
 require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
@@ -20,3 +20,5 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )
+
+replace github.com/egoist/mygo => <mygo-patched-checkout>

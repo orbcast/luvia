@@ -52,15 +52,20 @@ func (p *Page) View(c *ui.Context) ui.Element {
 	return root
 }
 
-// stage is the picture plus the overlay chrome laid over it.
+// stage is the picture plus the overlay chrome laid over it. The video is
+// always mounted, whether its first frame has come or not: an engine delivers
+// that frame on its own clock, and taking the element away until Ready would
+// hide the only frame the player ever shows. Everything that covers the stage
+// goes under the video, or nothing of it would show.
 func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	if p.player != nil && p.player.Ready() {
-		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Cover)
-	} else {
+	if p.player != nil {
 		p.stageFallback(c, t, m)
-		if p.player != nil && p.notice == noticeNone {
+		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Cover)
+		if p.notice == noticeNone && p.player.Buffering() {
 			p.stageBuffering(c, m)
 		}
+	} else {
+		p.stageFallback(c, t, m)
 	}
 	p.stageDanmaku(c, width)
 	p.stageTop(c, t, m)
@@ -257,7 +262,10 @@ func (p *Page) stageControls(c *ui.Context, t *ui.Theme, m locales.Messages) {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(10).Children(func() {
 			ui.Text(c, clock(p.position())).FontSize(11).TextColor(mediaInk)
 			p.scrubber(c)
-			ui.Text(c, clock(p.duration())).FontSize(11).TextColor(mediaInk)
+			// Until the engine learns the stream's length both ends read 00:00,
+			// which looks like a film that cannot start; the mark says the
+			// length is unknown rather than pretending it is zero.
+			ui.Text(c, lengthLabel(p.duration())).FontSize(11).TextColor(mediaInk)
 		})
 
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
@@ -275,6 +283,14 @@ func (p *Page) stageControls(c *ui.Context, t *ui.Theme, m locales.Messages) {
 			})
 		})
 	})
+}
+
+// lengthLabel is the total time, or a dash while the engine has not learned it.
+func lengthLabel(total time.Duration) string {
+	if total <= 0 {
+		return "--:--"
+	}
+	return clock(total)
 }
 
 // scrubber is the thin progress track; pressing it seeks.
