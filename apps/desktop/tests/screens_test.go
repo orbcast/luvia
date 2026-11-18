@@ -32,14 +32,18 @@ func TestRouterOpensDetailAndPlayer(t *testing.T) {
 		t.Fatalf("router did not show the detail page: %v", tt.Texts())
 	}
 
-	// Playing opens the player screen.
+	// Playing opens the player screen, which starts on the picture alone and
+	// keeps the side panel behind its reveal control.
 	if err := tt.Click("Play"); err != nil {
 		t.Fatalf("play: %v", err)
 	}
 	apply(t, run)
 	tt.Frame()
-	if !tt.HasText("NOW PLAYING") {
+	if !tt.HasText("Show panel") {
 		t.Fatalf("router did not show the player: %v", tt.Texts())
+	}
+	if tt.HasText("NOW PLAYING") {
+		t.Fatal("the player must open with its side panel away")
 	}
 
 	// Closing the player returns to the title page.

@@ -73,6 +73,7 @@ type Page struct {
 	playing      bool
 	muted        bool
 	volume       float64
+	restore      float64 // level to return to when unmuting
 	rate         float64
 	showSubtitle bool
 	danmaku      bool
@@ -89,6 +90,10 @@ type Page struct {
 
 var rates = []float64{1, 1.25, 1.5, 2, 0.75, 0.5}
 
+// defaultVolume is the level a new player starts at, and the level the speaker
+// toggle returns to when it unmutes a video whose slider sits at zero.
+const defaultVolume = 0.7
+
 // New prepares the player. Call Open with a title and episode to start it.
 func New(deps Deps) *Page {
 	if deps.Run == nil {
@@ -97,7 +102,7 @@ func New(deps Deps) *Page {
 	if deps.OpenVideo == nil {
 		deps.OpenVideo = video.OpenURL
 	}
-	p := &Page{deps: deps, index: -1, volume: 1, rate: 1, playing: true, danmaku: true}
+	p := &Page{deps: deps, index: -1, volume: defaultVolume, restore: defaultVolume, rate: 1, playing: true, danmaku: true}
 	if deps.Images != nil {
 		deps.Images.SetChanged(func() { p.invalidate() })
 	}
@@ -110,7 +115,7 @@ func (p *Page) Open(detail source.Detail, episodes []source.Episode, index int) 
 	p.detail, p.episodes, p.index = detail, episodes, index
 	p.lineID, p.playback = "", source.Playback{}
 	p.loading, p.err, p.notice, p.started = false, nil, noticeNone, false
-	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, false, false, true, false, false
+	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, false, false, true, true, false
 	p.expanded, p.tab, p.scrub, p.scrubbing = false, tabEpisodes, 0, false
 	p.Start()
 }
@@ -296,25 +301,52 @@ func (p *Page) CycleRate() {
 	p.invalidate()
 }
 
-// ToggleMute mutes or unmutes the video.
+// ToggleMute mutes or unmutes the video. Unmuting a slider left at zero brings
+// the level back to the last audible one, so the speaker always restores sound.
 func (p *Page) ToggleMute() {
-	p.muted = !p.muted
-	if p.player != nil {
-		p.player.SetMuted(p.muted)
+	if p.muted {
+		p.muted = false
+		if p.volume <= 0 {
+			level := p.restore
+			if level <= 0 {
+				level = defaultVolume
+			}
+			p.volume = clampF(level, 0, 1)
+		}
+	} else {
+		p.muted = true
+		if p.volume > 0 {
+			p.restore = p.volume
+		}
 	}
-	p.invalidate()
-}
-
-// SetVolume applies the volume the viewer picks in the slider.
-func (p *Page) SetVolume(v float64) {
-	p.volume = clampF(v, 0, 1)
-	p.muted = p.volume == 0
 	if p.player != nil {
 		p.player.SetVolume(p.volume)
 		p.player.SetMuted(p.muted)
 	}
 	p.invalidate()
 }
+
+// SetVolume applies the volume the viewer picks in the slider. The slider owns
+// the level only: silence follows the level, and the speaker stays the one place
+// that mutes and restores sound.
+func (p *Page) SetVolume(v float64) {
+	p.volume = clampF(v, 0, 1)
+	if p.volume > 0 {
+		p.muted = false
+		p.restore = p.volume
+	} else {
+		p.muted = true
+	}
+	if p.player != nil {
+		p.player.SetVolume(p.volume)
+		p.player.SetMuted(p.muted)
+	}
+	p.invalidate()
+}
+
+// Audible reports whether sound is playing at all: the speaker dims both when it
+// was silenced and when the slider sits at zero.
+func (p *Page) Audible() bool { return !p.muted && p.volume > 0 }
 
 // ToggleDanmaku shows or hides the comment layer over the picture.
 func (p *Page) ToggleDanmaku() {
@@ -341,9 +373,24 @@ func (p *Page) SeekBy(delta time.Duration) {
 func (p *Page) ToggleSubtitle() { p.showSubtitle = !p.showSubtitle; p.invalidate() }
 
 // TogglePanel hides or shows the now-playing side panel, letting the video fill
-// the window and back.
+// the window and back. A player opens with the panel away, so the picture owns
+// the screen until the viewer asks for the episode list.
 func (p *Page) TogglePanel() {
 	p.panelHidden = !p.panelHidden
+	p.invalidate()
+}
+
+// CollapsePanel puts the side panel away; the picture keeps a reveal control.
+func (p *Page) CollapsePanel() { p.setPanelHidden(true) }
+
+// RevealPanel brings the side panel back beside the picture.
+func (p *Page) RevealPanel() { p.setPanelHidden(false) }
+
+func (p *Page) setPanelHidden(hidden bool) {
+	if p.panelHidden == hidden {
+		return
+	}
+	p.panelHidden = hidden
 	p.invalidate()
 }
 func (p *Page) ToggleCinema()   { p.cinema = !p.cinema; p.invalidate() }

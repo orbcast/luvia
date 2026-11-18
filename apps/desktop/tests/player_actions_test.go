@@ -66,11 +66,46 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 
 	// The overlay chrome: volume track, speaker, danmaku toggle and the two
 	// ten-second seeks all take a click without leaving the screen.
-	for _, label := range []string{"Volume", "Mute", "Danmaku", "Rewind 10 seconds", "Forward 10 seconds"} {
+	for _, label := range []string{"Volume", "Danmaku", "Rewind 10 seconds", "Forward 10 seconds"} {
 		if err := tt.Click(label); err != nil {
 			t.Fatalf("click %q: %v", label, err)
 		}
 		tt.Frame()
+	}
+
+	// The speaker toggles sound on its own: the first press silences the video,
+	// the second restores it.
+	if !page.Audible() {
+		t.Fatal("a fresh player must sound audible")
+	}
+	if err := tt.Click("Mute"); err != nil {
+		t.Fatalf("click mute: %v", err)
+	}
+	tt.Frame()
+	if page.Audible() {
+		t.Fatal("the speaker did not mute the video")
+	}
+	if err := tt.Click("Mute"); err != nil {
+		t.Fatalf("click mute again: %v", err)
+	}
+	tt.Frame()
+	if !page.Audible() {
+		t.Fatal("the speaker did not restore sound")
+	}
+
+	// A slider left at zero sounds nothing, and the speaker brings the level
+	// back instead of leaving the video silent.
+	page.SetVolume(0)
+	tt.Frame()
+	if page.Audible() {
+		t.Fatal("zero volume should sound nothing")
+	}
+	if err := tt.Click("Mute"); err != nil {
+		t.Fatalf("click mute at zero: %v", err)
+	}
+	tt.Frame()
+	if !page.Audible() {
+		t.Fatalf("unmuting at zero volume kept the video silent: %v", tt.Texts())
 	}
 
 	page.TogglePlay()

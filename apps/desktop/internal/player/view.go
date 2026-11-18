@@ -112,21 +112,25 @@ func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	ui.Row(c).Absolute().Right(24).Top(52).AlignItems(ui.Center).Gap(12).Children(func() {
 		p.volumeControl(c, m)
 		p.playerPill(c, m)
+		p.panelReveal(c, m)
 	})
 }
 
 // volumeControl is the pill holding the volume track and its speaker toggle.
+// The speaker keeps one accessible name, "Mute": a press silences the video,
+// another restores sound at the last audible level.
 func (p *Page) volumeControl(c *ui.Context, m locales.Messages) {
 	ui.Row(c).AlignItems(ui.Center).Gap(8).Radius(999).Padding(6, 12).Material(glass.Glass{}).Children(func() {
 		p.volumeTrack(c, m)
-		label := m.MuteLabel()
-		if p.muted {
-			label = m.UnmuteLabel()
+		label := m.UnmuteLabel()
+		if p.Audible() {
+			label = m.MuteLabel()
 		}
-		speaker := ui.ButtonBase(c).Key("volume-mute").Size(24, 24).Radius(999).Label(label).Tooltip(label)
+		speaker := ui.ButtonBase(c).Key("volume-mute").Size(24, 24).Radius(999).
+			Label(m.MuteLabel()).Tooltip(label)
 		speaker.Children(func() {
 			ink := mediaInk
-			if p.muted {
+			if !p.Audible() {
 				ink = mediaMuted
 			}
 			ui.Icon(c, icons.Parse("volume-loud-linear")).Size(17, 17).TextColor(ink)
@@ -156,15 +160,32 @@ func (p *Page) volumeTrack(c *ui.Context, m locales.Messages) {
 
 // playerPill is the close / danmaku / panel-toggle cluster at the top-right.
 func (p *Page) playerPill(c *ui.Context, m locales.Messages) {
-	panelLabel := m.CollapsePanel()
-	if p.panelHidden {
-		panelLabel = m.ExpandPanel()
-	}
 	ui.Row(c).AlignItems(ui.Center).Gap(2).Radius(999).Padding(4).Material(glass.Glass{}).Children(func() {
 		p.pillButton(c, "close", "close-linear", m.ClosePlayer(), false, p.Back)
 		p.pillButton(c, "danmaku", "chat-round-linear", m.DanmakuLabel(), p.danmaku, p.ToggleDanmaku)
-		p.pillButton(c, "panel", "widget-2-linear", panelLabel, false, p.TogglePanel)
+		if !p.panelHidden {
+			p.pillButton(c, "panel", "widget-2-linear", m.CollapsePanel(), false, p.CollapsePanel)
+		}
 	})
+}
+
+// panelReveal is the single control the picture keeps while the side panel is
+// away: it brings the episode list and lines back when the viewer wants them.
+func (p *Page) panelReveal(c *ui.Context, m locales.Messages) {
+	if !p.panelHidden {
+		return
+	}
+	label := m.ExpandPanel()
+	button := ui.ButtonBase(c).Key("p-panel-reveal").Size(34, 34).Radius(999).Label(label).
+		Tooltip(label).Material(glass.Glass{})
+	ink := mediaMuted
+	if button.Hovered() {
+		ink = mediaInk
+	}
+	button.Children(func() { ui.Icon(c, icons.Parse("widget-2-linear")).Size(18, 18).TextColor(ink) })
+	if button.Clicked() {
+		p.RevealPanel()
+	}
 }
 
 func (p *Page) pillButton(c *ui.Context, key, icon, tip string, active bool, fn func()) {
