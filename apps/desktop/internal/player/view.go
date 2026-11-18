@@ -103,68 +103,88 @@ func (p *Page) stageFallback(c *ui.Context, t *ui.Theme, m locales.Messages) {
 }
 
 // stageTop draws the episode marker at the top-left and the floating control
-// cluster (volume slider plus close / danmaku / panel buttons) at the top-right.
+// cluster (speaker / danmaku / panel buttons) at the top-right.
 func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	if episode, ok := p.current(); ok {
 		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(84).Top(24).
 			FontSize(13).Bold().TextColor(mediaInk)
 	}
+	if p.volumeOpen {
+		p.FoldVolume(time.Now())
+		if p.volumeOpen {
+			c.After(time.Until(p.volumeUntil))
+		}
+	}
 	ui.Row(c).Absolute().Right(24).Top(52).AlignItems(ui.Center).Gap(12).Children(func() {
-		p.volumeControl(c, m)
 		p.playerPill(c, m)
 		p.panelReveal(c, m)
 	})
 }
 
-// volumeControl is the pill holding the volume track and its speaker toggle.
-// The speaker keeps one accessible name, "Mute": a press silences the video,
-// another restores sound at the last audible level.
-func (p *Page) volumeControl(c *ui.Context, m locales.Messages) {
-	ui.Row(c).AlignItems(ui.Center).Gap(8).Radius(999).Padding(6, 12).Material(glass.Glass{}).Children(func() {
-		p.volumeTrack(c, m)
-		label := m.UnmuteLabel()
-		if p.Audible() {
-			label = m.MuteLabel()
-		}
-		speaker := ui.ButtonBase(c).Key("volume-mute").Size(24, 24).Radius(999).
-			Label(m.MuteLabel()).Tooltip(label)
-		speaker.Children(func() {
-			ink := mediaInk
-			if !p.Audible() {
-				ink = mediaMuted
-			}
-			ui.Icon(c, icons.Parse("volume-loud-linear")).Size(17, 17).TextColor(ink)
-		})
-		if speaker.Clicked() {
-			p.ToggleMute()
+// playerPill is the speaker / danmaku / panel-toggle cluster at the top-right.
+//
+// The speaker keeps one accessible name, Mute: a press unfolds the level track,
+// and a press with the track out silences the video and folds the track away.
+func (p *Page) playerPill(c *ui.Context, m locales.Messages) {
+	ui.Row(c).AlignItems(ui.Center).Gap(2).Radius(999).Padding(4).Material(glass.Glass{}).Children(func() {
+		p.speaker(c, m)
+		p.pillButton(c, "danmaku", "chat-round-linear", m.DanmakuLabel(), p.danmaku, p.ToggleDanmaku)
+		if !p.panelHidden {
+			p.pillButton(c, "panel", "widget-2-linear", m.CollapsePanel(), false, p.CollapsePanel)
 		}
 	})
 }
 
-// volumeTrack is the thin white volume bar; pressing it sets the level.
+// speaker is the mute toggle, with the level track folding out beside it.
+func (p *Page) speaker(c *ui.Context, m locales.Messages) {
+	if p.volumeOpen {
+		p.volumeTrack(c, m)
+	}
+	tip := m.MuteLabel()
+	if p.Audible() {
+		tip = m.UnmuteLabel()
+	}
+	button := ui.ButtonBase(c).Key("p-mute").Size(34, 34).Radius(999).Label(m.MuteLabel()).
+		Tooltip(tip).Background(ui.Transparent)
+	ink := mediaMuted
+	switch {
+	case !p.Audible():
+		ink = mediaMuted
+	case p.volumeOpen || button.Hovered():
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		ink = mediaInk
+	}
+	icon := "volume-loud-linear"
+	if !p.Audible() {
+		icon = "volume-cross-linear"
+	}
+	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(18, 18).TextColor(ink) })
+	if p.volumeOpen && button.Hovered() {
+		p.KeepVolumeOpen(time.Now())
+	}
+	if button.Clicked() {
+		p.ToggleVolumeSpeaker()
+	}
+}
+
+// volumeTrack is the thin white level bar that folds out of the speaker;
+// pressing it sets the level and holds it out a little longer.
 func (p *Page) volumeTrack(c *ui.Context, m locales.Messages) {
 	const trackWidth float32 = 88
 	frac := float32(clampF(p.volume, 0, 1))
 	ui.Box(c).Width(trackWidth).Height(18).Children(func() {
-		track := ui.ButtonBase(c).Key("volume-track").Fill().Label(m.VolumeLabel()).Tooltip(m.VolumeLabel())
+		track := ui.ButtonBase(c).Key("p-volume").Fill().Label(m.VolumeLabel()).Tooltip(m.VolumeLabel())
 		track.Children(func() {
 			ui.Box(c).Absolute().Left(0).Right(0).Top(7).Height(4).Radius(2).Background(ui.RGBA(255, 255, 255, 0.28))
 			ui.Box(c).Absolute().Left(0).Top(7).Height(4).Radius(2).Background(mediaInk).Width(trackWidth * frac)
 			ui.Box(c).Absolute().Top(4).Left(trackWidth*frac-5).Size(10, 10).Radius(5).Background(mediaInk)
 		})
+		if over := track.Hovered(); over {
+			p.KeepVolumeOpen(time.Now())
+		}
 		if x, _, over := track.PointerPosition(); over && track.Pressed() {
 			p.SetVolume(float64(x / trackWidth))
-		}
-	})
-}
-
-// playerPill is the close / danmaku / panel-toggle cluster at the top-right.
-func (p *Page) playerPill(c *ui.Context, m locales.Messages) {
-	ui.Row(c).AlignItems(ui.Center).Gap(2).Radius(999).Padding(4).Material(glass.Glass{}).Children(func() {
-		p.pillButton(c, "close", "close-linear", m.ClosePlayer(), false, p.Back)
-		p.pillButton(c, "danmaku", "chat-round-linear", m.DanmakuLabel(), p.danmaku, p.ToggleDanmaku)
-		if !p.panelHidden {
-			p.pillButton(c, "panel", "widget-2-linear", m.CollapsePanel(), false, p.CollapsePanel)
+			p.KeepVolumeOpen(time.Now())
 		}
 	})
 }

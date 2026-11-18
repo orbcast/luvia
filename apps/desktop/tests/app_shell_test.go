@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 	"luvia/apps/desktop/internal/appshell"
 	"luvia/apps/desktop/internal/design"
@@ -201,5 +203,37 @@ func TestAppShellMovesBetweenColumnAndDock(t *testing.T) {
 	nodes = column()
 	if nodes[0].Bounds.X > 60 {
 		t.Fatalf("window did not return to the column: %+v", nodes[0].Bounds)
+	}
+}
+
+// TestAppShellDrawsWindowButtons covers the window controls the shell draws in
+// place of the system's: the desktop's layout decides which it has and where,
+// and a desktop that asks for none gets none.
+func TestAppShellDrawsWindowButtons(t *testing.T) {
+	names := func(s *appshell.Shell) []string {
+		tt := ui.NewTester(s.View, 1100, 720)
+		tt.SetTitleBar(ui.TitleBar{Height: 28, Bottom: 28, Left: 78})
+		tt.SetLocale("en")
+		var out []string
+		for _, node := range tt.AccessAll() {
+			if node.Role == ui.RoleButton && strings.HasPrefix(node.Name, "Close window") ||
+				node.Role == ui.RoleButton && strings.HasPrefix(node.Name, "Minimize window") ||
+				node.Role == ui.RoleButton && strings.HasPrefix(node.Name, "Maximize window") {
+				out = append(out, node.Name)
+			}
+		}
+		return out
+	}
+
+	s := appshell.New()
+	s.SetWindowButtons(appshell.WindowButtons{End: []string{"minimize", "maximize", "close"}})
+	if got := names(s); len(got) != 3 {
+		t.Fatalf("a desktop with three window buttons got %v", got)
+	}
+
+	bare := appshell.New()
+	bare.SetWindowButtons(appshell.WindowButtons{})
+	if got := names(bare); len(got) != 0 {
+		t.Fatalf("a desktop that asks for no buttons still got %v", got)
 	}
 }

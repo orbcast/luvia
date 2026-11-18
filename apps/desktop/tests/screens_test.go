@@ -46,7 +46,11 @@ func TestRouterOpensDetailAndPlayer(t *testing.T) {
 		t.Fatal("the player must open with its side panel away")
 	}
 
-	// Closing the player returns to the title page.
+	// The panel's close button returns to the title page.
+	if err := tt.Click("Show panel"); err != nil {
+		t.Fatalf("reveal panel: %v", err)
+	}
+	tt.Frame()
 	if err := tt.Click("Close"); err != nil {
 		t.Fatalf("close: %v", err)
 	}

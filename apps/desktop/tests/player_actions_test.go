@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/gif"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -44,6 +45,10 @@ func newGIFPlayer(t *testing.T) *ui.VideoPlayer {
 	return pl
 }
 
+// volumeLingerForTest is longer than the player's idle time for the level
+// track, so folding it is due without waiting in a test.
+const volumeLingerForTest = 5 * time.Second
+
 func TestPlayerControlsWithVideo(t *testing.T) {
 	src, _ := sampleTitle()
 	src.playback.URL = "mem://clip"
@@ -64,45 +69,84 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 	tt.SetLocale("en")
 	tt.Frame()
 
-	// The overlay chrome: volume track, speaker, danmaku toggle and the two
-	// ten-second seeks all take a click without leaving the screen.
-	for _, label := range []string{"Volume", "Danmaku", "Rewind 10 seconds", "Forward 10 seconds"} {
+	// The overlay carries the speaker, the danmaku toggle, the panel toggle and
+	// the two ten-second seeks. The level track stays folded until asked for.
+	for _, label := range []string{"Mute", "Danmaku", "Show panel", "Rewind 10 seconds", "Forward 10 seconds"} {
+		if !tt.HasText(label) {
+			t.Fatalf("overlay lost %q: %v", label, tt.Texts())
+		}
+	}
+	if tt.HasText("Volume") {
+		t.Fatalf("the level track must stay folded at first: %v", tt.Texts())
+	}
+	for _, label := range []string{"Rewind 10 seconds", "Forward 10 seconds"} {
 		if err := tt.Click(label); err != nil {
 			t.Fatalf("click %q: %v", label, err)
 		}
 		tt.Frame()
 	}
-
-	// The speaker toggles sound on its own: the first press silences the video,
-	// the second restores it.
-	if !page.Audible() {
-		t.Fatal("a fresh player must sound audible")
-	}
-	if err := tt.Click("Mute"); err != nil {
-		t.Fatalf("click mute: %v", err)
+	if err := tt.Click("Show panel"); err != nil {
+		t.Fatalf("revealing the panel: %v", err)
 	}
 	tt.Frame()
+	if err := tt.Click("Hide panel"); err != nil {
+		t.Fatalf("collapsing the panel: %v", err)
+	}
+	tt.Frame()
+
+	// A player opens silent, and a press on the speaker unfolds the level track.
 	if page.Audible() {
-		t.Fatal("the speaker did not mute the video")
+		t.Fatal("a fresh player must start muted")
 	}
 	if err := tt.Click("Mute"); err != nil {
-		t.Fatalf("click mute again: %v", err)
+		t.Fatalf("click speaker: %v", err)
 	}
 	tt.Frame()
-	if !page.Audible() {
-		t.Fatal("the speaker did not restore sound")
+	if !page.VolumeOpen() {
+		t.Fatal("the speaker did not unfold the level track")
+	}
+	if !tt.HasText("Volume") {
+		t.Fatalf("the unfolded track is missing: %v", tt.Texts())
 	}
 
-	// A slider left at zero sounds nothing, and the speaker brings the level
-	// back instead of leaving the video silent.
+	// A second press silences the video and folds the track away.
+	page.ToggleMute()
+	tt.Frame()
+	if !page.Audible() {
+		t.Fatal("unmuting kept the video silent")
+	}
+	if err := tt.Click("Mute"); err != nil {
+		t.Fatalf("click speaker again: %v", err)
+	}
+	tt.Frame()
+	if page.VolumeOpen() {
+		t.Fatal("the second press must fold the level track away")
+	}
+	if page.Audible() {
+		t.Fatal("the second press must silence the video")
+	}
+
+	// The track folds back on its own once the viewer leaves it alone, from the
+	// moment it unfolds, without waiting for a touch first.
+	page.OpenVolume()
+	tt.Frame()
+	if !page.VolumeOpen() {
+		t.Fatal("opening the level track failed")
+	}
+	page.FoldVolume(time.Now().Add(volumeLingerForTest + time.Second))
+	tt.Frame()
+	if page.VolumeOpen() {
+		t.Fatal("the level track stayed out after its idle time")
+	}
+
+	// A level left at zero sounds nothing, and unmuting restores the sound
+	// instead of leaving the video silent.
 	page.SetVolume(0)
 	tt.Frame()
 	if page.Audible() {
 		t.Fatal("zero volume should sound nothing")
 	}
-	if err := tt.Click("Mute"); err != nil {
-		t.Fatalf("click mute at zero: %v", err)
-	}
+	page.ToggleMute()
 	tt.Frame()
 	if !page.Audible() {
 		t.Fatalf("unmuting at zero volume kept the video silent: %v", tt.Texts())
@@ -110,7 +154,6 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 
 	page.TogglePlay()
 	page.TogglePlay()
-	page.ToggleMute()
 	page.ToggleSubtitle()
 	page.CycleRate()
 	for i := 0; i < 6; i++ {

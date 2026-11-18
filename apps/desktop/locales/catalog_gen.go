@@ -1284,6 +1284,36 @@ func (msgs Messages) CastToDevice() string {
 	return Catalog.Format(msgs.locale, "castToDevice", nil)
 }
 
+// CloseWindow says "Close window"
+// in the language the app shows.
+func CloseWindow() string { return In(i18n.Locale()).CloseWindow() }
+
+// CloseWindow says "Close window"
+// in the language of msgs.
+func (msgs Messages) CloseWindow() string {
+	return Catalog.Format(msgs.locale, "closeWindow", nil)
+}
+
+// MinimizeWindow says "Minimize window"
+// in the language the app shows.
+func MinimizeWindow() string { return In(i18n.Locale()).MinimizeWindow() }
+
+// MinimizeWindow says "Minimize window"
+// in the language of msgs.
+func (msgs Messages) MinimizeWindow() string {
+	return Catalog.Format(msgs.locale, "minimizeWindow", nil)
+}
+
+// MaximizeWindow says "Maximize window"
+// in the language the app shows.
+func MaximizeWindow() string { return In(i18n.Locale()).MaximizeWindow() }
+
+// MaximizeWindow says "Maximize window"
+// in the language of msgs.
+func (msgs Messages) MaximizeWindow() string {
+	return Catalog.Format(msgs.locale, "maximizeWindow", nil)
+}
+
 // VolumeLabel says "Volume"
 // in the language the app shows.
 func VolumeLabel() string { return In(i18n.Locale()).VolumeLabel() }

@@ -73,7 +73,9 @@ type Page struct {
 	playing      bool
 	muted        bool
 	volume       float64
-	restore      float64 // level to return to when unmuting
+	restore      float64   // level to return to when unmuting
+	volumeOpen   bool      // the speaker has its level track out
+	volumeUntil  time.Time // when the open track folds back on its own
 	rate         float64
 	showSubtitle bool
 	danmaku      bool
@@ -90,9 +92,13 @@ type Page struct {
 
 var rates = []float64{1, 1.25, 1.5, 2, 0.75, 0.5}
 
-// defaultVolume is the level a new player starts at, and the level the speaker
-// toggle returns to when it unmutes a video whose slider sits at zero.
+// defaultVolume is the level a new player keeps in reserve: playback starts
+// muted, and unmuting restores this level.
 const defaultVolume = 0.7
+
+// volumeLinger is how long the level track stays out after the last time the
+// pointer touched the speaker or the track, before it folds back on its own.
+const volumeLinger = 4 * time.Second
 
 // New prepares the player. Call Open with a title and episode to start it.
 func New(deps Deps) *Page {
@@ -102,7 +108,7 @@ func New(deps Deps) *Page {
 	if deps.OpenVideo == nil {
 		deps.OpenVideo = video.OpenURL
 	}
-	p := &Page{deps: deps, index: -1, volume: defaultVolume, restore: defaultVolume, rate: 1, playing: true, danmaku: true}
+	p := &Page{deps: deps, index: -1, muted: true, volume: defaultVolume, restore: defaultVolume, rate: 1, playing: true, danmaku: true}
 	if deps.Images != nil {
 		deps.Images.SetChanged(func() { p.invalidate() })
 	}
@@ -115,7 +121,7 @@ func (p *Page) Open(detail source.Detail, episodes []source.Episode, index int) 
 	p.detail, p.episodes, p.index = detail, episodes, index
 	p.lineID, p.playback = "", source.Playback{}
 	p.loading, p.err, p.notice, p.started = false, nil, noticeNone, false
-	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, false, false, true, true, false
+	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, true, false, true, true, false
 	p.expanded, p.tab, p.scrub, p.scrubbing = false, tabEpisodes, 0, false
 	p.Start()
 }
@@ -347,6 +353,64 @@ func (p *Page) SetVolume(v float64) {
 // Audible reports whether sound is playing at all: the speaker dims both when it
 // was silenced and when the slider sits at zero.
 func (p *Page) Audible() bool { return !p.muted && p.volume > 0 }
+
+// VolumeOpen reports whether the speaker has its level track out.
+func (p *Page) VolumeOpen() bool { return p.volumeOpen }
+
+// OpenVolume unfolds the level track beside the speaker.
+func (p *Page) OpenVolume() {
+	if p.volumeOpen {
+		return
+	}
+	p.volumeOpen = true
+	p.volumeUntil = time.Now().Add(volumeLinger)
+	p.invalidate()
+}
+
+// CloseVolume folds the level track back beside the speaker.
+func (p *Page) CloseVolume() {
+	if !p.volumeOpen {
+		return
+	}
+	p.volumeOpen, p.volumeUntil = false, time.Time{}
+	p.invalidate()
+}
+
+// ToggleVolumeSpeaker is the press on the speaker itself: it unfolds the level
+// track while it is away, and silences the video while it is out, folding the
+// track in at once so a second press never leaves the track open by accident.
+func (p *Page) ToggleVolumeSpeaker() {
+	if !p.volumeOpen {
+		p.OpenVolume()
+		return
+	}
+	p.volumeOpen, p.volumeUntil = false, time.Time{}
+	p.ToggleMute()
+	p.invalidate()
+}
+
+// KeepVolumeOpen holds the level track out for a few idle seconds, and folds it
+// back when they run out. The view calls it while the pointer rests on the
+// speaker or the track.
+func (p *Page) KeepVolumeOpen(now time.Time) {
+	if !p.volumeOpen {
+		return
+	}
+	deadline := now.Add(volumeLinger)
+	if deadline.After(p.volumeUntil) {
+		p.volumeUntil = deadline
+	}
+}
+
+// FoldVolume closes the level track once its idle time has passed. The view
+// calls it on the frames it asked for with After.
+func (p *Page) FoldVolume(now time.Time) {
+	if !p.volumeOpen || p.volumeUntil.IsZero() || now.Before(p.volumeUntil) {
+		return
+	}
+	p.volumeOpen, p.volumeUntil = false, time.Time{}
+	p.invalidate()
+}
 
 // ToggleDanmaku shows or hides the comment layer over the picture.
 func (p *Page) ToggleDanmaku() {

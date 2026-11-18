@@ -18,6 +18,12 @@ const (
 	ShellHeight        = 5*NavigationHeight + 4*ShellGap + 2*ShellPadding
 	TitleBarHeight     = 28
 	TitleBarGap        = 8
+
+	// WindowControlSize is the diameter of the window buttons the shell draws
+	// in place of the system's, WindowControlGap the space between them.
+	WindowControlSize     = 26
+	WindowControlGap      = 8
+	WindowControlIconSize = 15
 	// NavigationTopGap keeps the column below the title bar instead of
 	// hugging it.
 	NavigationTopGap = 24

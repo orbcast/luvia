@@ -360,6 +360,36 @@
       "sha256": "5dde7ea6e8218e7ef32b3c696a7a7f566de29cc39e5efe935232311ee02ba942",
       "source": "https://api.iconify.design/solar/map-point-linear.svg"
     },
+    "solar:maximize-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/maximize-linear/",
+      "file": "solar--maximize-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "559cee378af21be12142bdb583bcd27f185fe480b05d44e975c6f6aba1b1b202",
+      "source": "https://api.iconify.design/solar/maximize-linear.svg"
+    },
+    "solar:minimize-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/minimize-linear/",
+      "file": "solar--minimize-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "d8088d18903a82f8e2d313485a20b81f43df5227cd63c6008ec40e7915ee876d",
+      "source": "https://api.iconify.design/solar/minimize-linear.svg"
+    },
     "solar:pause-bold": {
       "author": {
         "name": "480 Design",
@@ -554,6 +584,21 @@
       },
       "sha256": "a194386cf7ee169b24f4bbd61ef38334eccdd3e3401827defb97c02d35dfa57d",
       "source": "https://api.iconify.design/solar/users-group-rounded-linear.svg"
+    },
+    "solar:volume-cross-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/volume-cross-linear/",
+      "file": "solar--volume-cross-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "b8bfeec6fa2cb153c621877eb1a29f2401dd3bd762dfd007ae0f628183337e64",
+      "source": "https://api.iconify.design/solar/volume-cross-linear.svg"
     },
     "solar:volume-loud-linear": {
       "author": {

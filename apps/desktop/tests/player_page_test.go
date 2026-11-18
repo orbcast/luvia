@@ -43,7 +43,7 @@ func TestPlayerRendersSwitchesEpisodeAndCloses(t *testing.T) {
 	if tt.HasText("NOW PLAYING") {
 		t.Fatal("the side panel must stay hidden when the player opens")
 	}
-	for _, text := range []string{"Show panel", "Mute", "Danmaku"} {
+	for _, text := range []string{"Mute", "Danmaku", "Show panel"} {
 		if !tt.HasText(text) {
 			t.Fatalf("missing %q in %v", text, tt.Texts())
 		}
@@ -86,7 +86,12 @@ func TestPlayerRendersSwitchesEpisodeAndCloses(t *testing.T) {
 		t.Fatal("the picture should offer to show the panel again")
 	}
 
-	// Closing the panel leaves the player.
+	// The close button rides on the expanded panel: it comes back with it and
+	// leaves the player.
+	if err := tt.Click("Show panel"); err != nil {
+		t.Fatalf("reveal panel again: %v", err)
+	}
+	tt.Frame()
 	if err := tt.Click("Close"); err != nil {
 		t.Fatalf("close: %v", err)
 	}
