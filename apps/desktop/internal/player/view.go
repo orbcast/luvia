@@ -16,6 +16,15 @@ import (
 
 const panelWidth float32 = 360
 
+// The stage's top line: the episode marker at the top-left and the floating
+// control cluster at the top-right.
+const (
+	stageLineTop    float32 = 24
+	stageMarkerSize float32 = 13
+	stageButtonSize float32 = 34
+	pillPadding     float32 = 4
+)
+
 var (
 	mediaInk   = ui.RGBA(255, 255, 255, 0.94)
 	mediaMuted = ui.RGBA(255, 255, 255, 0.62)
@@ -131,10 +140,13 @@ func (p *Page) stageFallback(c *ui.Context, t *ui.Theme, m locales.Messages) {
 }
 
 // stageTop draws the episode marker at the top-left and the floating control
-// cluster (speaker / danmaku / panel buttons) at the top-right.
+// cluster (speaker / danmaku / panel buttons) at the top-right. The two sit on
+// one line: the cluster's buttons hang at the middle of the marker, so they
+// read level with the label of the episode they belong to.
 func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
+	top := stageLineTop
 	if episode, ok := p.current(); ok {
-		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(84).Top(24).
+		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(84).Top(top).
 			FontSize(13).Bold().TextColor(mediaInk)
 	}
 	if p.volumeOpen {
@@ -143,7 +155,8 @@ func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
 			c.After(time.Until(p.volumeUntil))
 		}
 	}
-	ui.Row(c).Absolute().Right(24).Top(52).AlignItems(ui.Center).Gap(12).Children(func() {
+	cluster := top + stageMarkerSize/2 - (stageButtonSize+2*pillPadding)/2
+	ui.Row(c).Absolute().Right(24).Top(cluster).AlignItems(ui.Center).Gap(12).Children(func() {
 		p.playerPill(c, m)
 		p.panelReveal(c, m)
 	})
@@ -154,7 +167,7 @@ func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
 // The speaker keeps one accessible name, Mute: a press unfolds the level track,
 // and a press with the track out silences the video and folds the track away.
 func (p *Page) playerPill(c *ui.Context, m locales.Messages) {
-	ui.Row(c).AlignItems(ui.Center).Gap(2).Radius(999).Padding(4).Material(glass.Glass{}).Children(func() {
+	ui.Row(c).AlignItems(ui.Center).Gap(2).Radius(999).Padding(pillPadding).Material(glass.Glass{}).Children(func() {
 		p.speaker(c, m)
 		p.pillButton(c, "danmaku", "chat-round-linear", m.DanmakuLabel(), p.danmaku, p.ToggleDanmaku)
 		if !p.panelHidden {
@@ -172,7 +185,7 @@ func (p *Page) speaker(c *ui.Context, m locales.Messages) {
 	if p.Audible() {
 		tip = m.UnmuteLabel()
 	}
-	button := ui.ButtonBase(c).Key("p-mute").Size(34, 34).Radius(999).Label(m.MuteLabel()).
+	button := ui.ButtonBase(c).Key("p-mute").Size(stageButtonSize, stageButtonSize).Radius(999).Label(m.MuteLabel()).
 		Tooltip(tip).Background(ui.Transparent)
 	ink := mediaMuted
 	switch {
@@ -224,7 +237,7 @@ func (p *Page) panelReveal(c *ui.Context, m locales.Messages) {
 		return
 	}
 	label := m.ExpandPanel()
-	button := ui.ButtonBase(c).Key("p-panel-reveal").Size(34, 34).Radius(999).Label(label).
+	button := ui.ButtonBase(c).Key("p-panel-reveal").Size(stageButtonSize, stageButtonSize).Radius(999).Label(label).
 		Tooltip(label).Material(glass.Glass{})
 	ink := mediaMuted
 	if button.Hovered() {
@@ -237,7 +250,7 @@ func (p *Page) panelReveal(c *ui.Context, m locales.Messages) {
 }
 
 func (p *Page) pillButton(c *ui.Context, key, icon, tip string, active bool, fn func()) {
-	button := ui.ButtonBase(c).Key("p-"+key).Size(34, 34).Radius(999).Label(tip).Tooltip(tip).
+	button := ui.ButtonBase(c).Key("p-"+key).Size(stageButtonSize, stageButtonSize).Radius(999).Label(tip).Tooltip(tip).
 		Background(ui.Transparent)
 	ink := mediaMuted
 	switch {

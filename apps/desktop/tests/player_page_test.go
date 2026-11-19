@@ -52,6 +52,28 @@ func TestPlayerRendersSwitchesEpisodeAndCloses(t *testing.T) {
 		t.Fatal("the picture must not offer to collapse a panel that is already away")
 	}
 
+	// The floating cluster hangs level with the episode marker instead of
+	// dropping below it by the marker's whole height.
+	boxes := make(map[string]ui.Rect, 4)
+	for _, node := range tt.AccessAll() {
+		if node.Role == ui.RoleButton || node.Role == ui.RoleText {
+			boxes[node.Name] = node.Bounds
+		}
+	}
+	mute, ok := boxes["Mute"]
+	if !ok {
+		t.Fatalf("the speaker is missing among %v", boxes)
+	}
+	marker, ok := boxes["Episode 1"]
+	if !ok {
+		t.Fatalf("the episode marker is missing among %v", boxes)
+	}
+	// The label's box carries the line height of its 13-point face, so the
+	// centers sit within a few units rather than on one number.
+	if mid, want := mute.Y+mute.H/2, marker.Y+marker.H/2; mid > want+5 || mid < want-5 {
+		t.Fatalf("the player controls sit at %v, not level with the episode marker at %v", mid, want)
+	}
+
 	// The reveal control brings the side panel back beside the picture.
 	if err := tt.Click("Show panel"); err != nil {
 		t.Fatalf("reveal panel: %v", err)
