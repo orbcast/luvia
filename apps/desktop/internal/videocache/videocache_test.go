@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -280,6 +281,24 @@ func countCacheFiles(t *testing.T, dir string) int {
 	return count
 }
 
+func countCacheBytes(t *testing.T, dir string) int64 {
+	t.Helper()
+	descriptors, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var total int64
+	for _, descriptor := range descriptors {
+		if descriptor.IsDir() || !isCacheFile(descriptor.Name()) {
+			continue
+		}
+		if info, infoErr := descriptor.Info(); infoErr == nil {
+			total += info.Size()
+		}
+	}
+	return total
+}
+
 func TestNewRequiresDirectory(t *testing.T) {
 	if _, err := New("", Options{}); err == nil {
 		t.Fatal("empty dir must fail")
@@ -461,4 +480,212 @@ func TestProxyServesLaterRangeWhileTheTransferGrows(t *testing.T) {
 	if resp.StatusCode != http.StatusPartialContent || len(body) != 512 {
 		t.Fatalf("second read: %d len=%d", resp.StatusCode, len(body))
 	}
+}
+
+// An object a player reads by range never becomes complete: it lives in a part
+// file forever. Those bytes must count against the budget and must be evictable,
+// or a cache of parts grows without limit while eviction finds nothing to remove.
+func TestPartsCountAgainstTheBudgetAndAreEvicted(t *testing.T) {
+	big := []byte(strings.Repeat("p", 64))
+	server, _ := newMediaServer(t, map[string][]byte{"/a.mp4": big, "/b.mp4": big})
+	dir := t.TempDir()
+	cache := newCache(t, dir, Options{Client: server.Client(), MaxBytes: 100})
+
+	// A player seeking into the middle of a film asks for the rest of it; the
+	// transfer stores the object in a part file that never becomes complete.
+	readRange(t, cache.ProxyURL(server.URL+"/a.mp4"), "bytes=32-")
+	if got := countCacheBytes(t, dir); got == 0 {
+		t.Fatal("a part file was not counted against the budget")
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	readRange(t, cache.ProxyURL(server.URL+"/b.mp4"), "bytes=32-")
+	if _, err := os.Stat(cache.partOf(keyOf(server.URL + "/a.mp4"))); !os.IsNotExist(err) {
+		t.Fatalf("the older part was not evicted: %v", err)
+	}
+	if got := countCacheBytes(t, dir); got > 100 {
+		t.Fatalf("the cache holds %d bytes over a 100 byte budget", got)
+	}
+}
+
+// A part file written before the last quit is part of the cache a new process
+// opens, not invisible bytes on disk.
+func TestPartsAreCountedAtStartup(t *testing.T) {
+	dir := t.TempDir()
+	part := filepath.Join(dir, "stale.cache.part")
+	if err := os.WriteFile(part, []byte(strings.Repeat("s", 32)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cache := newCache(t, dir, Options{MaxBytes: 100})
+	if cache.total != 32 {
+		t.Fatalf("startup total = %d, want 32", cache.total)
+	}
+}
+
+// The transfer a playback is reading must not be evicted under it: removing its
+// part file would leave the player asking for bytes the cache can no longer
+// serve.
+func TestEvictionLeavesTheOpenTransferAlone(t *testing.T) {
+	big := []byte(strings.Repeat("t", 64))
+	server, _ := newMediaServer(t, map[string][]byte{"/a.mp4": big, "/b.mp4": big})
+	dir := t.TempDir()
+	cache := newCache(t, dir, Options{Client: server.Client(), MaxBytes: 100})
+
+	readRange(t, cache.ProxyURL(server.URL+"/a.mp4"), "bytes=32-")
+	open := cache.partOf(keyOf(server.URL + "/a.mp4"))
+	cache.mu.Lock()
+	cache.inflight[keyOf(server.URL+"/a.mp4")] = &call{done: make(chan struct{})}
+	cache.mu.Unlock()
+	defer func() {
+		cache.mu.Lock()
+		delete(cache.inflight, keyOf(server.URL+"/a.mp4"))
+		cache.mu.Unlock()
+	}()
+
+	readRange(t, cache.ProxyURL(server.URL+"/b.mp4"), "bytes=32-")
+	if _, err := os.Stat(open); err != nil {
+		t.Fatalf("the transfer in flight was evicted: %v", err)
+	}
+}
+
+// Prefetching an episode warms the playlist and its leading segments, so the
+// switch to it starts on stored bytes.
+func TestPrefetchWarmsPlaylistAndLeadingSegments(t *testing.T) {
+	server, origin := newMediaServer(t, map[string][]byte{
+		"/v/index.m3u8": []byte("#EXTM3U\n#EXT-X-TARGETDURATION:4\n" +
+			"#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXTINF:4,\nseg2.ts\n" +
+			"#EXTINF:4,\nseg3.ts\n#EXTINF:4,\nseg4.ts\n#EXT-X-ENDLIST\n"),
+		"/v/seg0.ts": []byte("SEG0"),
+		"/v/seg1.ts": []byte("SEG1"),
+		"/v/seg2.ts": []byte("SEG2"),
+		"/v/seg3.ts": []byte("SEG3"),
+		"/v/seg4.ts": []byte("SEG4"),
+	})
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client()})
+	cache.Prefetch(server.URL + "/v/index.m3u8")
+	waitFor(t, func() bool { return origin.count("/v/seg2.ts") == 1 })
+
+	for _, path := range []string{"/v/index.m3u8", "/v/seg0.ts", "/v/seg1.ts", "/v/seg2.ts"} {
+		if origin.count(path) != 1 {
+			t.Fatalf("%s fetched %d times, want 1", path, origin.count(path))
+		}
+	}
+	// Only the leading segments are warmed: the rest of the episode is fetched
+	// when the viewer actually gets there.
+	for _, path := range []string{"/v/seg3.ts", "/v/seg4.ts"} {
+		if origin.count(path) != 0 {
+			t.Fatalf("%s was prefetched %d times", path, origin.count(path))
+		}
+	}
+}
+
+// A master playlist names variants rather than segments, so the warm-up has to
+// follow one level down to reach the bytes an episode opens on.
+func TestPrefetchFollowsMasterPlaylistToSegments(t *testing.T) {
+	server, origin := newMediaServer(t, map[string][]byte{
+		"/master.m3u8": []byte("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nv/index.m3u8\n"),
+		"/v/index.m3u8": []byte("#EXTM3U\n#EXT-X-TARGETDURATION:4\n" +
+			"#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXT-X-ENDLIST\n"),
+		"/v/seg0.ts": []byte("SEG0"),
+		"/v/seg1.ts": []byte("SEG1"),
+	})
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client()})
+	cache.Prefetch(server.URL + "/master.m3u8")
+	waitFor(t, func() bool { return origin.count("/v/seg1.ts") == 1 })
+
+	if origin.count("/v/index.m3u8") != 1 {
+		t.Fatalf("the variant was fetched %d times", origin.count("/v/index.m3u8"))
+	}
+	if origin.count("/v/seg0.ts") != 1 {
+		t.Fatalf("the first segment was fetched %d times", origin.count("/v/seg0.ts"))
+	}
+}
+
+// Warming an episode already held refetches nothing.
+func TestPrefetchSkipsWhatIsAlreadyStored(t *testing.T) {
+	server, origin := newMediaServer(t, map[string][]byte{
+		"/v/index.m3u8": []byte("#EXTM3U\n#EXTINF:4,\nseg0.ts\n#EXT-X-ENDLIST\n"),
+		"/v/seg0.ts":    []byte("SEG0"),
+	})
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client()})
+	get(t, cache.ProxyURL(server.URL+"/v/index.m3u8"))
+	get(t, cache.ProxyURL(server.URL+"/v/seg0.ts"))
+
+	cache.Prefetch(server.URL + "/v/index.m3u8")
+	time.Sleep(200 * time.Millisecond)
+	if origin.count("/v/index.m3u8") != 1 || origin.count("/v/seg0.ts") != 1 {
+		t.Fatalf("prefetch refetched: playlist %d, segment %d",
+			origin.count("/v/index.m3u8"), origin.count("/v/seg0.ts"))
+	}
+}
+
+// A playback already fetching an object is its own warm-up; a prefetch must not
+// open a second transfer for the same bytes.
+func TestPrefetchLeavesARunningTransferAlone(t *testing.T) {
+	server, origin := newMediaServer(t, map[string][]byte{
+		"/v/index.m3u8": []byte("#EXTM3U\n#EXT-X-ENDLIST\n"),
+	})
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client()})
+	key := keyOf(server.URL + "/v/index.m3u8")
+	cache.mu.Lock()
+	cache.inflight[key] = &call{done: make(chan struct{})}
+	cache.mu.Unlock()
+	defer func() {
+		cache.mu.Lock()
+		delete(cache.inflight, key)
+		cache.mu.Unlock()
+	}()
+
+	cache.Prefetch(server.URL + "/v/index.m3u8")
+	time.Sleep(200 * time.Millisecond)
+	if origin.count("/v/index.m3u8") != 0 {
+		t.Fatalf("prefetch opened a second transfer: %d", origin.count("/v/index.m3u8"))
+	}
+}
+
+// A single media address says nothing about which bytes a player will want, so
+// warming one would download a whole film the viewer may never open.
+func TestPrefetchIgnoresASingleMediaAddress(t *testing.T) {
+	server, origin := newMediaServer(t, map[string][]byte{"/film.mp4": []byte("FILM")})
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client()})
+
+	cache.Prefetch(server.URL + "/film.mp4")
+	time.Sleep(200 * time.Millisecond)
+	if origin.count("/film.mp4") != 0 {
+		t.Fatalf("a single media address was prefetched: %d", origin.count("/film.mp4"))
+	}
+}
+
+func readRange(t *testing.T, rawURL, rangeHeader string) []byte {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Range", rangeHeader)
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+		t.Fatalf("range read: %d", resp.StatusCode)
+	}
+	return body
+}
+
+func waitFor(t *testing.T, done func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if done() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for the prefetch")
 }

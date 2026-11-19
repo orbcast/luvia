@@ -196,10 +196,58 @@ func (p *Page) resolve() {
 				p.open(playback.URL)
 				p.record(episode, playback)
 				p.loadComments(ctx, episode, gen)
+				p.warmNext(episode, line, gen)
 			}
 			p.invalidate()
 		})
 	}()
+}
+
+// warmNext warms the cache for the episode a viewer is most likely to open
+// next, in the background, so switching to it starts on stored bytes instead of
+// a cold fetch. The episode is resolved on the line just used, which is the line
+// the viewer would pick for it; only its leading segments are fetched. A viewer
+// who has already moved on is not warmed for: the generation they moved past
+// means the episode they left is no longer what comes next.
+func (p *Page) warmNext(current source.Episode, line string, gen uint64) {
+	if p.deps.Cache == nil || p.deps.Source == nil {
+		return
+	}
+	next, ok := p.adjacent(current, 1)
+	if !ok {
+		return
+	}
+	src, cache, run := p.deps.Source, p.deps.Cache, p.deps.Run
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		playback, err := src.Resolve(ctx, next, line)
+		if err != nil {
+			return
+		}
+		run(func() {
+			if gen != p.gen {
+				return
+			}
+			cache.Prefetch(playback.URL)
+		})
+	}()
+}
+
+// adjacent returns the episode offset away from current, matched by identity
+// rather than by the page's own index, because current may be the episode the
+// player was told to open.
+func (p *Page) adjacent(current source.Episode, offset int) (source.Episode, bool) {
+	for i, episode := range p.episodes {
+		if episode.ID != current.ID || episode.Media != current.Media {
+			continue
+		}
+		if i+offset < 0 || i+offset >= len(p.episodes) {
+			return source.Episode{}, false
+		}
+		return p.episodes[i+offset], true
+	}
+	return source.Episode{}, false
 }
 
 // loadComments asks the source for the comments an episode carries. A source

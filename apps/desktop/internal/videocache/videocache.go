@@ -7,7 +7,8 @@
 // so mp4 and HLS both work without parsing media. Only the bytes a playback asks
 // for are fetched, and a partial object is kept as a growing prefix that later
 // ranges are cut from. An object larger than the whole cache budget is passed
-// straight through, the player's own request and all.
+// straight through, the player's own request and all. Prefetch warms a playlist
+// the viewer is likely to open next.
 package videocache
 
 import (
@@ -35,6 +36,21 @@ const (
 	defaultMaxBytes  int64 = 2 << 30 // 2 GiB on disk
 	defaultUserAgent       = "Luvia/1.0 (+videocache)"
 )
+
+// prefetchSegments is how many leading entries of a playlist a prefetch warms.
+// An episode opens on its first seconds, so a few segments cover the gap between
+// the viewer choosing it and the player asking for its first bytes.
+const prefetchSegments = 3
+
+// prefetchHops is how deep a prefetch follows playlists: a master playlist
+// names variants, and a variant names the segments that are worth warming.
+const prefetchHops = 2
+
+// playlistLimit bounds how much of a prefetched object is read for parsing.
+const playlistLimit = 1 << 20
+
+// playlistTag opens every HLS playlist.
+var playlistTag = []byte("#EXTM3U")
 
 // errTooLarge reports an object bigger than MaxBytes; it is passed through
 // without being cached.
@@ -65,6 +81,10 @@ type Cache struct {
 	server   *http.Server
 	baseURL  string
 
+	// ctx aborts the transfers a prefetch started when the cache closes.
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	mu       sync.Mutex
 	total    int64
 	inflight map[string]*call
@@ -88,6 +108,7 @@ func New(dir string, opts Options) (*Cache, error) {
 		dir: dir, maxBytes: opts.MaxBytes,
 		client: opts.Client, inflight: map[string]*call{},
 	}
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	if c.maxBytes <= 0 {
 		c.maxBytes = defaultMaxBytes
 	}
@@ -121,14 +142,154 @@ func (c *Cache) ProxyURL(raw string) string {
 	return c.baseURL + "/media?u=" + url.QueryEscape(raw)
 }
 
-// Close stops the proxy.
+// Close stops the proxy and abandons the prefetches still running.
 func (c *Cache) Close() error {
 	if c == nil || c.server == nil {
 		return nil
 	}
+	c.cancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return c.server.Shutdown(ctx)
+}
+
+// Prefetch warms what a viewer is likely to open next, in the background and
+// without an answer to wait for. Only an HLS playlist is warmed: it names the
+// bytes an episode opens on, while a single media address does not, so fetching
+// one would download a whole film the viewer may never watch.
+func (c *Cache) Prefetch(raw string) {
+	if c == nil || c.ctx == nil || !isPlaylistAddress(raw) {
+		return
+	}
+	if parsed, err := url.Parse(raw); err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return
+	}
+	go c.prefetchPlaylist(raw, prefetchHops)
+}
+
+// isPlaylistAddress is a cheap guess from the address alone, used only to decide
+// whether warming is worth a request. The playlist tag in the body is the real
+// test; a wrong guess here costs one fetch and warms nothing.
+func isPlaylistAddress(raw string) bool {
+	return strings.Contains(strings.ToLower(raw), "m3u8")
+}
+
+// prefetchPlaylist fetches raw when it is not held yet and, while hops remain,
+// warms the leading segments the playlist names.
+func (c *Cache) prefetchPlaylist(raw string, hops int) {
+	if c.ctx.Err() != nil {
+		return
+	}
+	body, ok := c.prefetchObject(raw)
+	if !ok || !bytes.HasPrefix(body, playlistTag) {
+		return
+	}
+	if hops <= 0 {
+		return
+	}
+	base, err := url.Parse(raw)
+	if err != nil {
+		return
+	}
+	refs := playlistRefs(string(body))
+	for _, ref := range refs[:min(prefetchSegments, len(refs))] {
+		// A stored playlist has been rewritten to point at this proxy, so its
+		// references are proxy addresses; the transfer has to be opened
+		// upstream, or the prefetch would fetch itself and store a second copy.
+		target, err := url.Parse(c.originOf(ref))
+		if err != nil {
+			continue
+		}
+		if !target.IsAbs() {
+			target = base.ResolveReference(target)
+		}
+		if target.Scheme != "http" && target.Scheme != "https" {
+			continue
+		}
+		if c.ctx.Err() != nil {
+			return
+		}
+		if body, ok := c.prefetchObject(target.String()); ok && bytes.HasPrefix(body, playlistTag) {
+			c.prefetchPlaylist(target.String(), hops-1)
+		}
+	}
+}
+
+// prefetchObject stores raw when the cache does not hold it yet, and returns the
+// bytes it holds either way so a playlist can be read without a second fetch.
+func (c *Cache) prefetchObject(raw string) ([]byte, bool) {
+	key := keyOf(raw)
+	path, part := c.pathOf(key), c.partOf(key)
+	if info, err := os.Stat(path); err == nil && info.Size() > 0 {
+		return readHead(path), true
+	}
+	c.mu.Lock()
+	if _, running := c.inflight[key]; running {
+		// A playback is already fetching this object; its own transfer is the
+		// warm-up, and a second one would only duplicate it.
+		c.mu.Unlock()
+		return nil, false
+	}
+	c.inflight[key] = &call{done: make(chan struct{})}
+	c.mu.Unlock()
+
+	parsed, _ := url.Parse(raw)
+	err := c.fetchRange(c.ctx, raw, parsed, path, part, 0, -1)
+
+	c.mu.Lock()
+	delete(c.inflight, key)
+	c.mu.Unlock()
+	if err != nil {
+		return nil, false
+	}
+	if info, err := os.Stat(path); err == nil && info.Size() > 0 {
+		return readHead(path), true
+	}
+	return readHead(part), true
+}
+
+// originOf maps a reference back to its upstream address, undoing the proxy
+// rewrite a stored playlist carries.
+func (c *Cache) originOf(ref string) string {
+	prefix := c.baseURL + "/media?u="
+	if !strings.HasPrefix(ref, prefix) {
+		return ref
+	}
+	unescaped, err := url.QueryUnescape(strings.TrimPrefix(ref, prefix))
+	if err != nil {
+		return ref
+	}
+	return unescaped
+}
+
+// readHead returns as much of a stored object as reading a playlist needs.
+func readHead(path string) []byte {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+	body, err := io.ReadAll(io.LimitReader(file, playlistLimit))
+	if err != nil {
+		return nil
+	}
+	return body
+}
+
+// playlistRefs lists the media a playlist names, in order: a master names its
+// variants, a variant names its segments, and the first entries of either are
+// what an episode opens on. Tags are skipped; their URI attributes are not
+// media a prefetch should fetch.
+func playlistRefs(playlist string) []string {
+	var refs []string
+	for _, line := range strings.Split(playlist, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		refs = append(refs, trimmed)
+	}
+	return refs
 }
 
 func (c *Cache) handle(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +336,7 @@ func (c *Cache) handle(w http.ResponseWriter, r *http.Request) {
 	c.inflight[key] = job
 	c.mu.Unlock()
 
-	job.err = c.fetchRange(raw, parsed, path, part, start, end)
+	job.err = c.fetchRange(r.Context(), raw, parsed, path, part, start, end)
 
 	// Let the next request in before this one is answered: a player may want
 	// a second range from the object this request is writing.
@@ -236,6 +397,9 @@ func (c *Cache) serveFromPart(w http.ResponseWriter, r *http.Request, part, raw 
 	w.Header().Set("Content-Length", strconv.FormatInt(end-start+1, 10))
 	w.WriteHeader(http.StatusPartialContent)
 	_, _ = io.Copy(w, io.NewSectionReader(source, start, end-start+1))
+	// A part is read the same way a complete object is, so it ages the same
+	// way: the prefix a playback keeps asking for must not look stale.
+	c.touch(part)
 	return true
 }
 
@@ -247,8 +411,8 @@ func (c *Cache) fail(w http.ResponseWriter, err error) {
 // cached in file, with a playlist rewritten. A partial one is appended to the
 // transfer's part file, starting from its own beginning, so every range a player
 // asks for later comes out of the same growing prefix.
-func (c *Cache) fetchRange(raw string, parsed *url.URL, file, part string, start, end int64) error {
-	total, err := c.remoteSize(raw)
+func (c *Cache) fetchRange(ctx context.Context, raw string, parsed *url.URL, file, part string, start, end int64) error {
+	total, err := c.remoteSize(ctx, raw)
 	if err != nil {
 		return err
 	}
@@ -257,19 +421,19 @@ func (c *Cache) fetchRange(raw string, parsed *url.URL, file, part string, start
 	}
 	partial := start > 0 || (end >= 0 && total > 0 && end+1 < total)
 	if !partial {
-		return c.fetchWhole(raw, parsed, file)
+		return c.fetchWhole(ctx, raw, parsed, file)
 	}
 	// A later range is cut from the prefix the transfer stores; when the
 	// prefix does not reach it yet, the request is answered from upstream.
 	if end >= 0 && partialSize(part) < end+1 {
 		return errNotStored
 	}
-	return c.fetchPart(parsed, raw, part)
+	return c.fetchPart(ctx, parsed, raw, part)
 }
 
 // fetchWhole stores the entire object in file.
-func (c *Cache) fetchWhole(raw string, parsed *url.URL, file string) error {
-	request, err := http.NewRequest(http.MethodGet, raw, nil)
+func (c *Cache) fetchWhole(ctx context.Context, raw string, parsed *url.URL, file string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
 		return err
 	}
@@ -289,9 +453,9 @@ func (c *Cache) fetchWhole(raw string, parsed *url.URL, file string) error {
 // fetchPart continues the transfer stored in part. The first request stores the
 // object from its start, because a player that is handed a prefix asks for the
 // bytes after it next, not for the offset it asked first.
-func (c *Cache) fetchPart(parsed *url.URL, raw, part string) error {
+func (c *Cache) fetchPart(ctx context.Context, parsed *url.URL, raw, part string) error {
 	have := partialSize(part)
-	request, err := http.NewRequest(http.MethodGet, raw, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
 		return err
 	}
@@ -343,6 +507,7 @@ func (c *Cache) store(response *http.Response, parsed *url.URL, raw, file string
 		if writeErr := os.WriteFile(file, rewritten, 0o644); writeErr != nil {
 			return writeErr
 		}
+		// The file holds the rewritten bytes, not the bytes that arrived.
 		written = int64(len(rewritten))
 	}
 	c.addSize(file, written)
@@ -351,8 +516,8 @@ func (c *Cache) store(response *http.Response, parsed *url.URL, raw, file string
 
 // remoteSize asks upstream how large an object is. A server that will not say
 // gives zero, and the cache then decides from what it is handed.
-func (c *Cache) remoteSize(raw string) (int64, error) {
-	request, err := http.NewRequest(http.MethodGet, raw, nil)
+func (c *Cache) remoteSize(ctx context.Context, raw string) (int64, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -597,7 +762,9 @@ func (c *Cache) pathOf(key string) string {
 }
 
 // partOf is where an object still being transferred grows. Its name ends in
-// .part so the cache never mistakes it for a complete object on startup.
+// .part so the cache never mistakes it for a complete object on startup, but it
+// is a cache file all the same: a range-read object never completes, so its
+// bytes have to be counted and evicted like any other.
 func (c *Cache) partOf(key string) string {
 	return filepath.Join(c.dir, key+".cache.part")
 }
@@ -608,8 +775,8 @@ func (c *Cache) touch(path string) {
 	_ = os.Chtimes(path, now, now)
 }
 
-// addSize records a stored object and evicts the least recently used objects
-// when the cache grows past its byte budget.
+// addSize records bytes written to path and evicts the least recently used
+// objects when the cache grows past its byte budget.
 func (c *Cache) addSize(path string, size int64) {
 	c.mu.Lock()
 	c.total += size
@@ -618,6 +785,14 @@ func (c *Cache) addSize(path string, size int64) {
 	if over {
 		c.evict(path)
 	}
+}
+
+// isCacheFile reports whether name is an object the cache owns bytes in. A part
+// file is a transfer still growing, and it counts: an object a player reads by
+// range never becomes complete, so leaving parts out would let them fill the
+// disk while eviction found nothing to remove.
+func isCacheFile(name string) bool {
+	return strings.HasSuffix(name, ".cache") || strings.HasSuffix(name, ".cache.part")
 }
 
 // evict removes the oldest objects until the cache is back within budget,
@@ -635,7 +810,7 @@ func (c *Cache) evict(keep string) {
 	entries := make([]entry, 0, len(descriptors))
 	var total int64
 	for _, descriptor := range descriptors {
-		if descriptor.IsDir() || !strings.HasSuffix(descriptor.Name(), ".cache") {
+		if descriptor.IsDir() || !isCacheFile(descriptor.Name()) {
 			continue
 		}
 		full := filepath.Join(c.dir, descriptor.Name())
@@ -651,7 +826,7 @@ func (c *Cache) evict(keep string) {
 		if total <= c.maxBytes {
 			break
 		}
-		if item.path == keep {
+		if item.path == keep || c.transferring(item.path) {
 			continue
 		}
 		if removeErr := os.Remove(item.path); removeErr == nil {
@@ -663,6 +838,20 @@ func (c *Cache) evict(keep string) {
 	c.mu.Unlock()
 }
 
+// transferring reports whether path is the part file of a transfer still in
+// flight. Removing one would leave the transfer writing to an unlinked file and
+// the playback asking for bytes it can no longer read.
+func (c *Cache) transferring(path string) bool {
+	name, found := strings.CutSuffix(filepath.Base(path), ".cache.part")
+	if !found {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, running := c.inflight[name]
+	return running
+}
+
 // scanSize sums the cache directory at startup.
 func (c *Cache) scanSize() int64 {
 	descriptors, err := os.ReadDir(c.dir)
@@ -671,7 +860,7 @@ func (c *Cache) scanSize() int64 {
 	}
 	var total int64
 	for _, descriptor := range descriptors {
-		if descriptor.IsDir() || !strings.HasSuffix(descriptor.Name(), ".cache") {
+		if descriptor.IsDir() || !isCacheFile(descriptor.Name()) {
 			continue
 		}
 		if info, infoErr := descriptor.Info(); infoErr == nil {

@@ -16,7 +16,7 @@ Luvia 的 Go / MyGo 桌面应用。目前实现应用框架、发现页（Home�
 
 `main.go` 只组装窗口、生命周期和平台 API。`internal/appshell/` 管理导航与系统菜单，`internal/appwindow/` 管理窗口关闭和重新激活，`internal/preferences/` 处理主题偏好读写，`internal/design/` 集中配色、尺寸与图像叠加 Token，`internal/glass/` 提供窗口控件胶囊的半透明表面（填充、描边、高光、投影加背景模糊）；行为测试集中于 `tests/`，通过公开接口调用生产实现。配色与尺寸遵循 [DESIGN.md](../../DESIGN.md)。
 
-发现页与本地数据分成三块：`internal/home/` 是页面状态机与视图（拉取首页、轮播、周历聚合、空态与提示），只依赖 `source.Source`、本地库与图片加载器；`internal/catalog/` 是资源库页的状态机与视图（分类页签、搜索、筛选、海报网格/列表），只读源列表与本地追剧集合，加载用请求代号丢弃过期回包；`internal/library/` 保存观看进度与追剧，以 `source.Ref` 为键原子写入用户数据目录的 `library.json`；`internal/media/` 负责下载远程图片、在主线程解码，并用 `sha256(url)` 命名做内存与磁盘缓存（单张上限 12 MB、并发 4）。使用 MyGo `ButtonBase`、`Icon`、原生窗口顶栏及官方 `plugins/glass` 材质；窗口控件由应用自己画（系统按钮已隐藏），其胶囊用 `internal/glass` 的填充、描边、高光、投影叠官方 `Blur`，不自绘玻璃路径。
+发现页与本地数据分成三块：`internal/home/` 是页面状态机与视图（拉取首页、轮播、周历聚合、空态与提示），只依赖 `source.Source`、本地库与图片加载器；`internal/catalog/` 是资源库页的状态机与视图（分类页签、搜索、筛选、海报网格/列表），只读源列表与本地追剧集合，加载用请求代号丢弃过期回包；`internal/library/` 保存观看进度与追剧，以 `source.Ref` 为键原子写入用户数据目录的 `library.json`；`internal/media/` 负责下载远程图片、在主线程解码，并用 `sha256(url)` 命名做内存与磁盘缓存（单张上限 12 MB、并发 4）。`internal/player/` 是播放页状态机与视图（解析线路、切集、弹幕与进度），`internal/videocache/` 在回环上起 HTTP 代理做磁盘缓存，播放地址经它改写后再交给系统视频组件，一集解析成功后还会在后台预热下一集的前几个分片。使用 MyGo `ButtonBase`、`Icon`、原生窗口顶栏及官方 `plugins/glass` 材质；窗口控件由应用自己画（系统按钮已隐藏），其胶囊用 `internal/glass` 的填充、描边、高光、投影叠官方 `Blur`，不自绘玻璃路径。
 
 中英文文案位于 `locales/en.json`、`locales/zh-Hans.json`，执行 `go tool mygo generate` 更新 `locales/catalog_gen.go`。自定义菜单在语言变化后重建，标准 role 标签由框架翻译。
 
