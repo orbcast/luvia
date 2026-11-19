@@ -117,7 +117,10 @@ func main() {
 			Cache:     profile.video,
 			Refresh:   window.Refresh,
 			Immersive: shell.SetNavigationHidden,
-			Intro:     func() { introCtrl.Start(nil) },
+			// The player brings its own controls, so the window's stay away
+			// there and return with the navigation pages.
+			WindowButtons: shell.SetWindowControlsHidden,
+			Intro:         func() { introCtrl.Start(nil) },
 			Base: func(c *ui.Context) ui.Element {
 				switch shell.Selected() {
 				case appshell.Discover:

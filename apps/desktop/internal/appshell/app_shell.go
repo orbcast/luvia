@@ -72,8 +72,13 @@ type Shell struct {
 	lastWidth float32
 	pending   bool
 	// navHidden hides the navigation chrome on immersive screens such as the
-	// title page and the player, which cover the whole window.
+	// title page and the player, which cover the whole window. The title page
+	// keeps the window's buttons; the player hides them.
 	navHidden bool
+	// controlsHidden hides the window's buttons while the player covers the
+	// window: the picture is the interface there, and a minimize or close
+	// beside its own controls reads as one more player button.
+	controlsHidden bool
 
 	// controls are the window's minimize, maximize and close buttons, which
 	// this view draws because the window hides the system's, and window is
@@ -127,7 +132,12 @@ func (b WindowButtons) Has(button string) bool {
 
 func (s *Shell) Selected() Page                  { return s.selected }
 func (s *Shell) SetNavigationHidden(hidden bool) { s.navHidden = hidden }
-func (s *Shell) SetOnNavigate(fn func(Page))     { s.onNavigate = fn }
+
+// SetWindowControlsHidden hides the window's minimize, maximize and close
+// buttons while the player owns the window, and brings them back after. The
+// window still drags by the strip the buttons leave.
+func (s *Shell) SetWindowControlsHidden(hidden bool) { s.controlsHidden = hidden }
+func (s *Shell) SetOnNavigate(fn func(Page))         { s.onNavigate = fn }
 
 // SetContent installs the page that fills the window behind the navigation
 // column. The navigation column and the window drag strip stay above it.
@@ -184,7 +194,9 @@ func (s *Shell) View(c *ui.Context) {
 		}
 		ui.Row(c).Absolute().Top(0).Left(bar.Left).Right(bar.Right).
 			Height(max(design.TitleBarHeight, bar.Bottom)).DragWindow().ZIndex(20)
-		s.windowControls(c, m, bar, width)
+		if !s.controlsHidden {
+			s.windowControls(c, m, bar, width)
+		}
 		// The AppShell is placed by the window width: a dock along the bottom
 		// when it narrows, or, at the left edge, two panels split around the
 		// destinations that belong at the bottom. Panels and buttons are

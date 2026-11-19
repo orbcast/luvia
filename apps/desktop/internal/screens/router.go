@@ -32,8 +32,11 @@ type Deps struct {
 	Refresh   func()
 	Run       func(func())
 	Immersive func(bool)
-	Intro     func()
-	OpenVideo func(string) (*ui.VideoPlayer, error)
+	// WindowButtons hides the window's own buttons on screens that bring
+	// none, such as the player.
+	WindowButtons func(bool)
+	Intro         func()
+	OpenVideo     func(string) (*ui.VideoPlayer, error)
 }
 
 // Router owns the title and player screens and switches between them and the
@@ -69,6 +72,7 @@ func (r *Router) View(c *ui.Context) ui.Element {
 		return r.player.View(c)
 	default:
 		r.setImmersive(false)
+		r.setWindowButtons(false)
 		if r.deps.Base != nil {
 			return r.deps.Base(c)
 		}
@@ -80,12 +84,14 @@ func (r *Router) View(c *ui.Context) ui.Element {
 func (r *Router) OpenDetail(ref source.Ref) {
 	r.mode = modeDetail
 	r.setImmersive(true)
+	r.setWindowButtons(false)
 	r.detail.Open(ref)
 	r.refresh()
 }
 
 func (r *Router) openPlayer(d source.Detail, episodes []source.Episode, index int) {
 	r.mode = modePlayer
+	r.setWindowButtons(true)
 	if r.deps.Intro != nil {
 		r.deps.Intro()
 	}
@@ -96,11 +102,13 @@ func (r *Router) openPlayer(d source.Detail, episodes []source.Episode, index in
 func (r *Router) backFromDetail() {
 	r.mode = modeNav
 	r.setImmersive(false)
+	r.setWindowButtons(false)
 	r.refresh()
 }
 
 func (r *Router) backFromPlayer() {
 	r.mode = modeDetail
+	r.setWindowButtons(false)
 	r.refresh()
 }
 
@@ -108,11 +116,20 @@ func (r *Router) backFromPlayer() {
 func (r *Router) Reset() {
 	r.mode = modeNav
 	r.setImmersive(false)
+	r.setWindowButtons(false)
 }
 
 func (r *Router) setImmersive(on bool) {
 	if r.deps.Immersive != nil {
 		r.deps.Immersive(on)
+	}
+}
+
+// setWindowButtons hides the window's minimize, maximize and close buttons
+// while a screen that brings its own controls owns the window.
+func (r *Router) setWindowButtons(hidden bool) {
+	if r.deps.WindowButtons != nil {
+		r.deps.WindowButtons(hidden)
 	}
 }
 
