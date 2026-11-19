@@ -255,12 +255,14 @@ var windowControlGlyph = map[string]string{
 	"close":    "close-linear",
 }
 
-// windowControlSquare draws the maximize figure a title bar uses: a sharp
-// square alone while the window is maximized, and the same square with a
-// second one stepped behind it at the bottom right while restoring would give
-// back a window, as every desktop draws the pair. It is one figure on the
-// button's size, in the color the desktop's window controls ink a glyph.
-func windowControlSquare(p *ui.Painter, r ui.Rect, maximized bool) {
+// windowControlSquare draws the maximize figure a title bar uses, reading the
+// window itself: a square alone while it is unmaximized, and the same square
+// with a second one stepped behind it at the bottom right while it is
+// maximized, the figure that restores it, as every desktop draws the pair. It
+// paints after the button's children, so the window's state it reads is the
+// one the click just left, and none of the button's figure shows on top of it.
+func windowControlSquare(p *ui.Painter, r ui.Rect, w *mygo.Window) {
+	maximized := w != nil && w.IsMaximized()
 	for _, box := range windowControlSquareFrames(r, maximized) {
 		p.Stroke(box, design.WindowControlInk(), 1.5, 1.3)
 	}
@@ -276,12 +278,12 @@ func windowControlSquareFrames(r ui.Rect, maximized bool) []ui.Rect {
 	left := r.X + (r.W-size-step)/2
 	top := r.Y + (r.H-size-step)/2
 	if maximized {
-		return []ui.Rect{{X: left + step/2, Y: top + step/2, W: size, H: size}}
+		return []ui.Rect{
+			{X: left + step, Y: top + step, W: size, H: size},
+			{X: left, Y: top, W: size, H: size},
+		}
 	}
-	return []ui.Rect{
-		{X: left + step, Y: top + step, W: size, H: size},
-		{X: left, Y: top, W: size, H: size},
-	}
+	return []ui.Rect{{X: left + step/2, Y: top + step/2, W: size, H: size}}
 }
 
 // windowControls draws the window's buttons in the capsule the AppShell floats
@@ -299,7 +301,6 @@ func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBa
 	if len(names) == 0 {
 		return
 	}
-	maximized := s.window != nil && s.window.IsMaximized()
 	n := float32(len(names))
 	capsuleWidth := n*design.WindowControlWidth + (n-1)*design.WindowControlGap + 2*design.WindowControlPadding
 	top := max(bar.Bottom, design.WindowControlTop)
@@ -323,7 +324,7 @@ func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBa
 			if !ok {
 				continue
 			}
-			s.windowControl(c, m, control, maximized)
+			s.windowControl(c, m, control)
 		}
 	})
 }
@@ -331,7 +332,7 @@ func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBa
 // windowControl draws one window button: a figure on the capsule that only
 // lights as the pointer reaches it. The close button is the one that takes a
 // color there, red, as leaving the window is the one promise a color can keep.
-func (s *Shell) windowControl(c *ui.Context, m locales.Messages, control WindowControl, maximized bool) {
+func (s *Shell) windowControl(c *ui.Context, m locales.Messages, control WindowControl) {
 	label := control.label(m)
 	button := ui.ButtonBase(c).Key("window-"+control.key).
 		Size(design.WindowControlWidth, design.WindowControlHeight).Radius(design.WindowControlRadius).
@@ -350,7 +351,7 @@ func (s *Shell) windowControl(c *ui.Context, m locales.Messages, control WindowC
 	button.Children(func() {
 		if control.key == "maximize" {
 			ui.Box(c).Size(design.WindowControlIconSize, design.WindowControlIconSize).
-				Draw(func(p *ui.Painter, r ui.Rect) { windowControlSquare(p, r, maximized) })
+				DrawOver(func(p *ui.Painter, r ui.Rect) { windowControlSquare(p, r, s.window) })
 			return
 		}
 		ui.Icon(c, icons.Parse(windowControlGlyph[control.key])).Size(design.WindowControlIconSize, design.WindowControlIconSize)
