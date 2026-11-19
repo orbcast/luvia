@@ -5,6 +5,14 @@ MYGO ?= go tool mygo
 COVER_MIN ?= 80
 
 .DEFAULT_GOAL := help
+
+# .env 是本地文件（.gitignore 把 .env* 全部挡住，不入库），源规则的签名密钥从
+# 这里读。sourcing 会覆盖同名变量，所以先记下调用方已经设置的值，读完 .env
+# 再还原：一次性 export、`KANJU_SECRET=x make dev` 都仍然优先于文件内容。
+LOAD_ENV = set +u; \
+	pre="$$(env | grep -E '^[A-Za-z_][A-Za-z0-9_]*=' || true)"; \
+	if [ -f "$(CURDIR)/.env" ]; then set -a; . "$(CURDIR)/.env"; set +a; fi; \
+	if [ -n "$$pre" ]; then set -a; eval "$$pre"; set +a; fi;
 .PHONY: help doctor dev test test-native build vet fmt check rules rules-verify i18n cover race check-gen hooks icons icons-check brand skills
 
 ## help: 列出可用命令
@@ -25,7 +33,7 @@ dev:
 	else \
 		echo "dev: 源规则目录 $$rules（覆盖方式：LUVIA_RULES_DIR=... make dev）"; \
 	fi; \
-	cd $(APP) && LUVIA_RULES_DIR="$$rules" $(MYGO) dev
+	cd $(APP) && $(LOAD_ENV) LUVIA_RULES_DIR="$$rules" $(MYGO) dev
 
 ## test: 运行全部测试（无需窗口）
 test:

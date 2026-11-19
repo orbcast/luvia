@@ -35,15 +35,9 @@ coverage-*.out
 # 本地 Agent 状态；正式 .agents/skills/ 和各级 AGENTS.md 必须保留
 /.pi/
 
-# 本机配置与密钥变量；允许提交不含秘密的示例模板
+# 本机配置与密钥变量：任何 .env* 一律不入库，含本地密钥与示例模板
 .env
 .env.*
-!.env.example
-!.env.template
-!.env.sample
-!.env.*.example
-!.env.*.template
-!.env.*.sample
 *.local.env
 
 # 编辑器个人状态与临时文件
@@ -66,3 +60,4 @@ Desktop.ini
 
 # 本地界面还原参考截图（仅本地对照，不入库）
 ui-reference/
+
