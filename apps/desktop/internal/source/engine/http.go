@@ -181,7 +181,15 @@ func (s *sourceImpl) signHeaders(site callSite, method, pathWithQuery string) (m
 	if !ok {
 		return nil, s.fail(site, source.ErrInvalidRule, "sign.message did not resolve", nil)
 	}
-	mac := hmac.New(sha256.New, []byte(expandEnv(sign.Secret)))
+	secret, ok := expandEnvStrict(sign.Secret)
+	if !ok {
+		// Signing with the unexpanded placeholder would reach upstream as a
+		// plain signature failure and hide the real cause, so the shipped rule
+		// (whose secret lives in ${env:KANJU_SECRET}) stops here instead.
+		return nil, s.fail(site, source.ErrUnauthorized,
+			fmt.Sprintf("sign.secret %q is not set in the environment", sign.Secret), nil)
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(message))
 	signature := hex.EncodeToString(mac.Sum(nil))
 
@@ -315,21 +323,32 @@ func excerpt(body []byte) string {
 // expandEnv substitutes ${env:NAME} so rules can keep secrets out of the file
 // while still declaring where they come from. Missing variables stay literal.
 func expandEnv(text string) string {
+	expanded, _ := expandEnvStrict(text)
+	return expanded
+}
+
+// expandEnvStrict is expandEnv for values that must not be sent unresolved. It
+// reports false when any ${env:NAME} hole is left open, so a caller can refuse
+// the request instead of signing or sending a placeholder.
+func expandEnvStrict(text string) (string, bool) {
 	const marker = "${env:"
+	resolved := true
 	for {
 		start := strings.Index(text, marker)
 		if start < 0 {
-			return text
+			return text, resolved
 		}
 		end := strings.IndexByte(text[start:], '}')
 		if end < 0 {
-			return text
+			return text, resolved
 		}
 		end += start
 		name := text[start+len(marker) : end]
 		replacement, ok := os.LookupEnv(name)
 		if !ok || name == "" {
-			return text
+			resolved = false
+			text = text[:start] + text[end+1:]
+			continue
 		}
 		text = text[:start] + replacement + text[end+1:]
 	}

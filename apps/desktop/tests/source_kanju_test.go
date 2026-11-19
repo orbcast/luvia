@@ -16,8 +16,11 @@ import (
 )
 
 // kanjuSource loads the checked-in kanju rule with the stub transport attached.
+// It exports the fixture secret first, because the engine refuses to sign with
+// an unset ${env:NAME} instead of sending a placeholder upstream.
 func kanjuSource(t *testing.T, client *http.Client) source.Source {
 	t.Helper()
+	kanjuSecret(t)
 	set := loadSources(t, rulesDir, client)
 	if diagnostics := set.Diagnostics(); len(diagnostics) != 0 {
 		t.Fatalf("rule diagnostics for %s: %v", rulesDir, diagnostics)
@@ -61,13 +64,36 @@ func verifyKanjuSignature(t *testing.T, record recordedRequest, secret string) {
 	}
 }
 
-func kanjuSecret(t *testing.T) string {
+// kanjuTestSecret is the value the fixtures are signed with. The checked-in
+// rule keeps its real secret in ${env:KANJU_SECRET}, so the tests export this
+// stand-in through the variable the rule names before anything is loaded.
+const kanjuTestSecret = "fixture-secret"
+
+// kanjuEnvVar extracts the environment variable the checked-in rule reads its
+// secret from, so renaming it in rule.json does not leave the tests signing
+// with a variable the engine never looks at.
+func kanjuEnvVar(t *testing.T) string {
 	t.Helper()
 	parsed, err := rule.DecodeFile(filepath.Join(rulesDir, "kanju", "rule.json"))
 	if err != nil {
 		t.Fatalf("decode kanju rule: %v", err)
 	}
-	return parsed.Sign.Secret
+	const marker = "${env:"
+	start := strings.Index(parsed.Sign.Secret, marker)
+	end := strings.IndexByte(parsed.Sign.Secret, '}')
+	if start < 0 || end < start {
+		t.Fatalf("kanju sign.secret %q does not read an environment variable", parsed.Sign.Secret)
+	}
+	return parsed.Sign.Secret[start+len(marker) : end]
+}
+
+// kanjuSecret exports the fixture secret under the rule's variable and returns
+// it for signature checks.
+func kanjuSecret(t *testing.T) string {
+	t.Helper()
+	name := kanjuEnvVar(t)
+	t.Setenv(name, kanjuTestSecret)
+	return kanjuTestSecret
 }
 
 func TestKanjuHomeMapsSectionsAndCards(t *testing.T) {

@@ -67,7 +67,7 @@ apps/luvia-rules/
 
 `http` 与 `sign` 可选。`http` 缺省值：超时 30 秒、重试 2 次、并发上限 4、翻页上限 20。`timeoutMs` 是单次尝试的上限；重试只对幂等方法（GET / HEAD）在传输错误与 5xx 时进行，退避 200 ms × 2ⁿ。
 
-`sign` 存在时，除显式写 `"sign": false` 的步骤外，所有请求都带签名头：`{method}`、`{path}`（含 query）、`{timestamp}`、`{nonce}` 四个变量供 `message` 模板使用，`{signature}` 供头模板使用。`timestampUnit` 取 `ms` 或 `s`；`nonceBytes` 是随机字节数，十六进制编码后使用。
+“sign” 存在时，除显式写 “sign”: false 的步骤外，所有请求都带签名头：{method}、{path}（含 query）、{timestamp}、{nonce} 四个变量供 message 模板使用，{signature} 供头模板使用。timestampUnit 取 ms 或 s；nonceBytes 是随机字节数，十六进制编码后使用。sign.secret 支持 `${env:NAME}`，取值在发请求前从环境变量替换；变量缺失时不发送请求，直接按 unauthorized 失败（Detail 里带缺失的变量名），不拿占位符去签名。
 
 ## 步骤（steps）
 

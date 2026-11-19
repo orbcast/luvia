@@ -2,11 +2,15 @@ package engine
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -178,6 +182,72 @@ func TestRequestSendsSignedBodyAndHeaders(t *testing.T) {
 	}
 	if body["page"] != "3" || body["keyword"] != "hello" {
 		t.Fatalf("body = %v", body)
+	}
+}
+
+func TestSignedRequestWithoutSecretIsUnauthorized(t *testing.T) {
+	t.Setenv("LUVIA_TEST_SIGN_SECRET", "")
+	os.Unsetenv("LUVIA_TEST_SIGN_SECRET")
+	sent := false
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		sent = true
+		return reply(http.StatusOK, `{"sections":[]}`), nil
+	})}
+	text := `{
+		"schemaVersion": 1, "id": "sample", "name": "Sample", "baseURL": "https://sample.test",
+		"sign": {"secret": "${env:LUVIA_TEST_SIGN_SECRET}", "message": "{method} {path}",
+			"headers": [{"name": "x-signature", "value": "{signature}"}]},
+		"home": {
+			"steps": [{"op": "request", "as": "res", "path": "/v1/home"}],
+			"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+				"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}
+		}
+	}`
+	built := buildSource(t, text, client)
+	_, err := built.Home(context.Background())
+	if kind, ok := source.KindOf(err); !ok || kind != source.ErrUnauthorized {
+		t.Fatalf("missing secret kind = %v (%v)", kind, err)
+	}
+	if !strings.Contains(err.Error(), "LUVIA_TEST_SIGN_SECRET") {
+		t.Fatalf("error must name the missing variable: %v", err)
+	}
+	if sent {
+		t.Fatal("a request must not leave with an unresolved secret")
+	}
+}
+
+func TestSignedRequestExpandsSecretFromEnvironment(t *testing.T) {
+	t.Setenv("LUVIA_TEST_SIGN_SECRET", "hunter2")
+	var captured *http.Request
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		captured = request
+		return reply(http.StatusOK, `{"sections":[]}`), nil
+	})}
+	text := `{
+		"schemaVersion": 1, "id": "sample", "name": "Sample", "baseURL": "https://sample.test",
+		"sign": {"secret": "${env:LUVIA_TEST_SIGN_SECRET}", "message": "{method} {path}",
+			"headers": [{"name": "x-signature", "value": "{signature}"}]},
+		"home": {
+			"steps": [{"op": "request", "as": "res", "path": "/v1/home"}],
+			"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+				"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}
+		}
+	}`
+	built := buildSource(t, text, client)
+	if _, err := built.Home(context.Background()); err != nil {
+		t.Fatalf("home: %v", err)
+	}
+	if captured == nil {
+		t.Fatal("no request captured")
+	}
+	message := captured.Method + " " + captured.URL.RequestURI()
+	mac := hmac.New(sha256.New, []byte("hunter2"))
+	mac.Write([]byte(message))
+	if want := hex.EncodeToString(mac.Sum(nil)); captured.Header.Get("x-signature") != want {
+		t.Fatalf("signature = %q, want %q", captured.Header.Get("x-signature"), want)
+	}
+	if strings.Contains(captured.Header.Get("x-signature"), "env:") {
+		t.Fatal("placeholder leaked into the signature")
 	}
 }
 
