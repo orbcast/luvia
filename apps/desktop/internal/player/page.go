@@ -49,6 +49,10 @@ type Deps struct {
 	Run       func(func())
 	OnBack    func()
 	OpenVideo func(string) (*ui.VideoPlayer, error)
+	// SetFullScreen takes the window in and out of full screen. The picture
+	// fills the window either way; the player's full-screen button hands the
+	// screen back by asking the window for it, not by hiding its own chrome.
+	SetFullScreen func(bool)
 }
 
 // Page is the player state. Everything here is touched on the main thread.
@@ -594,7 +598,32 @@ func (p *Page) setPanelHidden(hidden bool) {
 	p.panelHidden = hidden
 	p.invalidate()
 }
-func (p *Page) ToggleCinema()   { p.cinema = !p.cinema; p.invalidate() }
+
+// ToggleFullScreen takes the window in and out of full screen. Cinema is the
+// player's own reading of it: the panel goes away and the picture keeps the
+// whole window while the screen is the viewer's.
+func (p *Page) ToggleFullScreen() {
+	p.setCinema(!p.cinema)
+}
+
+// SyncFullScreen follows the window when the desktop took it in or out of full
+// screen on its own, as Escape does. The window already holds that state, so
+// this only moves the player's own reading of it.
+func (p *Page) SyncFullScreen(on bool) {
+	if p.cinema == on {
+		return
+	}
+	p.cinema = on
+	p.invalidate()
+}
+
+func (p *Page) setCinema(on bool) {
+	p.cinema = on
+	if p.deps.SetFullScreen != nil {
+		p.deps.SetFullScreen(on)
+	}
+	p.invalidate()
+}
 func (p *Page) ToggleExpanded() { p.expanded = !p.expanded; p.invalidate() }
 
 func (p *Page) SelectTab(i int) {
@@ -605,8 +634,12 @@ func (p *Page) SelectTab(i int) {
 	p.invalidate()
 }
 
-// Back leaves the player and returns what it opened.
+// Back leaves the player and returns what it opened. Leaving full screen is
+// part of leaving the player: the pages behind it want the window back.
 func (p *Page) Back() {
+	if p.cinema {
+		p.setCinema(false)
+	}
 	p.releasePlayer()
 	if p.deps.OnBack != nil {
 		p.deps.OnBack()

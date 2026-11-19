@@ -156,23 +156,25 @@ func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
 		}
 	}
 	cluster := top + stageMarkerSize/2 - (stageButtonSize+2*pillPadding)/2
-	ui.Row(c).Absolute().Right(24).Top(cluster).AlignItems(ui.Center).Gap(12).Children(func() {
-		p.playerPill(c, m)
-		p.panelReveal(c, m)
-	})
+	p.playerPill(c, m, cluster)
 }
 
 // playerPill is the speaker / danmaku / panel-toggle cluster at the top-right.
+// It is one capsule: the panel toggle turns into the reveal control when the
+// panel goes away, so the cluster never breaks into two floating pieces.
 //
 // The speaker keeps one accessible name, Mute: a press unfolds the level track,
 // and a press with the track out silences the video and folds the track away.
-func (p *Page) playerPill(c *ui.Context, m locales.Messages) {
-	ui.Row(c).AlignItems(ui.Center).Gap(2).Radius(999).Padding(pillPadding).Material(glass.Glass{}).Children(func() {
+func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
+	ui.Row(c).Absolute().Right(24).Top(top).AlignItems(ui.Center).Gap(2).Radius(999).
+		Padding(pillPadding).Material(glass.Glass{}).Children(func() {
 		p.speaker(c, m)
 		p.pillButton(c, "danmaku", "chat-round-linear", m.DanmakuLabel(), p.danmaku, p.ToggleDanmaku)
-		if !p.panelHidden {
-			p.pillButton(c, "panel", "widget-2-linear", m.CollapsePanel(), false, p.CollapsePanel)
+		if p.panelHidden {
+			p.panelReveal(c, m)
+			return
 		}
+		p.pillButton(c, "panel", "widget-2-linear", m.CollapsePanel(), false, p.CollapsePanel)
 	})
 }
 
@@ -232,15 +234,15 @@ func (p *Page) volumeTrack(c *ui.Context, m locales.Messages) {
 
 // panelReveal is the single control the picture keeps while the side panel is
 // away: it brings the episode list and lines back when the viewer wants them.
+// It lives inside the pill, so the cluster stays one capsule whether the panel
+// is out or away.
 func (p *Page) panelReveal(c *ui.Context, m locales.Messages) {
-	if !p.panelHidden {
-		return
-	}
 	label := m.ExpandPanel()
 	button := ui.ButtonBase(c).Key("p-panel-reveal").Size(stageButtonSize, stageButtonSize).Radius(999).Label(label).
-		Tooltip(label).Material(glass.Glass{})
+		Tooltip(label).Background(ui.Transparent)
 	ink := mediaMuted
 	if button.Hovered() {
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
 		ink = mediaInk
 	}
 	button.Children(func() { ui.Icon(c, icons.Parse("widget-2-linear")).Size(18, 18).TextColor(ink) })
@@ -367,7 +369,7 @@ func (p *Page) fullscreenButton(c *ui.Context, m locales.Messages) {
 	}
 	button.Children(func() { ui.Icon(c, icons.Parse("full-screen-linear")).Size(18, 18).TextColor(mediaInk) })
 	if button.Clicked() {
-		p.ToggleCinema()
+		p.ToggleFullScreen()
 	}
 }
 

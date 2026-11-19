@@ -120,7 +120,21 @@ func main() {
 			// The player brings its own controls, so the window's stay away
 			// there and return with the navigation pages.
 			WindowButtons: shell.SetWindowControlsHidden,
-			Intro:         func() { introCtrl.Start(nil) },
+			// The player's full-screen button takes the window itself in and
+			// out of full screen; the desktop can also do it on its own, so
+			// the router reads the window back before every player frame.
+			SetFullScreen: func(on bool) {
+				if w := window.Current(); w != nil {
+					w.SetFullScreen(on)
+				}
+			},
+			WindowFullScreen: func() bool {
+				if w := window.Current(); w != nil {
+					return w.IsFullScreen()
+				}
+				return false
+			},
+			Intro: func() { introCtrl.Start(nil) },
 			Base: func(c *ui.Context) ui.Element {
 				switch shell.Selected() {
 				case appshell.Discover:

@@ -8,11 +8,14 @@ import (
 type windowStub struct {
 	shown, invalidated int
 	closed             func()
+	fullScreen         bool
 }
 
 func (w *windowStub) Show()                     { w.shown++ }
 func (w *windowStub) Invalidate()               { w.invalidated++ }
 func (w *windowStub) OnClosed(fn func()) func() { w.closed = fn; return func() { w.closed = nil } }
+func (w *windowStub) SetFullScreen(on bool)     { w.fullScreen = on }
+func (w *windowStub) IsFullScreen() bool        { return w.fullScreen }
 
 func TestMainWindowReactivation(t *testing.T) {
 	var windows []*windowStub

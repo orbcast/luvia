@@ -35,8 +35,12 @@ type Deps struct {
 	// WindowButtons hides the window's own buttons on screens that bring
 	// none, such as the player.
 	WindowButtons func(bool)
-	Intro         func()
-	OpenVideo     func(string) (*ui.VideoPlayer, error)
+	// SetFullScreen takes the window in and out of full screen, and
+	// WindowFullScreen reports where the desktop last put it.
+	SetFullScreen    func(bool)
+	WindowFullScreen func() bool
+	Intro            func()
+	OpenVideo        func(string) (*ui.VideoPlayer, error)
 }
 
 // Router owns the title and player screens and switches between them and the
@@ -59,6 +63,7 @@ func New(deps Deps) *Router {
 	r.player = player.New(player.Deps{
 		Source: deps.Source, Library: deps.Library, Images: deps.Images, Cache: deps.Cache, Run: deps.Run,
 		OnBack: r.backFromPlayer, OpenVideo: deps.OpenVideo,
+		SetFullScreen: deps.SetFullScreen,
 	})
 	return r
 }
@@ -69,6 +74,11 @@ func (r *Router) View(c *ui.Context) ui.Element {
 	case modeDetail:
 		return r.detail.View(c)
 	case modePlayer:
+		// The window may have left full screen without the player asking, as
+		// Escape does, so the player reads the window before it draws.
+		if r.deps.WindowFullScreen != nil {
+			r.player.SyncFullScreen(r.deps.WindowFullScreen())
+		}
 		return r.player.View(c)
 	default:
 		r.setImmersive(false)

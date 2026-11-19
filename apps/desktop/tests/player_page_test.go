@@ -107,6 +107,25 @@ func TestPlayerRendersSwitchesEpisodeAndCloses(t *testing.T) {
 	if !tt.HasText("Show panel") {
 		t.Fatal("the picture should offer to show the panel again")
 	}
+	// The reveal control lives in the same capsule as the speaker and the
+	// danmaku toggle, so the cluster stays one piece when the panel is away.
+	boxes = make(map[string]ui.Rect, 4)
+	for _, node := range tt.AccessAll() {
+		if node.Role == ui.RoleButton {
+			boxes[node.Name] = node.Bounds
+		}
+	}
+	danmaku, okDanmaku := boxes["Danmaku"]
+	reveal, okReveal := boxes["Show panel"]
+	if !okDanmaku || !okReveal {
+		t.Fatalf("the pill lost a button among %v", boxes)
+	}
+	if gap := reveal.X - (danmaku.X + danmaku.W); gap > 8 {
+		t.Fatalf("the reveal control floats %v away from the pill instead of sitting in it", gap)
+	}
+	if reveal.Y != danmaku.Y || reveal.H != danmaku.H {
+		t.Fatalf("the reveal control sits at %v, not in the pill's row at %v", reveal, danmaku)
+	}
 
 	// The close button rides on the expanded panel: it comes back with it and
 	// leaves the player.
@@ -119,5 +138,66 @@ func TestPlayerRendersSwitchesEpisodeAndCloses(t *testing.T) {
 	}
 	if !backed {
 		t.Fatal("close did not call OnBack")
+	}
+}
+
+func TestPlayerFullScreenAsksTheWindow(t *testing.T) {
+	src, _ := sampleTitle()
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := make(chan func(), 8)
+	var asked []bool
+	page := player.New(player.Deps{
+		Source: src, Library: store, Run: func(fn func()) { run <- fn },
+		SetFullScreen: func(on bool) { asked = append(asked, on) },
+		OpenVideo:     func(string) (*ui.VideoPlayer, error) { return nil, nil },
+	})
+	page.Open(src.detail, src.episodes, 0)
+	apply(t, run)
+
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(ui.DarkTheme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 1280, 900)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	// The button takes the window in and out of full screen; the picture
+	// filling the window is not the same thing as the screen being the
+	// viewer's.
+	if err := tt.Click("Fullscreen"); err != nil {
+		t.Fatalf("full screen: %v", err)
+	}
+	tt.Frame()
+	if len(asked) != 1 || !asked[0] {
+		t.Fatalf("the full-screen button did not ask the window in: %v", asked)
+	}
+	if !tt.HasText("Exit fullscreen") {
+		t.Fatalf("the button kept its old name in full screen: %v", tt.Texts())
+	}
+
+	// The desktop can leave full screen on its own, as Escape does; the
+	// player follows the window rather than its own idea of the screen.
+	page.SyncFullScreen(false)
+	tt.Frame()
+	if len(asked) != 1 {
+		t.Fatalf("following the window asked it again instead of reading it: %v", asked)
+	}
+	if !tt.HasText("Fullscreen") {
+		t.Fatalf("the button did not read as full screen again: %v", tt.Texts())
+	}
+
+	// Leaving the player hands the window back.
+	if err := tt.Click("Fullscreen"); err != nil {
+		t.Fatalf("full screen again: %v", err)
+	}
+	tt.Frame()
+	page.Back()
+	tt.Frame()
+	if last := asked[len(asked)-1]; last {
+		t.Fatalf("leaving the player left the window in full screen: %v", asked)
 	}
 }
