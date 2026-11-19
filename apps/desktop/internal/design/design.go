@@ -17,7 +17,6 @@ const (
 	NavigationIconSize = 23
 	ShellHeight        = 5*NavigationHeight + 4*ShellGap + 2*ShellPadding
 	TitleBarHeight     = 28
-	TitleBarGap        = 8
 
 	// WindowControlWidth and WindowControlHeight are the hit area of each window
 	// button in the capsule the shell draws in place of the system's, and
@@ -33,9 +32,6 @@ const (
 	WindowControlPadding  = 5
 	WindowControlInset    = 12
 	WindowControlTop      = 12
-	// NavigationTopGap keeps the column below the title bar instead of
-	// hugging it.
-	NavigationTopGap = 24
 
 	// ContentInset is where page content starts, clear of the floating AppShell.
 	ContentInset  = ShellInset + ShellWidth
@@ -93,6 +89,12 @@ func ShellGroupHeight(count int) float32 {
 	}
 	return float32(count)*NavigationHeight + float32(count-1)*ShellGap + 2*ShellPadding
 }
+
+// ChromeTop is the one line the window's chrome starts on: the window
+// controls' capsule, the AppShell column and a page's back button all begin
+// there, so the top corners read as one row. A window whose title bar holds
+// the system's controls keeps that bar's room first, as the capsule does.
+func ChromeTop(barBottom float32) float32 { return max(barBottom, WindowControlTop) }
 
 // Docked reports whether the AppShell docks at the bottom at this width.
 func Docked(width float32) bool { return width < NarrowWidth }

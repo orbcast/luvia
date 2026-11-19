@@ -315,7 +315,7 @@ func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBa
 	}
 	n := float32(len(names))
 	capsuleWidth := n*design.WindowControlWidth + (n-1)*design.WindowControlGap + 2*design.WindowControlPadding
-	top := max(bar.Bottom, design.WindowControlTop)
+	top := design.ChromeTop(bar.Bottom)
 	left := width - design.WindowControlInset - capsuleWidth
 	if atStart {
 		left = design.WindowControlInset
@@ -399,10 +399,9 @@ func navPanels(docked bool, width, height, barBottom float32) []navPanel {
 			pages:  pages[:],
 		}}
 	}
-	top := barBottom + design.NavigationTopGap
-	if top < barBottom+design.TitleBarGap {
-		top = barBottom + design.TitleBarGap
-	}
+	// The column starts on the same line as the window controls' capsule in
+	// the other corner, so the window's top reads as one row.
+	top := design.ChromeTop(barBottom)
 	// Search and settings sit at the bottom edge of the window, apart from
 	// the destinations that open browsing.
 	pinned := 2

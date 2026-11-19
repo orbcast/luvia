@@ -39,7 +39,7 @@ func (p *Page) View(c *ui.Context) ui.Element {
 		default:
 			p.scroll(c, t, m, width)
 		}
-		p.backButton(c, t, m)
+		p.backButton(c, t, m, width, c.TitleBar().Bottom)
 	})
 	return root
 }
@@ -69,8 +69,13 @@ func (p *Page) backdrop(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func (p *Page) backButton(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	back := ui.ButtonBase(c).Key("detail-back").Absolute().Left(24).Top(44).
+// backButton is the page's way out, kept in the window's top-left corner
+// outside the scrolling copy. Its top shares the line of the window controls
+// the AppShell floats in the other corner, and its left is the page's own
+// gutter, so it lines up with the copy it returns to rather than floating on
+// a number of its own.
+func (p *Page) backButton(c *ui.Context, t *ui.Theme, m locales.Messages, width float32, barBottom float32) {
+	back := ui.ButtonBase(c).Key("detail-back").Absolute().Left(pageInset(width)).Top(design.ChromeTop(barBottom)).
 		Size(40, 40).Radius(20).Material(glass.Glass{}).Label(m.Back()).Tooltip(m.Back()).ZIndex(30)
 	if back.Hovered() {
 		back.Material(glass.Glass{Interactive: true})

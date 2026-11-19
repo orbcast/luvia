@@ -92,6 +92,52 @@ func newDetailTester(t *testing.T, page *detail.Page) *ui.Tester {
 	return tt
 }
 
+// TestDetailBackButtonKeepsTheChromeLine covers where the way out sits: on the
+// window's one chrome line, at the page's own gutter, so it reads as part of
+// the copy it returns to instead of floating on a number of its own.
+func TestDetailBackButtonKeepsTheChromeLine(t *testing.T) {
+	src, ref := sampleTitle()
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := make(chan func(), 8)
+	page := detail.New(detail.Deps{
+		Source: src, Library: store, Run: func(fn func()) { run <- fn },
+		OnPlay: func(source.Detail, []source.Episode, int) {},
+		OnBack: func() {},
+	})
+	page.Open(ref)
+	apply(t, run)
+
+	for _, bar := range []ui.TitleBar{{}, {Height: 28, Bottom: 28, Left: 78}} {
+		tt := ui.NewTester(func(c *ui.Context) {
+			theme := design.Theme(ui.DarkTheme())
+			c.SetTheme(&theme)
+			page.View(c)
+		}, 1180, 716)
+		tt.SetTitleBar(bar)
+		tt.SetLocale("en")
+		tt.Frame()
+		box, ok := tt.Find("Back")
+		if !ok {
+			t.Fatalf("the back button is missing in %v", tt.Texts())
+		}
+		if d := box.Y - design.ChromeTop(bar.Bottom); d < -1 || d > 1 {
+			t.Fatalf("the back button starts at %v, not on the chrome line %v", box.Y, design.ChromeTop(bar.Bottom))
+		}
+		// The page's copy starts on the same gutter, so the button reads as
+		// part of the column it returns to.
+		copyBox, ok := tt.Find("Synopsis")
+		if !ok {
+			t.Fatalf("the page's copy is missing in %v", tt.Texts())
+		}
+		if box.X != copyBox.X {
+			t.Fatalf("the back button starts at %v, not at the copy's gutter %v", box.X, copyBox.X)
+		}
+	}
+}
+
 func TestDetailRendersPlaysAndSwitchesTabs(t *testing.T) {
 	src, ref := sampleTitle()
 	store, err := library.Open("")

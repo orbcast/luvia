@@ -99,7 +99,9 @@ func TestAppShellLayoutAndLocale(t *testing.T) {
 				if first.X < 8 || first.Y < 28 || last.Y+last.H > float32(size[1]) {
 					t.Fatalf("clipped navigation: %+v %+v", first, last)
 				}
-				top := float32(28 + design.NavigationTopGap + design.ShellPadding)
+				// The column starts on the window's one chrome line, which
+				// keeps the system title bar's room first.
+				top := design.ChromeTop(28) + design.ShellPadding
 				if d := first.Y - top; d < -1 || d > 1 {
 					t.Fatalf("column does not start under the title bar: %v", d)
 				}
