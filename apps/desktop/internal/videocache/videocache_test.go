@@ -656,6 +656,83 @@ func TestPrefetchIgnoresASingleMediaAddress(t *testing.T) {
 	}
 }
 
+// Warming is a guess about what comes next, so it may only use a share of the
+// budget: a viewer who has already warmed more than that stops being warmed
+// rather than pushing out what is being watched.
+func TestPrefetchStopsOnceWarmingFilledItsShare(t *testing.T) {
+	server, origin := newMediaServer(t, map[string][]byte{
+		"/v/index.m3u8": []byte("#EXTM3U\n#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXT-X-ENDLIST\n"),
+		"/v/seg0.ts":    []byte(strings.Repeat("0", 240)),
+		"/v/seg1.ts":    []byte(strings.Repeat("1", 240)),
+	})
+	// A budget of 1000 leaves a quarter, 250, for warming: the playlist and one
+	// segment fill it, so the second segment is left to the playback.
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client(), MaxBytes: 1000})
+	cache.Prefetch(server.URL + "/v/index.m3u8")
+	waitFor(t, func() bool { return origin.count("/v/seg0.ts") == 1 })
+	time.Sleep(200 * time.Millisecond)
+	if origin.count("/v/seg1.ts") != 0 {
+		t.Fatalf("warming went past its share: seg1 fetched %d times", origin.count("/v/seg1.ts"))
+	}
+}
+
+// Bytes stored ahead of need are the first thing eviction may drop, even when
+// they are newer than what a playback read: a warm-up must not take the room
+// that scrubbing back into the watched episode needs.
+func TestEvictionTakesUnwatchedBytesBeforeWatchedOnes(t *testing.T) {
+	watched := []byte(strings.Repeat("w", 600))
+	extra := []byte(strings.Repeat("e", 300))
+	server, _ := newMediaServer(t, map[string][]byte{
+		"/film.mp4":     watched,
+		"/extra.mp4":    extra,
+		"/v/index.m3u8": []byte("#EXTM3U\n#EXTINF:4,\nseg0.ts\n#EXT-X-ENDLIST\n"),
+		"/v/seg0.ts":    []byte(strings.Repeat("s", 64)),
+	})
+	dir := t.TempDir()
+	cache := newCache(t, dir, Options{Client: server.Client(), MaxBytes: 950})
+
+	get(t, cache.ProxyURL(server.URL+"/film.mp4"))
+	stored := cache.pathOf(keyOf(server.URL + "/film.mp4"))
+	if _, err := os.Stat(stored); err != nil {
+		t.Fatalf("the watched object was not stored: %v", err)
+	}
+
+	cache.Prefetch(server.URL + "/v/index.m3u8")
+	segment := cache.pathOf(keyOf(server.URL + "/v/seg0.ts"))
+	waitFor(t, func() bool {
+		_, err := os.Stat(segment)
+		return err == nil
+	})
+
+	// A playback stores another object and pushes the cache over budget. What
+	// has to go is the warm-up, not the episode already watched.
+	get(t, cache.ProxyURL(server.URL+"/extra.mp4"))
+	if _, err := os.Stat(segment); !os.IsNotExist(err) {
+		t.Fatalf("the warm-up survived eviction: %v", err)
+	}
+	if _, err := os.Stat(stored); err != nil {
+		t.Fatalf("the watched object was evicted for a warm-up: %v", err)
+	}
+}
+
+// A playback reading a warmed object turns it into wanted data, so eviction
+// stops preferring it as the first thing to drop.
+func TestReadingAWarmedObjectMakesItWanted(t *testing.T) {
+	server, _ := newMediaServer(t, map[string][]byte{
+		"/v/index.m3u8": []byte("#EXTM3U\n#EXT-X-ENDLIST\n"),
+	})
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client()})
+	key := keyOf(server.URL + "/v/index.m3u8")
+
+	cache.Prefetch(server.URL + "/v/index.m3u8")
+	waitFor(t, func() bool { return cache.warm(cache.pathOf(key)) })
+
+	get(t, cache.ProxyURL(server.URL+"/v/index.m3u8"))
+	if cache.warm(cache.pathOf(key)) {
+		t.Fatal("a warmed object stayed in the warm set after a playback read it")
+	}
+}
+
 func readRange(t *testing.T, rawURL, rangeHeader string) []byte {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodGet, rawURL, nil)

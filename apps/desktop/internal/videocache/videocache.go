@@ -8,7 +8,8 @@
 // for are fetched, and a partial object is kept as a growing prefix that later
 // ranges are cut from. An object larger than the whole cache budget is passed
 // straight through, the player's own request and all. Prefetch warms a playlist
-// the viewer is likely to open next.
+// the viewer is likely to open next, out of a share of the budget the playback
+// itself never has to give up.
 package videocache
 
 import (
@@ -49,6 +50,11 @@ const prefetchHops = 2
 // playlistLimit bounds how much of a prefetched object is read for parsing.
 const playlistLimit = 1 << 20
 
+// prefetchShare is the fraction of the byte budget the bytes written ahead of
+// need may occupy. Warming is a guess about what comes next; it must never take
+// the room a playback needs for what the viewer is actually watching.
+const prefetchShare = 4
+
 // playlistTag opens every HLS playlist.
 var playlistTag = []byte("#EXTM3U")
 
@@ -88,6 +94,11 @@ type Cache struct {
 	mu       sync.Mutex
 	total    int64
 	inflight map[string]*call
+
+	// unwatched holds the keys stored ahead of need and not read since. Those
+	// bytes are evicted before anything a playback asked for, so scrubbing back
+	// into what was just watched does not have to download it again.
+	unwatched map[string]struct{}
 }
 
 // call is one in-flight download shared by every request for the same URL.
@@ -107,6 +118,7 @@ func New(dir string, opts Options) (*Cache, error) {
 	c := &Cache{
 		dir: dir, maxBytes: opts.MaxBytes,
 		client: opts.Client, inflight: map[string]*call{},
+		unwatched: map[string]struct{}{},
 	}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	if c.maxBytes <= 0 {
@@ -230,6 +242,16 @@ func (c *Cache) prefetchObject(raw string) ([]byte, bool) {
 		c.mu.Unlock()
 		return nil, false
 	}
+	c.mu.Unlock()
+	if !c.prefetchRoom() {
+		return nil, false
+	}
+
+	c.mu.Lock()
+	if _, running := c.inflight[key]; running {
+		c.mu.Unlock()
+		return nil, false
+	}
 	c.inflight[key] = &call{done: make(chan struct{})}
 	c.mu.Unlock()
 
@@ -238,6 +260,9 @@ func (c *Cache) prefetchObject(raw string) ([]byte, bool) {
 
 	c.mu.Lock()
 	delete(c.inflight, key)
+	if err == nil {
+		c.unwatched[key] = struct{}{}
+	}
 	c.mu.Unlock()
 	if err != nil {
 		return nil, false
@@ -398,8 +423,10 @@ func (c *Cache) serveFromPart(w http.ResponseWriter, r *http.Request, part, raw 
 	w.WriteHeader(http.StatusPartialContent)
 	_, _ = io.Copy(w, io.NewSectionReader(source, start, end-start+1))
 	// A part is read the same way a complete object is, so it ages the same
-	// way: the prefix a playback keeps asking for must not look stale.
+	// way: the prefix a playback keeps asking for must not look stale. It also
+	// stops being a guess: a playback asked for these bytes.
 	c.touch(part)
+	c.watched(keyOf(raw))
 	return true
 }
 
@@ -676,6 +703,7 @@ func (c *Cache) serveFile(w http.ResponseWriter, r *http.Request, path, raw stri
 		return
 	}
 	w.Header().Set("Content-Type", contentTypeOf(path, raw))
+	c.watched(keyOf(raw))
 	http.ServeContent(w, r, "", info.ModTime(), file)
 }
 
@@ -787,6 +815,38 @@ func (c *Cache) addSize(path string, size int64) {
 	}
 }
 
+// prefetchRoom reports whether a transfer written ahead of need still fits. The
+// budget keeps a quarter of itself for warming, so a guess about what comes next
+// cannot push out what is being watched; a viewer who scrubs through more than
+// that simply stops being warmed.
+func (c *Cache) prefetchRoom() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.unwatched) == 0 {
+		// The playlist is the first object warmed and the one that names the
+		// rest; refusing it would leave nothing to warm at all.
+		return true
+	}
+	return c.warmBytes() < c.maxBytes/prefetchShare
+}
+
+// warmBytes sums the stored bytes nothing has read yet. The caller holds mu.
+func (c *Cache) warmBytes() int64 {
+	var total int64
+	for key := range c.unwatched {
+		total += partialSize(c.pathOf(key)) + partialSize(c.partOf(key))
+	}
+	return total
+}
+
+// watched drops key from the warm set: a playback read it, so its bytes are
+// wanted data now rather than a guess, and eviction may drop them last.
+func (c *Cache) watched(key string) {
+	c.mu.Lock()
+	delete(c.unwatched, key)
+	c.mu.Unlock()
+}
+
 // isCacheFile reports whether name is an object the cache owns bytes in. A part
 // file is a transfer still growing, and it counts: an object a player reads by
 // range never becomes complete, so leaving parts out would let them fill the
@@ -797,6 +857,11 @@ func isCacheFile(name string) bool {
 
 // evict removes the oldest objects until the cache is back within budget,
 // never removing the object just stored.
+//
+// Bytes written ahead of need go first, oldest first, because nothing has asked
+// for them yet; only then does the cache fall back to the least recently read
+// object. Without that order a warm-up could take the room a playback needs and
+// make scrubbing back into what was just watched download it again.
 func (c *Cache) evict(keep string) {
 	type entry struct {
 		path string
@@ -821,7 +886,13 @@ func (c *Cache) evict(keep string) {
 		entries = append(entries, entry{path: full, size: info.Size(), mod: info.ModTime()})
 		total += info.Size()
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].mod.Before(entries[j].mod) })
+	sort.Slice(entries, func(i, j int) bool {
+		warmI, warmJ := c.warm(entries[i].path), c.warm(entries[j].path)
+		if warmI != warmJ {
+			return warmI
+		}
+		return entries[i].mod.Before(entries[j].mod)
+	})
 	for _, item := range entries {
 		if total <= c.maxBytes {
 			break
@@ -831,11 +902,38 @@ func (c *Cache) evict(keep string) {
 		}
 		if removeErr := os.Remove(item.path); removeErr == nil {
 			total -= item.size
+			c.forget(item.path)
 		}
 	}
 	c.mu.Lock()
 	c.total = total
 	c.mu.Unlock()
+}
+
+// warm reports whether path holds bytes stored ahead of need.
+func (c *Cache) warm(path string) bool {
+	key := keyOfPath(path)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, warm := c.unwatched[key]
+	return warm
+}
+
+// forget drops an evicted file from the warm set.
+func (c *Cache) forget(path string) {
+	key := keyOfPath(path)
+	c.mu.Lock()
+	delete(c.unwatched, key)
+	c.mu.Unlock()
+}
+
+// keyOfPath recovers the cache key a file name carries.
+func keyOfPath(path string) string {
+	name := filepath.Base(path)
+	if trimmed, found := strings.CutSuffix(name, ".cache.part"); found {
+		return trimmed
+	}
+	return strings.TrimSuffix(name, ".cache")
 }
 
 // transferring reports whether path is the part file of a transfer still in
