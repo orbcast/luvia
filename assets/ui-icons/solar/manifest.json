@@ -390,6 +390,36 @@
       "sha256": "d8088d18903a82f8e2d313485a20b81f43df5227cd63c6008ec40e7915ee876d",
       "source": "https://api.iconify.design/solar/minimize-linear.svg"
     },
+    "solar:minimize-square-minimalistic-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/minimize-square-minimalistic-linear/",
+      "file": "solar--minimize-square-minimalistic-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "b97daa2edaee8438a3b584fb75a58b1a3bb0902768d9f152c7d9c1259c4067e4",
+      "source": "https://api.iconify.design/solar/minimize-square-minimalistic-linear.svg"
+    },
+    "solar:minus-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/minus-linear/",
+      "file": "solar--minus-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "d9fa328240ceb835e7ffb93610dc2a62b1e9f64126b8e79b0667e3d338a74992",
+      "source": "https://api.iconify.design/solar/minus-linear.svg"
+    },
     "solar:pause-bold": {
       "author": {
         "name": "480 Design",
@@ -554,6 +584,21 @@
       },
       "sha256": "8a2cb54df93098d895596567ebd45e7d32c2f52b169d186e700ca03394de070f",
       "source": "https://api.iconify.design/solar/skip-previous-linear.svg"
+    },
+    "solar:stop-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/stop-linear/",
+      "file": "solar--stop-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "cba3fb88e7595612a1bbd6b37b0865ed586215f91c8012141b029b3f9d959282",
+      "source": "https://api.iconify.design/solar/stop-linear.svg"
     },
     "solar:subtitles-linear": {
       "author": {

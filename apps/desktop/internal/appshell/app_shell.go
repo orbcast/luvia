@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/glass"
+	mglass "github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 	"luvia/apps/desktop/internal/design"
+	"luvia/apps/desktop/internal/glass"
 	"luvia/apps/desktop/internal/icons"
 	"luvia/apps/desktop/locales"
 )
@@ -198,7 +199,7 @@ func (s *Shell) View(c *ui.Context) {
 			ui.Box(c).Key(panel.key).Absolute().Left(panel.left).Top(panel.top).
 				Width(panel.width).Height(panel.height).Radius(design.ShellRadius).
 				Role(ui.RoleNavigation).Label(m.Navigation()).
-				Material(glass.Glass{}).ZIndex(10).Transition(navigationMotion)
+				Material(mglass.Glass{}).ZIndex(10).Transition(navigationMotion)
 		}
 		for _, panel := range panels {
 			for i, p := range panel.pages {
@@ -215,12 +216,10 @@ func (s *Shell) View(c *ui.Context) {
 }
 
 // WindowControl is one button of the window controls Luvia draws: the system's
-// are hidden (mygo.WindowOptions.HideWindowButtons) and these take their place,
-// at the edge and in the order the desktop puts its own.
+// are hidden (mygo.WindowOptions.HideWindowButtons) and these take their place.
 type WindowControl struct {
 	slot  int
 	key   string
-	icon  string
 	label func(locales.Messages) string
 	act   func(*mygo.Window)
 }
@@ -232,77 +231,107 @@ const (
 	maximizeSlot
 )
 
+// windowControls are the buttons a title bar asks Luvia for by name, in the
+// order a title bar reads them: the minimize dash, the maximize square, and
+// the close cross at the end.
 var windowControls = [3]WindowControl{
-	{slot: closeSlot, key: "close", icon: "close-linear", label: locales.Messages.CloseWindow,
-		act: func(w *mygo.Window) {
-			if w != nil {
-				w.Close()
-			}
-		}},
-	{slot: minimizeSlot, key: "minimize", icon: "minimize-linear", label: locales.Messages.MinimizeWindow,
+	{slot: minimizeSlot, key: "minimize", label: locales.Messages.MinimizeWindow,
 		act: func(w *mygo.Window) {
 			if w != nil {
 				w.Minimize()
 			}
 		}},
-	{slot: maximizeSlot, key: "maximize", icon: "maximize-linear", label: locales.Messages.MaximizeWindow,
+	{slot: maximizeSlot, key: "maximize", label: locales.Messages.MaximizeWindow,
 		act: func(w *mygo.Window) {
 			if w != nil {
 				w.ToggleMaximize()
 			}
 		}},
+	{slot: closeSlot, key: "close", label: locales.Messages.CloseWindow,
+		act: func(w *mygo.Window) {
+			if w != nil {
+				w.Close()
+			}
+		}},
 }
 
-// windowControls draws the window's buttons where the desktop puts them: at the
-// start of the title bar on macOS, at its end on Linux and Windows. It draws
-// none under a desktop that decorates windows itself and asks for none.
+// windowControlIcon is the figure of each window button: the dash a title bar
+// draws for minimize, and the square and the cross for maximize and close —
+// Solar's rounded square standing in for the desktop's sharp one, as nothing in
+// the collection is a bare square, and rounded suits the capsule they sit in.
+var windowControlIcon = map[string]string{
+	"minimize": "minus-linear",
+	"maximize": "maximize-linear",
+	"close":    "close-linear",
+}
+
+// windowControls draws the window's buttons in the capsule the AppShell floats
+// over the page: at the start of the title bar on macOS, at its end on Linux
+// and Windows. It draws none under a desktop that decorates windows itself
+// and asks for none.
 func (s *Shell) windowControls(c *ui.Context, theme *ui.Theme, m locales.Messages, bar ui.TitleBar, width float32) {
-	order := s.layout
-	if order.Empty() {
+	// The desktop's layout names the buttons and their order; one end holds
+	// the whole cluster, and the bar's own edge decides which.
+	atStart := len(s.layout.Start) > 0
+	names := s.layout.Start
+	if !atStart {
+		names = s.layout.End
+	}
+	if len(names) == 0 {
 		return
 	}
-	atStart := len(order.Start) > 0
-	x := width - design.ShellInset - design.WindowControlSize
+	n := float32(len(names))
+	capsuleWidth := n*design.WindowControlWidth + (n-1)*design.WindowControlGap + 2*design.WindowControlPadding
+	top := max(bar.Bottom, design.WindowControlTop)
+	left := width - design.WindowControlInset - capsuleWidth
 	if atStart {
-		x = design.ShellInset
+		left = design.WindowControlInset
 	}
-	step := float32(-(design.WindowControlSize + design.WindowControlGap))
-	if atStart {
-		step = design.WindowControlSize + design.WindowControlGap
-	}
-	top := max(bar.Bottom, design.TitleBarHeight-design.WindowControlSize) / 2
-	names := order.Start
-	if !atStart {
-		names = order.End
-	}
-	for _, name := range names {
-		slot := closeSlot
-		switch name {
-		case "minimize":
-			slot = minimizeSlot
-		case "maximize":
-			slot = maximizeSlot
+	ui.Row(c).Key("window-controls").Absolute().Left(left).Top(top).Radius(design.WindowControlRadius).
+		Padding(design.WindowControlPadding).Gap(design.WindowControlGap).AlignItems(ui.Center).ZIndex(21).
+		Material(glass.Surface{
+			Fill:      design.WindowControlFill(),
+			Border:    design.WindowControlBorder(),
+			Highlight: design.WindowControlHighlight(),
+			Shadow:    design.WindowControlShadow(),
+			Lift:      10, Softness: 28, Spread: -10,
+			Blur: 14,
+		}).Children(func() {
+		for _, name := range names {
+			slot := closeSlot
+			switch name {
+			case "minimize":
+				slot = minimizeSlot
+			case "maximize":
+				slot = maximizeSlot
+			}
+			s.windowControl(c, m, s.controls[slot])
 		}
-		s.windowControl(c, theme, m, s.controls[slot], x, top)
-		x += step
-	}
+	})
 }
 
-// windowControl draws one window button, a quiet circle that warms under the
-// pointer as the navigation buttons do.
-func (s *Shell) windowControl(c *ui.Context, theme *ui.Theme, m locales.Messages, control WindowControl, left, top float32) {
+// windowControl draws one window button: a figure on the capsule that only
+// lights as the pointer reaches it. The close button is the one that takes a
+// color there, red, as leaving the window is the one promise a color can keep.
+func (s *Shell) windowControl(c *ui.Context, m locales.Messages, control WindowControl) {
 	label := control.label(m)
-	button := ui.ButtonBase(c).Key("window-"+control.key).Absolute().Left(left).Top(top).
-		Size(design.WindowControlSize, design.WindowControlSize).Radius(design.NavigationRadius).
-		Label(label).Tooltip(label).TextColor(theme.TextMuted).Center().ZIndex(21)
-	switch {
-	case button.Pressed():
-		button.Background(theme.SurfacePressed).TextColor(theme.Text)
-	case button.Hovered():
-		button.Background(theme.SurfaceHover).TextColor(theme.Text)
+	button := ui.ButtonBase(c).Key("window-"+control.key).
+		Size(design.WindowControlWidth, design.WindowControlHeight).Radius(design.WindowControlRadius).
+		Label(label).Tooltip(label).TextColor(design.WindowControlInk()).Center()
+	fill := ui.Transparent
+	ink := design.WindowControlInk()
+	if !button.Pressed() {
+		if button.Hovered() {
+			fill, ink = design.WindowControlHover(), design.WindowControlInkHover()
+			if control.key == "close" {
+				fill = design.CloseHover()
+			}
+		}
 	}
+	button.Background(fill).TextColor(ink)
+	button.Translate(0, 0)
 	button.Children(func() {
-		ui.Icon(c, icons.Parse(control.icon)).Size(design.WindowControlIconSize, design.WindowControlIconSize)
+		ui.Icon(c, icons.Parse(windowControlIcon[control.key])).Size(design.WindowControlIconSize, design.WindowControlIconSize)
 	})
 	if button.Clicked() {
 		control.act(s.window)
@@ -398,9 +427,9 @@ func (s *Shell) navigationButton(c *ui.Context, theme *ui.Theme, m locales.Messa
 		// The selected destination wears transparent grey glass, and its
 		// filled figure takes the theme's text color: white in dark, black
 		// in light.
-		button.Material(glass.Glass{Tint: design.NavigationTint()}).TextColor(theme.Text).Current(ui.CurrentPage)
+		button.Material(mglass.Glass{Tint: design.NavigationTint()}).TextColor(theme.Text).Current(ui.CurrentPage)
 		if button.Hovered() || button.Pressed() {
-			button.Material(glass.Glass{Tint: design.NavigationTint(), Interactive: true})
+			button.Material(mglass.Glass{Tint: design.NavigationTint(), Interactive: true})
 		}
 	} else if button.Pressed() {
 		button.Background(theme.SurfacePressed).TextColor(theme.Text)

@@ -19,11 +19,20 @@ const (
 	TitleBarHeight     = 28
 	TitleBarGap        = 8
 
-	// WindowControlSize is the diameter of the window buttons the shell draws
-	// in place of the system's, WindowControlGap the space between them.
-	WindowControlSize     = 26
-	WindowControlGap      = 8
-	WindowControlIconSize = 15
+	// WindowControlWidth and WindowControlHeight are the hit area of each window
+	// button in the capsule the shell draws in place of the system's, and
+	// WindowControlGap the space between them. WindowControlPadding is the room
+	// between the buttons and the capsule's edge, WindowControlInset the room
+	// between the capsule and the window's edge, and WindowControlTop where the
+	// capsule starts.
+	WindowControlWidth    = 38
+	WindowControlHeight   = 32
+	WindowControlGap      = 2
+	WindowControlRadius   = 999
+	WindowControlIconSize = 16
+	WindowControlPadding  = 5
+	WindowControlInset    = 12
+	WindowControlTop      = 12
 	// NavigationTopGap keeps the column below the title bar instead of
 	// hugging it.
 	NavigationTopGap = 24
@@ -51,6 +60,30 @@ func NavigationTint() ui.Color { return ui.RGBA(128, 128, 128, 0.22) }
 // on. The intro is always dark, whatever the desktop appearance, so its blue
 // mark and white wordmark stay legible.
 func PlayIntroBackground() ui.Color { return ui.Hex("#0B0A0F") }
+
+// The window controls are a capsule of glass floating over the page, so they
+// keep one deep tint at either theme, as a title bar over artwork does.
+
+// WindowControlFill is the capsule's tint over the blurred backdrop.
+func WindowControlFill() ui.Color { return ui.RGBA(18, 20, 25, 0.55) }
+
+// WindowControlBorder is the hairline around the capsule, and
+// WindowControlHighlight the light along its top rim, as glass throws it.
+func WindowControlBorder() ui.Color    { return ui.RGBA(255, 255, 255, 0.14) }
+func WindowControlHighlight() ui.Color { return ui.RGBA(255, 255, 255, 0.10) }
+
+// WindowControlShadow lifts the capsule off the page.
+func WindowControlShadow() ui.Color { return ui.RGBA(0, 0, 0, 0.75) }
+
+// WindowControlInk is the controls' figure, and WindowControlInkHover the one
+// under the pointer; WindowControlHover is the wash a button takes there.
+func WindowControlInk() ui.Color      { return ui.RGBA(255, 255, 255, 0.80) }
+func WindowControlInkHover() ui.Color { return ui.RGBA(255, 255, 255, 1) }
+func WindowControlHover() ui.Color    { return ui.RGBA(255, 255, 255, 0.11) }
+
+// CloseHover is the one color the cluster gives a meaning: the close button
+// turns red under the pointer, the one button that leaves the window.
+func CloseHover() ui.Color { return ui.Hex("#E5484D") }
 
 // ShellGroupHeight is the glass panel around count destinations stacked in
 // a column: the padding on both ends and one gap between each pair.

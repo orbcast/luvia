@@ -210,30 +210,110 @@ func TestAppShellMovesBetweenColumnAndDock(t *testing.T) {
 // place of the system's: the desktop's layout decides which it has and where,
 // and a desktop that asks for none gets none.
 func TestAppShellDrawsWindowButtons(t *testing.T) {
-	names := func(s *appshell.Shell) []string {
+	buttons := func(s *appshell.Shell) (names []string, bounds ui.Rect) {
 		tt := ui.NewTester(s.View, 1100, 720)
 		tt.SetTitleBar(ui.TitleBar{Height: 28, Bottom: 28, Left: 78})
 		tt.SetLocale("en")
-		var out []string
 		for _, node := range tt.AccessAll() {
-			if node.Role == ui.RoleButton && strings.HasPrefix(node.Name, "Close window") ||
-				node.Role == ui.RoleButton && strings.HasPrefix(node.Name, "Minimize window") ||
-				node.Role == ui.RoleButton && strings.HasPrefix(node.Name, "Maximize window") {
-				out = append(out, node.Name)
+			if node.Role != ui.RoleButton || !strings.HasSuffix(node.Name, "window") {
+				continue
 			}
+			names = append(names, node.Name)
+			box := node.Bounds
+			if bounds.W == 0 {
+				bounds = box
+				continue
+			}
+			left, top := min(bounds.X, box.X), min(bounds.Y, box.Y)
+			bounds = ui.Rect{X: left, Y: top, W: max(bounds.X+bounds.W, box.X+box.W) - left, H: max(bounds.Y+bounds.H, box.Y+box.H) - top}
 		}
-		return out
+		return names, bounds
+	}
+	capsule := func(names int) (w, h float32) {
+		n := float32(names)
+		return n*design.WindowControlWidth + (n-1)*design.WindowControlGap + 2*design.WindowControlPadding,
+			design.WindowControlHeight + 2*design.WindowControlPadding
 	}
 
 	s := appshell.New()
 	s.SetWindowButtons(appshell.WindowButtons{End: []string{"minimize", "maximize", "close"}})
-	if got := names(s); len(got) != 3 {
-		t.Fatalf("a desktop with three window buttons got %v", got)
+	names, bounds := buttons(s)
+	// The capsule floats below the desktop's title bar, the buttons in its
+	// padding.
+	ty := float32(28 + design.WindowControlPadding)
+	if len(names) != 3 {
+		t.Fatalf("a desktop with three window buttons got %v", names)
+	}
+	if names[0] != "Minimize window" || names[2] != "Close window" {
+		t.Fatalf("the buttons read %v, not a title bar's order", names)
+	}
+	// The capsule floats one inset in from the window's edge; the buttons sit
+	// in its padding, so together they are the capsule's width less that.
+	w, _ := capsule(3)
+	w -= 2 * design.WindowControlPadding
+	// The capsule's hairline border takes a pixel of the room its padding
+	// asked for, so the buttons end within one of it.
+	edge := float32(1100 - design.WindowControlInset - design.WindowControlPadding)
+	if d := bounds.X + bounds.W - edge; d < -2 || d > 1 {
+		t.Fatalf("the window controls end at %v, not %v", bounds.X+bounds.W, edge)
+	}
+	if bounds.W != w || bounds.H != design.WindowControlHeight {
+		t.Fatalf("the window controls are %vx%v, not %vx%v", bounds.W, bounds.H, w, design.WindowControlHeight)
+	}
+	if d := bounds.Y - ty; d < 0 || d > 1 {
+		t.Fatalf("the buttons start at %v, not at the capsule's %v", bounds.Y, ty)
 	}
 
 	bare := appshell.New()
 	bare.SetWindowButtons(appshell.WindowButtons{})
-	if got := names(bare); len(got) != 0 {
+	if got, _ := buttons(bare); len(got) != 0 {
 		t.Fatalf("a desktop that asks for no buttons still got %v", got)
+	}
+}
+
+// TestAppShellWindowControlsTakeTheirPlaces covers the capsule's inner layout:
+// one hit area per button, apart by the gap the design sets, and at the start
+// of the title bar where the desktop puts them there.
+func TestAppShellWindowControlsTakeTheirPlaces(t *testing.T) {
+	s := appshell.New()
+	s.SetWindowButtons(appshell.WindowButtons{Start: []string{"close", "minimize", "maximize"}})
+
+	tt := ui.NewTester(s.View, 1100, 720)
+	tt.SetTitleBar(ui.TitleBar{Height: 28, Bottom: 28, Left: 78})
+	tt.SetLocale("en")
+
+	boxes := make(map[string]ui.Rect, 3)
+	for _, node := range tt.AccessAll() {
+		if node.Role == ui.RoleButton && strings.HasSuffix(node.Name, "window") {
+			boxes[node.Name] = node.Bounds
+		}
+	}
+	reset, ok := boxes["Close window"]
+	if !ok {
+		t.Fatalf("the close button is missing among %v", boxes)
+	}
+	wantStart := float32(design.WindowControlInset + design.WindowControlPadding)
+	if d := reset.X - wantStart; d < 0 || d > 1 {
+		t.Fatalf("the close button starts at %v, not at the capsule's start %v", reset.X, wantStart)
+	}
+	for _, name := range []string{"Minimize window", "Maximize window"} {
+		box, ok := boxes[name]
+		if !ok {
+			t.Fatalf("%s is missing among %v", name, boxes)
+		}
+		if box.W != design.WindowControlWidth || box.H != design.WindowControlHeight {
+			t.Fatalf("%s is %vx%v, not %vx%v", name, box.W, box.H, design.WindowControlWidth, design.WindowControlHeight)
+		}
+		if box.Y != reset.Y {
+			t.Fatalf("%s sits at %v, not beside the close button at %v", name, box.Y, reset.Y)
+		}
+	}
+	prev := reset
+	for _, name := range []string{"Minimize window", "Maximize window"} {
+		box := boxes[name]
+		if gap := box.X - (prev.X + prev.W); gap != design.WindowControlGap {
+			t.Fatalf("%s follows %v apart, not %v", name, gap, design.WindowControlGap)
+		}
+		prev = box
 	}
 }
