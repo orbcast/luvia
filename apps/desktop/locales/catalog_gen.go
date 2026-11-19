@@ -1424,6 +1424,96 @@ func (msgs Messages) DanmakuLabel() string {
 	return Catalog.Format(msgs.locale, "danmakuLabel", nil)
 }
 
+// DanmakuSettings says "Danmaku settings"
+// in the language the app shows.
+func DanmakuSettings() string { return In(i18n.Locale()).DanmakuSettings() }
+
+// DanmakuSettings says "Danmaku settings"
+// in the language of msgs.
+func (msgs Messages) DanmakuSettings() string {
+	return Catalog.Format(msgs.locale, "danmakuSettings", nil)
+}
+
+// DanmakuOpacity says "Opacity"
+// in the language the app shows.
+func DanmakuOpacity() string { return In(i18n.Locale()).DanmakuOpacity() }
+
+// DanmakuOpacity says "Opacity"
+// in the language of msgs.
+func (msgs Messages) DanmakuOpacity() string {
+	return Catalog.Format(msgs.locale, "danmakuOpacity", nil)
+}
+
+// DanmakuSize says "Text size"
+// in the language the app shows.
+func DanmakuSize() string { return In(i18n.Locale()).DanmakuSize() }
+
+// DanmakuSize says "Text size"
+// in the language of msgs.
+func (msgs Messages) DanmakuSize() string {
+	return Catalog.Format(msgs.locale, "danmakuSize", nil)
+}
+
+// DanmakuLanes says "Rows"
+// in the language the app shows.
+func DanmakuLanes() string { return In(i18n.Locale()).DanmakuLanes() }
+
+// DanmakuLanes says "Rows"
+// in the language of msgs.
+func (msgs Messages) DanmakuLanes() string {
+	return Catalog.Format(msgs.locale, "danmakuLanes", nil)
+}
+
+// DanmakuArea says "Screen area"
+// in the language the app shows.
+func DanmakuArea() string { return In(i18n.Locale()).DanmakuArea() }
+
+// DanmakuArea says "Screen area"
+// in the language of msgs.
+func (msgs Messages) DanmakuArea() string {
+	return Catalog.Format(msgs.locale, "danmakuArea", nil)
+}
+
+// PictureInPicture says "Picture in picture"
+// in the language the app shows.
+func PictureInPicture() string { return In(i18n.Locale()).PictureInPicture() }
+
+// PictureInPicture says "Picture in picture"
+// in the language of msgs.
+func (msgs Messages) PictureInPicture() string {
+	return Catalog.Format(msgs.locale, "pictureInPicture", nil)
+}
+
+// PlayLabel says "Play"
+// in the language the app shows.
+func PlayLabel() string { return In(i18n.Locale()).PlayLabel() }
+
+// PlayLabel says "Play"
+// in the language of msgs.
+func (msgs Messages) PlayLabel() string {
+	return Catalog.Format(msgs.locale, "playLabel", nil)
+}
+
+// MuteTrackLabel says "Volume level"
+// in the language the app shows.
+func MuteTrackLabel() string { return In(i18n.Locale()).MuteTrackLabel() }
+
+// MuteTrackLabel says "Volume level"
+// in the language of msgs.
+func (msgs Messages) MuteTrackLabel() string {
+	return Catalog.Format(msgs.locale, "muteTrackLabel", nil)
+}
+
+// DanmakuPanelUnfold says "Show danmaku settings"
+// in the language the app shows.
+func DanmakuPanelUnfold() string { return In(i18n.Locale()).DanmakuPanelUnfold() }
+
+// DanmakuPanelUnfold says "Show danmaku settings"
+// in the language of msgs.
+func (msgs Messages) DanmakuPanelUnfold() string {
+	return Catalog.Format(msgs.locale, "danmakuPanelUnfold", nil)
+}
+
 // Rewind10 says "Rewind 10 seconds"
 // in the language the app shows.
 func Rewind10() string { return In(i18n.Locale()).Rewind10() }

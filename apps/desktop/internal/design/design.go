@@ -343,5 +343,56 @@ func PlayerPanel(t *ui.Theme) (bg, border ui.Color) {
 // the icons read on any frame.
 func ControlVeil() ui.Color { return ui.RGBA(0, 0, 0, 0.38) }
 
+// PlayerPill is the glass the player's controls float in over the picture: its
+// fill and hairline, the light along its top rim, its drop shadow and how far
+// the backdrop behind it blurs. The values are the window controls' own, so a
+// pill over a frame and the capsule over a page read as one material.
+type PlayerPill struct {
+	Fill, Border, Highlight, Shadow ui.Color
+	Blur                            float32
+}
+
+// PlayerPillGlass returns the fill, border, highlight and shadow of the pill
+// the player's floating clusters sit in, and how far it blurs the backdrop.
+func PlayerPillGlass() PlayerPill {
+	return PlayerPill{
+		Fill:      ui.RGBA(20, 22, 27, 0.42),
+		Border:    ui.RGBA(255, 255, 255, 0.16),
+		Highlight: ui.RGBA(255, 255, 255, 0.10),
+		Shadow:    ui.RGBA(0, 0, 0, 0.85),
+		Blur:      26,
+	}
+}
+
+// The player's pill buttons: the figure at rest, the same figure under the
+// pointer, and the wash a button takes while it is on. The wash is stronger
+// than the hover so "on" reads through the pointer, and the ink goes full white
+// for both, as a lit control on glass.
+func PlayerControlInk() ui.Color       { return ui.RGBA(255, 255, 255, 0.80) }
+func PlayerControlActiveInk() ui.Color { return ui.RGBA(255, 255, 255, 1) }
+func PlayerControlHover() ui.Color     { return ui.RGBA(255, 255, 255, 0.13) }
+func PlayerControlOn() ui.Color        { return ui.RGBA(255, 255, 255, 0.16) }
+
+// PlayerPanelGlass is the floating now-playing panel's tint and hairline. It
+// keeps one deep tint at either theme, as a card laid over a frame does.
+func PlayerPanelGlass() (fill, border ui.Color) {
+	return PlayerPanelGlassFill(), PlayerPanelGlassBorder()
+}
+
+// PlayerPanelGlassFill and PlayerPanelGlassBorder are the panel's tint and
+// hairline on their own, for a popover that dresses itself in the same glass.
+func PlayerPanelGlassFill() ui.Color   { return ui.RGBA(20, 13, 23, 0.80) }
+func PlayerPanelGlassBorder() ui.Color { return ui.RGBA(255, 255, 255, 0.10) }
+
+// PlayerChip is the quiet surface of a control inside the player panel: the tab
+// rail, the sort chip and an episode number. Selected takes the brighter wash
+// and ink, which the picture's own controls use when the pointer is on them.
+func PlayerChip(selected bool) (bg, ink ui.Color) {
+	if selected {
+		return ui.RGBA(255, 255, 255, 0.20), ui.RGBA(255, 255, 255, 1)
+	}
+	return ui.RGBA(255, 255, 255, 0.07), ui.RGBA(255, 255, 255, 0.78)
+}
+
 // PlayerTrack is the unfilled part of the player's scrub track.
 func PlayerTrack() ui.Color { return ui.RGBA(255, 255, 255, 0.28) }
