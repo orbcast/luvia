@@ -79,20 +79,20 @@ type Shell struct {
 	// this view draws because the window hides the system's, and window is
 	// the window they act on. layout says where the desktop puts them, and an
 	// empty layout means it asks for none, as under a tiling compositor.
-	controls [3]WindowControl
+	controls map[string]WindowControl
 	window   *mygo.Window
 	layout   WindowButtons
 }
 
 func New() *Shell {
-	s := &Shell{lastWidth: -1}
+	s := &Shell{lastWidth: -1, controls: make(map[string]WindowControl, len(windowControls))}
 	for i, names := range navigationIcons {
 		for j, name := range names {
 			s.icons[i][j] = icons.Parse(name)
 		}
 	}
 	for _, control := range windowControls {
-		s.controls[control.slot] = control
+		s.controls[control.key] = control
 	}
 	return s
 }
@@ -184,7 +184,7 @@ func (s *Shell) View(c *ui.Context) {
 		}
 		ui.Row(c).Absolute().Top(0).Left(bar.Left).Right(bar.Right).
 			Height(max(design.TitleBarHeight, bar.Bottom)).DragWindow().ZIndex(20)
-		s.windowControls(c, &theme, m, bar, width)
+		s.windowControls(c, m, bar, width)
 		// The AppShell is placed by the window width: a dock along the bottom
 		// when it narrows, or, at the left edge, two panels split around the
 		// destinations that belong at the bottom. Panels and buttons are
@@ -218,36 +218,28 @@ func (s *Shell) View(c *ui.Context) {
 // WindowControl is one button of the window controls Luvia draws: the system's
 // are hidden (mygo.WindowOptions.HideWindowButtons) and these take their place.
 type WindowControl struct {
-	slot  int
 	key   string
 	label func(locales.Messages) string
 	act   func(*mygo.Window)
 }
 
-// slot is the control's place in the cluster, from the window's start.
-const (
-	closeSlot = iota
-	minimizeSlot
-	maximizeSlot
-)
-
 // windowControls are the buttons a title bar asks Luvia for by name, in the
 // order a title bar reads them: the minimize dash, the maximize square, and
 // the close cross at the end.
 var windowControls = [3]WindowControl{
-	{slot: minimizeSlot, key: "minimize", label: locales.Messages.MinimizeWindow,
+	{key: "minimize", label: locales.Messages.MinimizeWindow,
 		act: func(w *mygo.Window) {
 			if w != nil {
 				w.Minimize()
 			}
 		}},
-	{slot: maximizeSlot, key: "maximize", label: locales.Messages.MaximizeWindow,
+	{key: "maximize", label: locales.Messages.MaximizeWindow,
 		act: func(w *mygo.Window) {
 			if w != nil {
 				w.ToggleMaximize()
 			}
 		}},
-	{slot: closeSlot, key: "close", label: locales.Messages.CloseWindow,
+	{key: "close", label: locales.Messages.CloseWindow,
 		act: func(w *mygo.Window) {
 			if w != nil {
 				w.Close()
@@ -255,21 +247,48 @@ var windowControls = [3]WindowControl{
 		}},
 }
 
-// windowControlIcon is the figure of each window button: the dash a title bar
-// draws for minimize, and the square and the cross for maximize and close —
-// Solar's rounded square standing in for the desktop's sharp one, as nothing in
-// the collection is a bare square, and rounded suits the capsule they sit in.
-var windowControlIcon = map[string]string{
+// windowControlGlyph is the figure of each window button Solar draws: the dash
+// of minimize and the cross of close. The maximize square has no figure in the
+// collection that is a bare square, so windowControlSquare draws it.
+var windowControlGlyph = map[string]string{
 	"minimize": "minus-linear",
-	"maximize": "maximize-linear",
 	"close":    "close-linear",
+}
+
+// windowControlSquare draws the maximize figure a title bar uses: a sharp
+// square alone while the window is maximized, and the same square with a
+// second one stepped behind it at the bottom right while restoring would give
+// back a window, as every desktop draws the pair. It is one figure on the
+// button's size, in the color the desktop's window controls ink a glyph.
+func windowControlSquare(p *ui.Painter, r ui.Rect, maximized bool) {
+	for _, box := range windowControlSquareFrames(r, maximized) {
+		p.Stroke(box, design.WindowControlInk(), 1.5, 1.3)
+	}
+}
+
+// windowControlSquareFrames are the squares of windowControlSquare, as boxes
+// to stroke on a button of box r.
+func windowControlSquareFrames(r ui.Rect, maximized bool) []ui.Rect {
+	const (
+		size = 10
+		step = 3
+	)
+	left := r.X + (r.W-size-step)/2
+	top := r.Y + (r.H-size-step)/2
+	if maximized {
+		return []ui.Rect{{X: left + step/2, Y: top + step/2, W: size, H: size}}
+	}
+	return []ui.Rect{
+		{X: left + step, Y: top + step, W: size, H: size},
+		{X: left, Y: top, W: size, H: size},
+	}
 }
 
 // windowControls draws the window's buttons in the capsule the AppShell floats
 // over the page: at the start of the title bar on macOS, at its end on Linux
 // and Windows. It draws none under a desktop that decorates windows itself
 // and asks for none.
-func (s *Shell) windowControls(c *ui.Context, theme *ui.Theme, m locales.Messages, bar ui.TitleBar, width float32) {
+func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBar, width float32) {
 	// The desktop's layout names the buttons and their order; one end holds
 	// the whole cluster, and the bar's own edge decides which.
 	atStart := len(s.layout.Start) > 0
@@ -280,6 +299,7 @@ func (s *Shell) windowControls(c *ui.Context, theme *ui.Theme, m locales.Message
 	if len(names) == 0 {
 		return
 	}
+	maximized := s.window != nil && s.window.IsMaximized()
 	n := float32(len(names))
 	capsuleWidth := n*design.WindowControlWidth + (n-1)*design.WindowControlGap + 2*design.WindowControlPadding
 	top := max(bar.Bottom, design.WindowControlTop)
@@ -287,7 +307,7 @@ func (s *Shell) windowControls(c *ui.Context, theme *ui.Theme, m locales.Message
 	if atStart {
 		left = design.WindowControlInset
 	}
-	ui.Row(c).Key("window-controls").Absolute().Left(left).Top(top).Radius(design.WindowControlRadius).
+	cluster := ui.Row(c).Key("window-controls").Absolute().Left(left).Top(top).Radius(design.WindowControlRadius).
 		Padding(design.WindowControlPadding).Gap(design.WindowControlGap).AlignItems(ui.Center).ZIndex(21).
 		Material(glass.Surface{
 			Fill:      design.WindowControlFill(),
@@ -296,16 +316,14 @@ func (s *Shell) windowControls(c *ui.Context, theme *ui.Theme, m locales.Message
 			Shadow:    design.WindowControlShadow(),
 			Lift:      10, Softness: 28, Spread: -10,
 			Blur: 14,
-		}).Children(func() {
+		})
+	cluster.Children(func() {
 		for _, name := range names {
-			slot := closeSlot
-			switch name {
-			case "minimize":
-				slot = minimizeSlot
-			case "maximize":
-				slot = maximizeSlot
+			control, ok := s.controls[name]
+			if !ok {
+				continue
 			}
-			s.windowControl(c, m, s.controls[slot])
+			s.windowControl(c, m, control, maximized)
 		}
 	})
 }
@@ -313,7 +331,7 @@ func (s *Shell) windowControls(c *ui.Context, theme *ui.Theme, m locales.Message
 // windowControl draws one window button: a figure on the capsule that only
 // lights as the pointer reaches it. The close button is the one that takes a
 // color there, red, as leaving the window is the one promise a color can keep.
-func (s *Shell) windowControl(c *ui.Context, m locales.Messages, control WindowControl) {
+func (s *Shell) windowControl(c *ui.Context, m locales.Messages, control WindowControl, maximized bool) {
 	label := control.label(m)
 	button := ui.ButtonBase(c).Key("window-"+control.key).
 		Size(design.WindowControlWidth, design.WindowControlHeight).Radius(design.WindowControlRadius).
@@ -329,9 +347,13 @@ func (s *Shell) windowControl(c *ui.Context, m locales.Messages, control WindowC
 		}
 	}
 	button.Background(fill).TextColor(ink)
-	button.Translate(0, 0)
 	button.Children(func() {
-		ui.Icon(c, icons.Parse(windowControlIcon[control.key])).Size(design.WindowControlIconSize, design.WindowControlIconSize)
+		if control.key == "maximize" {
+			ui.Box(c).Size(design.WindowControlIconSize, design.WindowControlIconSize).
+				Draw(func(p *ui.Painter, r ui.Rect) { windowControlSquare(p, r, maximized) })
+			return
+		}
+		ui.Icon(c, icons.Parse(windowControlGlyph[control.key])).Size(design.WindowControlIconSize, design.WindowControlIconSize)
 	})
 	if button.Clicked() {
 		control.act(s.window)

@@ -40,7 +40,6 @@ ICONS = (
     ("close", "linear"),
     ("minus", "linear"),
     ("close-circle", "linear"),
-    ("maximize", "linear"),
     ("widget-2", "linear"),
     ("pause", "bold"),
     ("subtitles", "linear"),
