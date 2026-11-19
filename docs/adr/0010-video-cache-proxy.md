@@ -33,4 +33,4 @@
 
 HLS 能否真正播放仍取决于系统解码器：macOS 的 AVFoundation 原生支持，Linux 需要 `gstreamer1.0-plugins-bad` 提供 hlsdemux。开发用的 Linux 环境未安装该插件且无 root，真实 HLS 在本机仍不能播放，这与缓存无关。
 
-代理只在回环监听，仅放行 http/https。图片缓存（`internal/media`）仍是按 URL 累积、无淘汰，与本决策没有合并；容量与开关若要做成用户可配，放在设置页另议。
+代理只在回环监听，仅放行 http/https。图片缓存（`internal/media`）另有一套字节预算与淘汰，见 [ADR 0012](0012-artwork-cache-budget.md)；两者的容量若要做成用户可配，放在设置页另议。

@@ -96,7 +96,7 @@ func TestHeroBlendsIntoThePage(t *testing.T) {
 		{name: "light", dark: false, page: [3]uint8{0xF3, 0xEE, 0xF6}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			images := media.New(t.TempDir(), &http.Client{Transport: artworkTransport{whiteArtwork(t, 64, 36)}})
+			images := media.New(t.TempDir(), media.Options{Client: &http.Client{Transport: artworkTransport{whiteArtwork(t, 64, 36)}}})
 			images.SetRunner(func(fn func()) { fn() })
 			page := newHeroPage(t, images)
 			images.Prefetch("https://cdn.example/doctor-wide.jpg")

@@ -23,5 +23,6 @@
 - [0009 发现页由源规则首页与本地观看库组合](0009-home-page-and-local-library.md)
 - [0010 视频经本地缓存代理播放](0010-video-cache-proxy.md)
 - [0011 超分与杜比止步于系统播放层](0011-playback-layer-boundary.md)
+- [0012 图片缓存按字节预算淘汰](0012-artwork-cache-budget.md)
 
 新增决策时在本列表补一行，写完跑 `make rules` 确认索引、文件名和链接都在。

@@ -195,7 +195,7 @@ func openProfile(ctx context.Context, userData, cache string) profile {
 	if err != nil {
 		log.Printf("library %s: %v", libraryPath, err)
 	}
-	images := media.New(filepath.Join(cache, "artwork"), http.DefaultClient)
+	images := media.New(filepath.Join(cache, "artwork"), media.Options{})
 	video, err := videocache.New(filepath.Join(cache, "video"), videocache.Options{})
 	if err != nil {
 		log.Printf("video cache %s: %v", filepath.Join(cache, "video"), err)
