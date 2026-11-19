@@ -1,0 +1,23 @@
+--- a/ui/video/gst_linux.go
++++ b/ui/video/gst_linux.go
+@@ -100,12 +100,14 @@
+ 
+ 	gstMapRead = 1
+ 
+-	// gstMessageTypeOffset is where a GstMessage keeps its type, after
+-	// its GstMiniObject (GST_MESSAGE_TYPE).
+-	gstMessageTypeOffset = 64
+-	// gstBufferPTSOffset is where a GstBuffer keeps its PTS, after its
+-	// GstMiniObject and pool (GST_BUFFER_PTS).
+-	gstBufferPTSOffset = 72
++	// gstMessageTypeOffset is where a GstMessage keeps its type: a
++	// GstMessageType just after its GstMiniObject, which is a GType and
++	// two int32 (GST_MESSAGE_TYPE).
++	gstMessageTypeOffset = 16
++	// gstBufferPTSOffset is where a GstBuffer keeps its PTS: a
++	// GstClockTime just after its GstMiniObject and pool, which is a
++	// GType, two int32 and a pointer (GST_BUFFER_PTS).
++	gstBufferPTSOffset = 24
+ )
+ 
+ // gValue is a GValue: its type, and two words of value.

@@ -464,6 +464,11 @@ def check_text_hygiene(files: list[str]) -> list[str]:
             problems.append(f"{path}: 缺少结尾换行")
         if path.endswith((".md", ".png", ".webp")):
             continue
+        # A unified diff encodes an empty context line as a single space, so
+        # patches are exempt from the trailing-whitespace rule; strip them
+        # and the patch no longer applies.
+        if path.endswith(".patch"):
+            continue
         for line_no, line in enumerate(raw.split(b"\n"), 1):
             if line != line.rstrip(b" \t"):
                 problems.append(f"{path}:{line_no}: 行尾有多余空白")
