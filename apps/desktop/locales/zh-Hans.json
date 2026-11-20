@@ -134,6 +134,7 @@
   "buffering": "缓冲中…",
   "preparing": "正在准备播放…",
   "waited": "已等待 {time}",
+  "noPicture": "视频画面未能加载。",
   "loadSpeed": "{speed} MB/s",
   "loadSpeedKB": "{speed} KB/s",
   "episodeNumber": "第 {number} 集",

@@ -21,7 +21,16 @@ import (
 
 const requestTimeout = 30 * time.Second
 
-var errNoSource = errors.New("no source rule is configured")
+// frameTimeout bounds how long an opened stream may hold the stage without a
+// picture. An engine that never delivers its first frame reports no error of its
+// own, so the stage is the one that has to say so, rather than wait for good.
+const frameTimeout = 10 * time.Second
+
+var (
+	errNoSource = errors.New("no source rule is configured")
+	errNoFrame  = errors.New("the stream opened but gave no picture")
+	errNoURL    = errors.New("the line gave no address")
+)
 
 // notice classifies the failure a toolbar or panel reports.
 type notice int
@@ -31,6 +40,7 @@ const (
 	noticeUnavailable
 	noticeUnsupported
 	noticeFailed
+	noticeNoFrame
 )
 
 // Tab under the now-playing header.
@@ -70,10 +80,16 @@ type Page struct {
 
 	// opened and buffered time the two waits a viewer sits through: the line
 	// being resolved, and the engine holding a stream it has opened but not yet
-	// drawn. The stage reports how long they last and the cache how fast the
-	// bytes are coming.
+	// drawn. drawing is when the stage last saw the engine wait, which a stream
+	// that already drew may enter again. The stage reports how long they last
+	// and the cache how fast the bytes are coming.
 	opened   time.Time
 	buffered time.Time
+	drawing  time.Time
+
+	// openSeq is the open the page last asked for, on its own thread: a stream
+	// that opened for an earlier one is closed rather than taken up.
+	openSeq uint64
 
 	loading bool
 	err     error
@@ -84,9 +100,7 @@ type Page struct {
 	playing      bool
 	muted        bool
 	volume       float64
-	restore      float64   // level to return to when unmuting
-	volumeOpen   bool      // the speaker has its level track out
-	volumeUntil  time.Time // when the open track folds back on its own
+	restore      float64 // level to return to when unmuting
 	rate         float64
 	showSubtitle bool
 	danmaku      bool
@@ -110,10 +124,6 @@ var rates = []float64{1, 1.25, 1.5, 2, 0.75, 0.5}
 // muted, and unmuting restores this level.
 const defaultVolume = 0.7
 
-// volumeLinger is how long the level track stays out after the last time the
-// pointer touched the speaker or the track, before it folds back on its own.
-const volumeLinger = 4 * time.Second
-
 // New prepares the player. Call Open with a title and episode to start it.
 func New(deps Deps) *Page {
 	if deps.Run == nil {
@@ -131,6 +141,7 @@ func New(deps Deps) *Page {
 
 // Open resets the player to the chosen episode and resolves it.
 func (p *Page) Open(detail source.Detail, episodes []source.Episode, index int) {
+	p.cancelOpen()
 	p.releasePlayer()
 	p.detail, p.episodes, p.index = detail, episodes, index
 	p.lineID, p.playback = "", source.Playback{}
@@ -171,8 +182,10 @@ func (p *Page) resolve() {
 	src := p.deps.Source
 	line := p.lineID
 	p.loading, p.err, p.notice = true, nil, noticeNone
-	p.opened, p.buffered = time.Now(), time.Time{}
+	p.opened, p.buffered, p.drawing = time.Now(), time.Time{}, time.Time{}
 	p.invalidate()
+	p.cancelOpen()
+	openSeq := p.openSeq
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
@@ -199,17 +212,25 @@ func (p *Page) resolve() {
 			if err != nil {
 				p.err = err
 				p.releasePlayer()
-			} else {
-				p.playback = playback
-				p.appliedLine = playback.Line.ID
-				if line == "" {
-					p.lineID = playback.Line.ID
-				}
-				p.open(playback.URL)
-				p.record(episode, playback)
-				p.loadComments(ctx, episode, gen)
-				p.warmNext(episode, line, gen)
+				p.invalidate()
+				return
 			}
+			p.playback = playback
+			p.appliedLine = playback.Line.ID
+			if line == "" {
+				p.lineID = playback.Line.ID
+			}
+			p.record(episode, playback)
+			p.loadComments(ctx, episode, gen)
+			p.warmNext(episode, line, gen)
+			// The stream opens off this thread: an engine that opened and never
+			// drew would otherwise hold the page, and the wait it owes the viewer
+			// would never be drawn at all.
+			url := playback.URL
+			go func() {
+				system, err := p.open(url)
+				p.deps.Run(func() { p.takePlayer(system, err, openSeq) })
+			}()
 			p.invalidate()
 		})
 	}()
@@ -332,23 +353,39 @@ func (p *Page) flyingComments(now time.Duration) []flying {
 	return out
 }
 
-// open starts a system player for url, or records why it could not.
-func (p *Page) open(url string) {
-	p.releasePlayer()
+// open starts a system player for url, off the page's thread, which the engine
+// may take long to return from, or never return from at all. It returns what
+// OpenVideo gave, for the page's thread to take up with takePlayer.
+func (p *Page) open(url string) (*ui.VideoPlayer, error) {
 	if url == "" {
-		p.notice = noticeUnavailable
-		return
+		return nil, errNoURL
 	}
 	if p.deps.Cache != nil {
 		url = p.deps.Cache.ProxyURL(url)
 	}
-	system, err := p.deps.OpenVideo(url)
-	if err != nil {
-		p.notice = noticeUnsupported
+	return p.deps.OpenVideo(url)
+}
+
+// takePlayer takes up the stream open started for the open of seq, or drops it
+// when the page has moved on to another one, or closed: its player would
+// otherwise play a stream nobody asked for, and never be closed.
+func (p *Page) takePlayer(system *ui.VideoPlayer, err error, seq uint64) {
+	if seq != p.openSeq {
+		if system != nil {
+			system.Close()
+		}
 		return
 	}
-	p.player = system
+	p.releasePlayer()
+	if err != nil {
+		p.notice, p.err = noticeFailed, err
+		p.invalidate()
+		return
+	}
+	// The wait the stage shows is the stream's: it started when opening did, and
+	// the engine holds it until it draws.
 	p.buffered = time.Now()
+	p.player = system
 	system.SetVolume(p.volume)
 	system.SetRate(p.rate)
 	system.SetMuted(p.muted)
@@ -357,14 +394,58 @@ func (p *Page) open(url string) {
 	} else {
 		system.Pause()
 	}
+	p.invalidate()
 }
+
+// cancelOpen tells the open in flight, if any, that the page no longer wants
+// the stream it started: its player is closed when its open returns.
+func (p *Page) cancelOpen() { p.openSeq++ }
 
 func (p *Page) releasePlayer() {
 	if p.player != nil {
 		p.player.Close()
 		p.player = nil
 	}
-	p.buffered = time.Time{}
+	p.buffered, p.drawing = time.Time{}, time.Time{}
+}
+
+// watchEngine reports what the engine of the current stream failed at: an error
+// it raised, or a stream that held the stage without a picture for longer than
+// an opening may take. Both become the stage's own error, which is the one thing
+// a viewer can see, close and try again from. An engine that waits for data
+// without ever drawing is the same stall as one that never reports anything:
+// neither will wake the page again on its own, so the stage is what says so.
+func (p *Page) watchEngine() {
+	if p.player == nil || p.buffered.IsZero() {
+		return
+	}
+	if err := p.player.Err(); err != nil {
+		p.notice, p.err = noticeFailed, err
+		p.invalidate()
+		return
+	}
+	if p.player.Ready() || time.Since(p.buffered) < frameTimeout {
+		return
+	}
+	p.notice, p.err = noticeNoFrame, errNoFrame
+	p.invalidate()
+}
+
+// watchOpening reports an open that has held the stage longer than an opening
+// may take, the one wait the engine cannot report on: its open has not returned,
+// so there is no player yet, and nothing else would end the wait. It says so and
+// reports whether it did.
+func (p *Page) watchOpening() bool {
+	if p.player != nil || p.buffered.IsZero() {
+		return false
+	}
+	if time.Since(p.buffered) < frameTimeout {
+		return false
+	}
+	p.notice, p.err = noticeNoFrame, errNoFrame
+	p.cancelOpen()
+	p.invalidate()
+	return true
 }
 
 // record keeps the viewer's place in the library for the continue row.
@@ -509,63 +590,11 @@ func (p *Page) SetVolume(v float64) {
 // was silenced and when the slider sits at zero.
 func (p *Page) Audible() bool { return !p.muted && p.volume > 0 }
 
-// VolumeOpen reports whether the speaker has its level track out.
-func (p *Page) VolumeOpen() bool { return p.volumeOpen }
+// Muted reports whether the video was silenced from the speaker.
+func (p *Page) Muted() bool { return p.muted }
 
-// OpenVolume unfolds the level track beside the speaker.
-func (p *Page) OpenVolume() {
-	if p.volumeOpen {
-		return
-	}
-	p.volumeOpen = true
-	p.volumeUntil = time.Now().Add(volumeLinger)
-	p.invalidate()
-}
-
-// CloseVolume folds the level track back beside the speaker.
-func (p *Page) CloseVolume() {
-	if !p.volumeOpen {
-		return
-	}
-	p.volumeOpen, p.volumeUntil = false, time.Time{}
-	p.invalidate()
-}
-
-// ToggleVolumeSpeaker is the press on the speaker itself: it unfolds the level
-// track while it is away, and silences the video while it is out, folding the
-// track in at once so a second press never leaves the track open by accident.
-func (p *Page) ToggleVolumeSpeaker() {
-	if !p.volumeOpen {
-		p.OpenVolume()
-		return
-	}
-	p.volumeOpen, p.volumeUntil = false, time.Time{}
-	p.ToggleMute()
-	p.invalidate()
-}
-
-// KeepVolumeOpen holds the level track out for a few idle seconds, and folds it
-// back when they run out. The view calls it while the pointer rests on the
-// speaker or the track.
-func (p *Page) KeepVolumeOpen(now time.Time) {
-	if !p.volumeOpen {
-		return
-	}
-	deadline := now.Add(volumeLinger)
-	if deadline.After(p.volumeUntil) {
-		p.volumeUntil = deadline
-	}
-}
-
-// FoldVolume closes the level track once its idle time has passed. The view
-// calls it on the frames it asked for with After.
-func (p *Page) FoldVolume(now time.Time) {
-	if !p.volumeOpen || p.volumeUntil.IsZero() || now.Before(p.volumeUntil) {
-		return
-	}
-	p.volumeOpen, p.volumeUntil = false, time.Time{}
-	p.invalidate()
-}
+// Volume reports the level the track beside the speaker holds.
+func (p *Page) Volume() float64 { return p.volume }
 
 // ToggleDanmaku shows or hides the comment layer over the picture.
 func (p *Page) ToggleDanmaku() {

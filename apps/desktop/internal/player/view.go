@@ -77,18 +77,38 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 		// stream, which on a slow line is the longest wait of all; one that has
 		// its picture and waits for more data is buffering. Both say so, with the
 		// time they have taken, so neither looks like a stage that stopped. A
-		// notice of its own covers the stage instead.
+		// notice of its own covers the stage instead. The stage is also the only
+		// thing watching the engine: one that draws nothing never wakes the
+		// window again, so a wait that has run too long is seen here, and the
+		// stage says the stream gave no picture.
 		switch {
 		case p.notice != noticeNone:
-		case p.player.Buffering() || !p.player.Ready():
-			p.stageBuffering(c, m)
+		case p.player.Buffering():
+			p.stageBuffering(c, m, true)
+			p.watchEngine()
+		case !p.player.Ready():
+			p.stageBuffering(c, m, false)
+			p.watchEngine()
 		default:
 			// The picture is here and nothing is waited on: the next wait is a new
 			// one, timed from its own start.
-			p.buffered = time.Time{}
+			p.buffered, p.drawing = time.Time{}, time.Time{}
 		}
 	} else {
+		// No stream yet: either the line is still being resolved, which says so
+		// above, or its stream is opening. Opening is the engine's own work and
+		// may take long, or never return, so it is waited on here, off the
+		// stream's own clock, rather than on the page's thread. An open that
+		// holds the stage longer than an opening may take is reported, so a
+		// stream that never comes back is not a stage that waits for good.
 		p.stageFallback(c, t, m)
+		if p.notice == noticeNone {
+			if p.loading {
+				p.stageOpening(c, m)
+			} else if !p.watchOpening() {
+				p.stageBuffering(c, m, false)
+			}
+		}
 	}
 	p.stageDanmaku(c, width)
 	p.stageTop(c, t, m)
@@ -120,16 +140,27 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 // stageBuffering shows a quiet marker while the engine has opened the media but
 // not delivered its first frame, or while it waits for more of a stream. A wait
 // that lasts gets the same line the resolution wait has: how long, and how fast.
-func (p *Page) stageBuffering(c *ui.Context, m locales.Messages) {
+// buffering says which of the two the engine is doing, which reads differently
+// to a viewer, and times a wait that follows a picture from its own start.
+func (p *Page) stageBuffering(c *ui.Context, m locales.Messages, buffering bool) {
 	now := time.Now()
 	if p.buffered.IsZero() {
 		p.buffered = now
 	}
-	// The first frame is the opening wait, not a stall in the middle of one, and
-	// the two read differently to a viewer.
-	label := m.Buffering()
-	if !p.player.Ready() {
-		label = m.Preparing()
+	label := m.Preparing()
+	if buffering {
+		label = m.Buffering()
+		if p.drawing.IsZero() {
+			// A wait after a picture is timed from its own start, not from the
+			// frame that opened the stream.
+			p.drawing = now
+		}
+	} else {
+		p.drawing = time.Time{}
+	}
+	waited := now.Sub(p.buffered)
+	if !p.drawing.IsZero() {
+		waited = now.Sub(p.drawing)
 	}
 	// Waiting is a state the stage only learns about while it draws, so the line
 	// keeps asking for frames until the engine has its picture.
@@ -143,7 +174,7 @@ func (p *Page) stageBuffering(c *ui.Context, m locales.Messages) {
 			spin := float32(0.5 + 0.5*math.Sin(float64(now.UnixMilli())/260))
 			ui.Box(c).Width(12).Height(12).Radius(6).Border(1.5, ui.RGBA(255, 255, 255, 0.35+0.5*spin))
 			ui.Text(c, label).FontSize(13).TextColor(mediaInk)
-			ui.Text(c, p.waitText(m, now.Sub(p.buffered))).FontSize(12).TextColor(mediaMuted)
+			ui.Text(c, p.waitText(m, waited)).FontSize(12).TextColor(mediaMuted)
 		})
 	})
 }
@@ -169,6 +200,16 @@ func (p *Page) stageFallback(c *ui.Context, t *ui.Theme, m locales.Messages) {
 			Justify(ui.Center).AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Icon(c, icons.Parse("full-screen-linear")).Size(34, 34).TextColor(mediaMuted)
 			ui.Text(c, message).FontSize(13).TextColor(mediaMuted)
+			// A stage the stream never filled is a dead end without a way out
+			// that does not depend on the panel being open.
+			leave := ui.ButtonBase(c).Key("s-leave").Width(112).Height(30).Radius(15).
+				Label(m.ClosePlayer()).Tooltip(m.ClosePlayer()).Background(ui.Transparent)
+			leave.Children(func() {
+				ui.Text(c, m.ClosePlayer()).FontSize(12).TextColor(mediaInk)
+			})
+			if leave.Clicked() {
+				p.Back()
+			}
 		})
 	}
 }
@@ -183,25 +224,19 @@ func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
 		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(84).Top(top).
 			FontSize(13).Bold().TextColor(mediaInk)
 	}
-	if p.volumeOpen {
-		p.FoldVolume(time.Now())
-		if p.volumeOpen {
-			c.After(time.Until(p.volumeUntil))
-		}
-	}
 	cluster := top + stageMarkerSize/2 - (stageButtonSize+2*pillPadding)/2
 	p.playerPill(c, m, cluster)
 }
 
-// playerPill is the speaker / danmaku / panel-toggle cluster at the top-right.
+// playerPill is the level / speaker / danmaku / panel-toggle cluster at the top-right.
 // It is one capsule: the panel toggle turns into the reveal control when the
-// panel goes away, so the cluster never breaks into two floating pieces.
-//
-// The speaker keeps one accessible name, Mute: a press unfolds the level track,
-// and a press with the track out silences the video and folds the track away.
+// panel goes away, so the cluster never breaks into two floating pieces, and
+// the level is the thin white track beside the speaker that the system's own
+// player shows, never a slider that folds out and back.
 func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
 	ui.Row(c).Absolute().Right(24).Top(top).AlignItems(ui.Center).Gap(2).Radius(999).
 		Padding(pillPadding).Material(glass.Glass{}).Children(func() {
+		p.volumeTrack(c, m)
 		p.speaker(c, m)
 		p.pillButton(c, "danmaku", "chat-round-linear", m.DanmakuLabel(), p.danmaku, p.ToggleDanmaku)
 		if p.panelHidden {
@@ -212,59 +247,64 @@ func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
 	})
 }
 
-// speaker is the mute toggle, with the level track folding out beside it.
-func (p *Page) speaker(c *ui.Context, m locales.Messages) {
-	if p.volumeOpen {
-		p.volumeTrack(c, m)
+// volumeTrack is the level itself, a track with its filled part and knob, as
+// the system's player lays it beside the speaker. Pressing it sets the level
+// where the pointer lands and dragging along it keeps setting it.
+func (p *Page) volumeTrack(c *ui.Context, m locales.Messages) {
+	frac := float32(clampF(p.volume, 0, 1))
+	track := ui.ButtonBase(c).Key("p-volume").Width(volumeTrackWidth).Height(stageButtonSize).
+		Label(m.VolumeLabel()).Tooltip(m.VolumeLabel()).Background(ui.Transparent).Cursor(ui.CursorResizeEW)
+	track.Children(func() {
+		const barHeight, knob float32 = 4, 12
+		middle := (stageButtonSize - barHeight) / 2
+		ui.Box(c).Absolute().Left(0).Right(0).Top(middle).Height(barHeight).Radius(barHeight / 2).
+			Background(ui.RGBA(255, 255, 255, 0.28))
+		ui.Box(c).Absolute().Left(0).Top(middle).Height(barHeight).Radius(barHeight / 2).
+			Background(mediaInk).Width((volumeTrackWidth-knob)*frac + knob/2)
+		ui.Box(c).Absolute().Top((stageButtonSize-knob)/2).Left((volumeTrackWidth-knob)*frac).
+			Size(knob, knob).Radius(knob / 2).Background(mediaInk)
+	})
+	// Where the pointer is along the track is the level: a press sets it at
+	// once and every move of the drag follows it, so the level never lags
+	// behind the hand. A muted video comes back as soon as the level is raised.
+	if x, _, over := track.PointerPosition(); over && track.Pressed() {
+		p.SetVolume(clampF(float64(x)/float64(volumeTrackWidth-volumeKnob), 0, 1))
 	}
+}
+
+// speaker is the sound's switch, as on the system's player: a press silences
+// the video, or brings it back at the level the track holds.
+func (p *Page) speaker(c *ui.Context, m locales.Messages) {
 	tip := m.MuteLabel()
 	if p.Audible() {
 		tip = m.UnmuteLabel()
 	}
-	button := ui.ButtonBase(c).Key("p-mute").Size(stageButtonSize, stageButtonSize).Radius(999).Label(m.MuteLabel()).
-		Tooltip(tip).Background(ui.Transparent)
+	button := ui.ButtonBase(c).Key("p-mute").Size(stageButtonSize, stageButtonSize).Radius(999).
+		Label(m.MuteLabel()).Tooltip(tip).Background(ui.Transparent)
 	ink := mediaMuted
-	switch {
-	case !p.Audible():
-		ink = mediaMuted
-	case p.volumeOpen || button.Hovered():
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
+	if p.Audible() {
 		ink = mediaInk
+	}
+	if button.Hovered() {
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
 	}
 	icon := "volume-loud-linear"
 	if !p.Audible() {
 		icon = "volume-cross-linear"
 	}
 	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(18, 18).TextColor(ink) })
-	if p.volumeOpen && button.Hovered() {
-		p.KeepVolumeOpen(time.Now())
-	}
 	if button.Clicked() {
-		p.ToggleVolumeSpeaker()
+		p.ToggleMute()
 	}
 }
 
-// volumeTrack is the thin white level bar that folds out of the speaker;
-// pressing it sets the level and holds it out a little longer.
-func (p *Page) volumeTrack(c *ui.Context, m locales.Messages) {
-	const trackWidth float32 = 88
-	frac := float32(clampF(p.volume, 0, 1))
-	ui.Box(c).Width(trackWidth).Height(18).Children(func() {
-		track := ui.ButtonBase(c).Key("p-volume").Fill().Label(m.VolumeLabel()).Tooltip(m.VolumeLabel())
-		track.Children(func() {
-			ui.Box(c).Absolute().Left(0).Right(0).Top(7).Height(4).Radius(2).Background(ui.RGBA(255, 255, 255, 0.28))
-			ui.Box(c).Absolute().Left(0).Top(7).Height(4).Radius(2).Background(mediaInk).Width(trackWidth * frac)
-			ui.Box(c).Absolute().Top(4).Left(trackWidth*frac-5).Size(10, 10).Radius(5).Background(mediaInk)
-		})
-		if over := track.Hovered(); over {
-			p.KeepVolumeOpen(time.Now())
-		}
-		if x, _, over := track.PointerPosition(); over && track.Pressed() {
-			p.SetVolume(float64(x / trackWidth))
-			p.KeepVolumeOpen(time.Now())
-		}
-	})
-}
+// volumeTrackWidth is the length of the level track beside the speaker, and
+// volumeKnob the knob's diameter, which the travel stops short of so the knob
+// stays inside the track at either end.
+const (
+	volumeTrackWidth float32 = 110
+	volumeKnob       float32 = 12
+)
 
 // panelReveal is the single control the picture keeps while the side panel is
 // away: it brings the episode list and lines back when the viewer wants them.
@@ -604,6 +644,8 @@ func (p *Page) noticeText(m locales.Messages) string {
 		return m.VideoUnsupported()
 	case noticeFailed:
 		return m.PlaybackFailed()
+	case noticeNoFrame:
+		return m.NoPicture()
 	default:
 		if p.err != nil {
 			return p.err.Error()

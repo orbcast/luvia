@@ -130,6 +130,9 @@ func openWithSource(t *testing.T, addresses map[string]string, order []string) s
 	})
 	page.Open(box.detail, box.episodes, 0)
 	apply(t, run)
+	// The stream opens off the page's thread, so the work it hands back is a
+	// callback of its own: wait for it before reading what was opened.
+	apply(t, run)
 	if len(opened) != 1 {
 		t.Fatalf("player opened %d videos", len(opened))
 	}
@@ -237,7 +240,9 @@ func TestPlayerSwitchingEpisodeOnAStaleLineId(t *testing.T) {
 	})
 	page.Open(box.detail, box.episodes, 0)
 	apply(t, run)
+	apply(t, run)
 	page.Next()
+	apply(t, run)
 	apply(t, run)
 	if len(opened) != 2 {
 		t.Fatalf("the player opened %d videos, want the second episode too", len(opened))

@@ -344,6 +344,7 @@
   "buffering": "Buffering…",
   "preparing": "Preparing playback…",
   "waited": "Waiting {time}",
+  "noPicture": "The stream gave no picture.",
   "loadSpeed": "{speed} MB/s",
   "loadSpeedKB": "{speed} KB/s",
   "episodeNumber": "Episode {number}",

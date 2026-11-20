@@ -1634,6 +1634,16 @@ func (msgs Messages) Waited(time_ string) string {
 	return Catalog.Format(msgs.locale, "waited", map[string]any{"time": time_})
 }
 
+// NoPicture says "The stream gave no picture."
+// in the language the app shows.
+func NoPicture() string { return In(i18n.Locale()).NoPicture() }
+
+// NoPicture says "The stream gave no picture."
+// in the language of msgs.
+func (msgs Messages) NoPicture() string {
+	return Catalog.Format(msgs.locale, "noPicture", nil)
+}
+
 // LoadSpeed says "{speed} MB/s"
 // in the language the app shows.
 func LoadSpeed(speed string) string { return In(i18n.Locale()).LoadSpeed(speed) }
