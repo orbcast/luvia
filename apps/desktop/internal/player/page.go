@@ -22,8 +22,10 @@ import (
 const requestTimeout = 30 * time.Second
 
 // frameTimeout bounds how long an opened stream may hold the stage without a
-// picture. An engine that never delivers its first frame reports no error of its
-// own, so the stage is the one that has to say so, rather than wait for good.
+// picture, and how long a picture that came may stand still before it is taken
+// for the same stall. An engine that never delivers its first frame, or that
+// stops delivering them, reports no error of its own, so the stage is the one
+// that has to say so, rather than wait for good.
 const frameTimeout = 10 * time.Second
 
 var (
@@ -74,18 +76,30 @@ type Page struct {
 	index       int
 	lineID      string
 	appliedLine string
+	// passed are the lines this episode opened without a picture, which the next
+	// resolve skips, so the viewer is not shown the same failure twice.
+	passed []string
+	// lastFailure is what the engine said about the line it failed on, which the
+	// stage reports when no other line answers the episode.
+	lastFailure error
 
 	player   *ui.VideoPlayer
 	playback source.Playback
 
 	// opened and buffered time the two waits a viewer sits through: the line
 	// being resolved, and the engine holding a stream it has opened but not yet
-	// drawn. drawing is when the stage last saw the engine wait, which a stream
-	// that already drew may enter again. The stage reports how long they last
-	// and the cache how fast the bytes are coming.
+	// drawn. The stage reports how long they last and the cache how fast the
+	// bytes are coming. A wait after the picture came is timed from stallAt.
 	opened   time.Time
 	buffered time.Time
-	drawing  time.Time
+
+	// stallAt is when the playhead of a stream that already drew was last seen
+	// to move, and stallPos where it stood then. They are zero until the stage
+	// sees that stream at all, and a stream that stands still past them is the
+	// same stall as one that never drew: the engine will not say so by itself,
+	// so the stage is what says it.
+	stallAt  time.Time
+	stallPos time.Duration
 
 	// openSeq is the open the page last asked for, on its own thread: a stream
 	// that opened for an earlier one is closed rather than taken up.
@@ -145,6 +159,7 @@ func (p *Page) Open(detail source.Detail, episodes []source.Episode, index int) 
 	p.releasePlayer()
 	p.detail, p.episodes, p.index = detail, episodes, index
 	p.lineID, p.playback = "", source.Playback{}
+	p.passed, p.lastFailure = nil, nil
 	p.loading, p.err, p.notice, p.started = false, nil, noticeNone, false
 	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, true, false, true, true, false
 	p.expanded, p.tab, p.scrub, p.scrubbing = false, tabEpisodes, 0, false
@@ -181,28 +196,42 @@ func (p *Page) resolve() {
 	gen := p.gen
 	src := p.deps.Source
 	line := p.lineID
+	// The lines this resolve abandons are passed over by the one that takes
+	// over, for the rest of the episode: they already gave no picture.
+	passed := p.passed
+	known := p.playback
 	p.loading, p.err, p.notice = true, nil, noticeNone
-	p.opened, p.buffered, p.drawing = time.Now(), time.Time{}, time.Time{}
+	p.opened, p.buffered = time.Now(), time.Time{}
 	p.invalidate()
 	p.cancelOpen()
 	openSeq := p.openSeq
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		playback, err := src.Resolve(ctx, episode, line)
-		if source.IsKind(err, source.ErrNotFound) && line != "" {
-			// A line id is bound to one episode's listing, so the line the
-			// previous episode was watched on is gone here. Falls back to the
-			// episode's own default line instead of failing the switch.
-			playback, err = src.Resolve(ctx, episode, "")
-			line = ""
+		// The line the page asked for is resolved, unless the page is passing one
+		// over: the lines it already knows are enough to pick the next.
+		playback := known
+		var err error
+		if line != "" || len(passed) == 0 {
+			playback, err = src.Resolve(ctx, episode, line)
+			if source.IsKind(err, source.ErrNotFound) && line != "" {
+				// A line id is bound to one episode's listing, so the line the
+				// previous episode was watched on is gone here. Falls back to the
+				// episode's own default line instead of failing the switch.
+				playback, err = src.Resolve(ctx, episode, "")
+				line = ""
+			}
 		}
-		if err == nil && !mediaOffers(ctx, playback.URL) {
+		if err == nil && (len(passed) > 0 || !mediaOffers(ctx, playback.URL)) {
 			// Some lines answer with a poster image or an empty address while
-			// claiming mp4. Their URLs often look plain, so the first bytes are
-			// fetched to tell; the next line that answers with media takes over
-			// so the viewer sees a picture instead of buffering forever.
-			playback, err = firstPlayable(ctx, src, episode, playback)
+			// claiming mp4, and one may have just opened without a picture. Their
+			// URLs often look plain, so the next line that answers with media
+			// takes over, so the viewer sees a picture instead of buffering
+			// forever.
+			if passesOver(passed, playback.Line.ID) {
+				playback = source.Playback{Lines: playback.Lines}
+			}
+			playback, err = firstPlayable(ctx, src, episode, playback, passed)
 		}
 		p.deps.Run(func() {
 			if gen != p.gen {
@@ -215,9 +244,18 @@ func (p *Page) resolve() {
 				p.invalidate()
 				return
 			}
+			if playback.URL == "" && len(passed) > 0 {
+				// No other line answered: the lines that gave no picture are the
+				// episode's last word, and the stage says what the engine said about
+				// them, or that they drew none. The lines stay in the panel, so a
+				// viewer can pick another one by hand.
+				p.playback = playback
+				p.reportFailure()
+				return
+			}
 			p.playback = playback
 			p.appliedLine = playback.Line.ID
-			if line == "" {
+			if line == "" || passesOver(passed, line) {
 				p.lineID = playback.Line.ID
 			}
 			p.record(episode, playback)
@@ -378,8 +416,13 @@ func (p *Page) takePlayer(system *ui.VideoPlayer, err error, seq uint64) {
 	}
 	p.releasePlayer()
 	if err != nil {
-		p.notice, p.err = noticeFailed, err
-		p.invalidate()
+		// An engine that refused the stream gives way to another line, as one
+		// that opened and drew nothing does: the failure is the stage's word only
+		// once no other line answers.
+		p.lastFailure = err
+		if !p.RetryOtherLine() {
+			p.reportFailure()
+		}
 		return
 	}
 	// The wait the stage shows is the stream's: it started when opening did, and
@@ -406,28 +449,125 @@ func (p *Page) releasePlayer() {
 		p.player.Close()
 		p.player = nil
 	}
-	p.buffered, p.drawing = time.Time{}, time.Time{}
+	p.buffered = time.Time{}
+	p.stallAt, p.stallPos = time.Time{}, 0
 }
 
 // watchEngine reports what the engine of the current stream failed at: an error
-// it raised, or a stream that held the stage without a picture for longer than
-// an opening may take. Both become the stage's own error, which is the one thing
-// a viewer can see, close and try again from. An engine that waits for data
-// without ever drawing is the same stall as one that never reports anything:
-// neither will wake the page again on its own, so the stage is what says so.
+// it raised, a stream that held the stage without a picture for longer than an
+// opening may take, or one that drew and then stopped moving for as long. All
+// three become the stage's own error, which is the one thing a viewer can see,
+// close and try again from. An engine that waits for data without ever drawing,
+// or without ever moving again, is the same stall as one that never reports
+// anything: neither will wake the page again on its own, so the stage is what
+// says so.
 func (p *Page) watchEngine() {
-	if p.player == nil || p.buffered.IsZero() {
+	if p.player == nil {
 		return
 	}
 	if err := p.player.Err(); err != nil {
-		p.notice, p.err = noticeFailed, err
-		p.invalidate()
+		p.lastFailure = err
+		if !p.RetryOtherLine() {
+			p.reportFailure()
+		}
 		return
 	}
-	if p.player.Ready() || time.Since(p.buffered) < frameTimeout {
+	if p.player.Ready() {
+		if !p.stalled() {
+			return
+		}
+	} else if p.buffered.IsZero() || time.Since(p.buffered) < frameTimeout {
 		return
 	}
-	p.notice, p.err = noticeNoFrame, errNoFrame
+	// A line that opened without a picture, or that stopped giving them, gives
+	// way to the next one. The stage is told so only when no line answers, which
+	// is what the wait's last resort leaves the viewer with.
+	p.lastFailure = nil
+	if !p.RetryOtherLine() {
+		p.reportFailure()
+	}
+}
+
+// standing reports whether the playhead of a stream that drew has stood still
+// since the stage last looked, recording where it stood. It is the only sign an
+// engine gives that it has nothing to give: it goes on calling the stream
+// buffering long after the picture moves again, and goes on calling it playing
+// while the picture stands still, so neither of its own words is worth the wait
+// marker. A stream whose playhead reaches its end played out rather than stood
+// still, and one a viewer paused stands still by choice, so neither is one.
+func (p *Page) standing() bool {
+	if p.player == nil || !p.player.Ready() || !p.player.Playing() {
+		return false
+	}
+	at := p.position()
+	if total := p.duration(); total > 0 && at >= total {
+		return false
+	}
+	if p.stallAt.IsZero() || at != p.stallPos {
+		p.stallAt, p.stallPos = time.Now(), at
+		return false
+	}
+	return true
+}
+
+// stalled reports whether the playhead of a stream that drew has stood still for
+// longer than a wait may take, which the engine will not say by itself.
+func (p *Page) stalled() bool {
+	return p.standing() && time.Since(p.stallAt) >= frameTimeout
+}
+
+// RetryOtherLine gives up on the line the episode opened and moves it to the
+// next one that answers with media, for a stream that failed or gave no picture.
+// When the episode has no other line, the stage reports what the engine said
+// about this one, or that it drew no picture. It reports whether it acted, which
+// it cannot when no line is known yet.
+func (p *Page) RetryOtherLine() bool {
+	line := p.lineID
+	if line == "" {
+		line = p.appliedLine
+	}
+	if line == "" || passesOver(p.passed, line) {
+		return false
+	}
+	// The lines are copied out: a resolve in flight holds the slice it was
+	// handed, and must not see this one grow under it.
+	passed := append(append([]string(nil), p.passed...), line)
+	p.passed = passed
+	// The stream that failed goes with its line: kept, the stage would see it
+	// fail again on the next frame, and ask for another line every time.
+	p.releasePlayer()
+	if !p.offersAnotherLine(passed, line) {
+		p.reportFailure()
+		return true
+	}
+	p.lineID = ""
+	p.started = false
+	p.Start()
+	return true
+}
+
+// offersAnotherLine reports whether the episode has a line left to try, past the
+// ones it already gave up on.
+func (p *Page) offersAnotherLine(passed []string, line string) bool {
+	for _, offered := range p.playback.Lines {
+		if offered.ID == "" || offered.ID == line || passesOver(passed, offered.ID) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// reportFailure puts the failure on the stage in the engine's own words, or as a
+// stream that gave no picture when the engine said nothing. It is the last word
+// once no line is left to try.
+func (p *Page) reportFailure() {
+	p.releasePlayer()
+	if p.lastFailure != nil {
+		p.notice, p.err = noticeFailed, p.lastFailure
+	} else {
+		p.notice, p.err = noticeNoFrame, errNoFrame
+	}
 	p.invalidate()
 }
 

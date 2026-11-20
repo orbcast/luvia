@@ -199,19 +199,23 @@ func TestPlayerReportsAStreamThatGaveNoPicture(t *testing.T) {
 	}
 }
 
-// TestPlayerReportsAnEngineError covers a player that failed to open: the stage
-// reports the failure, rather than waiting out the timeout.
+// TestPlayerReportsAnEngineError covers a player that failed to open on the
+// episode's only line: the stage reports the failure, rather than waiting out
+// the timeout.
 func TestPlayerReportsAnEngineError(t *testing.T) {
-	st := openStage(t, func() (*ui.VideoPlayer, error) {
+	src, _ := sampleTitle()
+	src.playback.Lines = src.playback.Lines[:1]
+	s := newStage(t, src, func() (*ui.VideoPlayer, error) {
 		return nil, errors.New("test: the engine failed")
 	})
+	s.open(t, src)
+	s.frame(t)
 	m := locales.In("en")
-	st.frame(t)
 
-	if !st.tt.HasText(m.PlaybackFailed()) {
-		t.Fatalf("an engine error shows nothing of the failure: %v", st.tt.Texts())
+	if !s.tt.HasText(m.PlaybackFailed()) {
+		t.Fatalf("an engine error shows nothing of the failure: %v", s.tt.Texts())
 	}
-	if st.tt.HasText(m.Preparing()) {
-		t.Fatalf("the wait stayed over a failed engine: %v", st.tt.Texts())
+	if s.tt.HasText(m.Preparing()) {
+		t.Fatalf("the wait stayed over a failed engine: %v", s.tt.Texts())
 	}
 }

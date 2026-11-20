@@ -83,16 +83,26 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 		// stage says the stream gave no picture.
 		switch {
 		case p.notice != noticeNone:
-		case p.player.Buffering():
-			p.stageBuffering(c, m, true)
+		case p.stalled():
+			// The picture came and has stood still since, which the engine does
+			// not say: it is waited on, and past this long it is the same stall
+			// as a stream that never drew one.
+			p.stageBuffering(c, m)
 			p.watchEngine()
 		case !p.player.Ready():
-			p.stageBuffering(c, m, false)
+			p.stagePreparing(c, m)
 			p.watchEngine()
 		default:
-			// The picture is here and nothing is waited on: the next wait is a new
-			// one, timed from its own start.
-			p.buffered, p.drawing = time.Time{}, time.Time{}
+			// The picture is here and moving. It may still stop moving without
+			// the engine saying so, which only a stage that looks again can
+			// tell: one that plays keeps asking for frames, and standing is
+			// what says when the playhead has stopped for too long. A stream
+			// that played out, or that a viewer paused, stands still by itself.
+			p.buffered = time.Time{}
+			p.watchEngine()
+			if p.player != nil && p.player.Playing() {
+				c.After(waitTick)
+			}
 		}
 	} else {
 		// No stream yet: either the line is still being resolved, which says so
@@ -106,7 +116,7 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 			if p.loading {
 				p.stageOpening(c, m)
 			} else if !p.watchOpening() {
-				p.stageBuffering(c, m, false)
+				p.stagePreparing(c, m)
 			}
 		}
 	}
@@ -137,33 +147,33 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 	}
 }
 
-// stageBuffering shows a quiet marker while the engine has opened the media but
-// not delivered its first frame, or while it waits for more of a stream. A wait
-// that lasts gets the same line the resolution wait has: how long, and how fast.
-// buffering says which of the two the engine is doing, which reads differently
-// to a viewer, and times a wait that follows a picture from its own start.
-func (p *Page) stageBuffering(c *ui.Context, m locales.Messages, buffering bool) {
-	now := time.Now()
+// stageBuffering shows a quiet marker while the picture that came has stood
+// still for longer than a wait may take, timed from the frame the playhead
+// stopped on. The engine's own word for it is no use: it goes on calling a
+// moving stream buffering long after the picture came back.
+func (p *Page) stageBuffering(c *ui.Context, m locales.Messages) {
 	if p.buffered.IsZero() {
-		p.buffered = now
+		p.buffered = time.Now()
 	}
-	label := m.Preparing()
-	if buffering {
-		label = m.Buffering()
-		if p.drawing.IsZero() {
-			// A wait after a picture is timed from its own start, not from the
-			// frame that opened the stream.
-			p.drawing = now
-		}
-	} else {
-		p.drawing = time.Time{}
+	p.stageWaiting(c, m, p.stallAt, m.Buffering())
+}
+
+// stagePreparing shows the same marker while the engine opens a stream it has not
+// drawn yet, timed from the open: on a slow line that is the longest wait of all.
+func (p *Page) stagePreparing(c *ui.Context, m locales.Messages) {
+	if p.buffered.IsZero() {
+		p.buffered = time.Now()
 	}
-	waited := now.Sub(p.buffered)
-	if !p.drawing.IsZero() {
-		waited = now.Sub(p.drawing)
-	}
-	// Waiting is a state the stage only learns about while it draws, so the line
-	// keeps asking for frames until the engine has its picture.
+	p.stageWaiting(c, m, p.buffered, m.Preparing())
+}
+
+// stageWaiting draws the marker of a wait that began at since: what is waited on,
+// and for how long. A wait that lasts gets the same line the resolution wait has:
+// how long, and how fast. Waiting is a state the stage only learns about while it
+// draws, so the marker keeps asking for frames until the wait ends.
+func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, label string) {
+	now := time.Now()
+	waited := now.Sub(since)
 	c.After(waitTick)
 	ui.Row(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Justify(ui.Center).AlignItems(ui.Center).Children(func() {

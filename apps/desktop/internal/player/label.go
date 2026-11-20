@@ -17,11 +17,20 @@ func (p *Page) BackdateWait(age time.Duration) {
 	if age <= 0 {
 		return
 	}
-	for _, clock := range []*time.Time{&p.buffered, &p.drawing, &p.opened} {
+	for _, clock := range []*time.Time{&p.buffered, &p.opened, &p.stallAt} {
 		if !clock.IsZero() {
 			*clock = clock.Add(-age)
 		}
 	}
+}
+
+// BackdateStall moves the clock of a picture that stood still back by age, for a
+// test that needs a stream to have been stuck for longer than a wait may take.
+func (p *Page) BackdateStall(age time.Duration) {
+	if age <= 0 || p.stallAt.IsZero() {
+		return
+	}
+	p.stallAt = p.stallAt.Add(-age)
 }
 
 // SpeedLabel is the speed of a transfer, which the stage appends to a wait while

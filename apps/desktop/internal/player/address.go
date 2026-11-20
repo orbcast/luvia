@@ -69,24 +69,41 @@ func mediaOffers(ctx context.Context, raw string) bool {
 // firstPlayable walks the lines the source reported and resolves up to
 // lineBudget of them, taking the first that answers with media. A line whose
 // address is media on sight needs no check, so a long line list still settles
-// at once; the original playback stands when none does.
-func firstPlayable(ctx context.Context, src source.Source, episode source.Episode, current source.Playback) (source.Playback, error) {
+// at once; a line in passed, one that opened without a picture or failed on
+// the engine, is not offered again. The original playback stands when none does.
+func firstPlayable(ctx context.Context, src source.Source, episode source.Episode, current source.Playback, passed []string) (source.Playback, error) {
 	tried := 0
 	for _, line := range current.Lines {
-		if line.ID == "" || line.ID == current.Line.ID {
+		if line.ID == "" || line.ID == current.Line.ID || passesOver(passed, line.ID) {
 			continue
 		}
-		if tried >= lineBudget {
+		tried++
+		if tried > lineBudget {
 			break
 		}
-		tried++
 		next, err := src.Resolve(ctx, episode, line.ID)
 		if err != nil || !mediaOffers(ctx, next.URL) {
 			continue
 		}
 		return next, nil
 	}
+	if len(passed) > 0 {
+		// Nothing else answers: the episode has no line left, and the stage is
+		// what says so rather than opening the same stream again.
+		return source.Playback{Lines: current.Lines}, nil
+	}
 	return current, nil
+}
+
+// passesOver reports whether id is one of the lines an episode already gave up
+// on, which neither the resolve nor the walk over its lines offers again.
+func passesOver(passed []string, id string) bool {
+	for _, line := range passed {
+		if line == id {
+			return true
+		}
+	}
+	return false
 }
 
 // lineBudget bounds how many neighbouring lines are resolved and checked
