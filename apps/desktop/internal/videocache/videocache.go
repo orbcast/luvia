@@ -91,8 +91,16 @@ type Cache struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu       sync.Mutex
-	total    int64
+	mu    sync.Mutex
+	total int64
+	// shown is the transfer a wait reads a speed from, and shownSeq the place
+	// of the transfer it came from in the order transfers began.
+	shown    Transfer
+	shownSeq uint64
+	begun    uint64
+	// now is the clock transfers are timed by. Tests move it to read a speed
+	// without waiting on a network.
+	now      func() time.Time
 	inflight map[string]*call
 
 	// unwatched holds the keys stored ahead of need and not read since. Those
@@ -118,7 +126,7 @@ func New(dir string, opts Options) (*Cache, error) {
 	c := &Cache{
 		dir: dir, maxBytes: opts.MaxBytes,
 		client: opts.Client, inflight: map[string]*call{},
-		unwatched: map[string]struct{}{},
+		unwatched: map[string]struct{}{}, now: time.Now,
 	}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	if c.maxBytes <= 0 {
@@ -256,7 +264,10 @@ func (c *Cache) prefetchObject(raw string) ([]byte, bool) {
 	c.mu.Unlock()
 
 	parsed, _ := url.Parse(raw)
-	err := c.fetchRange(c.ctx, raw, parsed, path, part, 0, -1)
+	// A warm-up is fetched for an episode nobody is watching yet, so its
+	// transfer is not published: the speed a wait shows belongs to the
+	// playback that wait is on.
+	err := c.fetchRange(c.ctx, raw, parsed, path, part, 0, -1, false)
 
 	c.mu.Lock()
 	delete(c.inflight, key)
@@ -361,7 +372,7 @@ func (c *Cache) handle(w http.ResponseWriter, r *http.Request) {
 	c.inflight[key] = job
 	c.mu.Unlock()
 
-	job.err = c.fetchRange(r.Context(), raw, parsed, path, part, start, end)
+	job.err = c.fetchRange(r.Context(), raw, parsed, path, part, start, end, true)
 
 	// Let the next request in before this one is answered: a player may want
 	// a second range from the object this request is writing.
@@ -438,7 +449,7 @@ func (c *Cache) fail(w http.ResponseWriter, err error) {
 // cached in file, with a playlist rewritten. A partial one is appended to the
 // transfer's part file, starting from its own beginning, so every range a player
 // asks for later comes out of the same growing prefix.
-func (c *Cache) fetchRange(ctx context.Context, raw string, parsed *url.URL, file, part string, start, end int64) error {
+func (c *Cache) fetchRange(ctx context.Context, raw string, parsed *url.URL, file, part string, start, end int64, watch bool) error {
 	total, err := c.remoteSize(ctx, raw)
 	if err != nil {
 		return err
@@ -448,18 +459,19 @@ func (c *Cache) fetchRange(ctx context.Context, raw string, parsed *url.URL, fil
 	}
 	partial := start > 0 || (end >= 0 && total > 0 && end+1 < total)
 	if !partial {
-		return c.fetchWhole(ctx, raw, parsed, file)
+		return c.fetchWhole(ctx, raw, parsed, file, c.begin(0, watch))
 	}
 	// A later range is cut from the prefix the transfer stores; when the
 	// prefix does not reach it yet, the request is answered from upstream.
 	if end >= 0 && partialSize(part) < end+1 {
 		return errNotStored
 	}
-	return c.fetchPart(ctx, parsed, raw, part)
+	stored := partialSize(part)
+	return c.fetchPart(ctx, raw, parsed, part, c.begin(stored, watch))
 }
 
 // fetchWhole stores the entire object in file.
-func (c *Cache) fetchWhole(ctx context.Context, raw string, parsed *url.URL, file string) error {
+func (c *Cache) fetchWhole(ctx context.Context, raw string, parsed *url.URL, file string, moved *mover) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
 		return err
@@ -474,13 +486,13 @@ func (c *Cache) fetchWhole(ctx context.Context, raw string, parsed *url.URL, fil
 		response.Body.Close()
 		return fmt.Errorf("upstream %s: %d", parsed.Host, response.StatusCode)
 	}
-	return c.store(response, parsed, raw, file, 0)
+	return c.store(response, parsed, raw, file, 0, moved)
 }
 
 // fetchPart continues the transfer stored in part. The first request stores the
 // object from its start, because a player that is handed a prefix asks for the
 // bytes after it next, not for the offset it asked first.
-func (c *Cache) fetchPart(ctx context.Context, parsed *url.URL, raw, part string) error {
+func (c *Cache) fetchPart(ctx context.Context, raw string, parsed *url.URL, part string, moved *mover) error {
 	have := partialSize(part)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
@@ -499,12 +511,13 @@ func (c *Cache) fetchPart(ctx context.Context, parsed *url.URL, raw, part string
 		response.Body.Close()
 		return fmt.Errorf("upstream %s: %d", parsed.Host, response.StatusCode)
 	}
-	return c.store(response, parsed, raw, part, have)
+	return c.store(response, parsed, raw, part, have, moved)
 }
 
 // store copies response into file at offset, adding what it wrote to the cache
-// budget.
-func (c *Cache) store(response *http.Response, parsed *url.URL, raw, file string, offset int64) error {
+// budget and reporting the transfer while it runs, so a wait on these bytes has
+// a progress and a speed to show.
+func (c *Cache) store(response *http.Response, parsed *url.URL, raw, file string, offset int64, moved *mover) error {
 	defer response.Body.Close()
 	flags := os.O_CREATE | os.O_WRONLY
 	if offset == 0 {
@@ -512,12 +525,16 @@ func (c *Cache) store(response *http.Response, parsed *url.URL, raw, file string
 	} else {
 		flags |= os.O_APPEND
 	}
+	// The transfer ends with the copy, whether it finished or broke off: a wait
+	// that follows must not read back the speed of this one.
+	defer moved.settle()
 	target, err := os.OpenFile(file, flags, 0o644)
 	if err != nil {
 		return err
 	}
 	limit := c.maxBytes + 1
-	written, copyErr := io.Copy(target, io.LimitReader(response.Body, limit))
+	body := io.TeeReader(io.LimitReader(response.Body, limit), moved)
+	written, copyErr := io.Copy(target, body)
 	closeErr := target.Close()
 	if copyErr != nil {
 		return copyErr

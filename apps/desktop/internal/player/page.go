@@ -68,6 +68,13 @@ type Page struct {
 	player   *ui.VideoPlayer
 	playback source.Playback
 
+	// opened and buffered time the two waits a viewer sits through: the line
+	// being resolved, and the engine holding a stream it has opened but not yet
+	// drawn. The stage reports how long they last and the cache how fast the
+	// bytes are coming.
+	opened   time.Time
+	buffered time.Time
+
 	loading bool
 	err     error
 	notice  notice
@@ -164,6 +171,7 @@ func (p *Page) resolve() {
 	src := p.deps.Source
 	line := p.lineID
 	p.loading, p.err, p.notice = true, nil, noticeNone
+	p.opened, p.buffered = time.Now(), time.Time{}
 	p.invalidate()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
@@ -340,6 +348,7 @@ func (p *Page) open(url string) {
 		return
 	}
 	p.player = system
+	p.buffered = time.Now()
 	system.SetVolume(p.volume)
 	system.SetRate(p.rate)
 	system.SetMuted(p.muted)
@@ -355,6 +364,7 @@ func (p *Page) releasePlayer() {
 		p.player.Close()
 		p.player = nil
 	}
+	p.buffered = time.Time{}
 }
 
 // record keeps the viewer's place in the library for the continue row.
@@ -403,8 +413,12 @@ func (p *Page) SelectEpisode(i int) {
 	p.playback = source.Playback{}
 	p.comments, p.commentsNote = nil, false
 	p.notice, p.err = noticeNone, nil
+	// The previous episode's engine is taken down with its own picture, so the
+	// wait that follows starts from an empty stage instead of the last frame.
 	p.playing = true
 	p.started = false
+	p.buffered = time.Time{}
+	p.releasePlayer()
 	p.Start()
 }
 

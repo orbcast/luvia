@@ -2,6 +2,7 @@ package player
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -67,11 +68,24 @@ func (p *Page) View(c *ui.Context) ui.Element {
 // hide the only frame the player ever shows. Everything that covers the stage
 // goes under the video, or nothing of it would show.
 func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	if p.player != nil {
+	if p.loading && p.player == nil && p.notice == noticeNone {
+		p.stageOpening(c, m)
+	} else if p.player != nil {
 		p.stageFallback(c, t, m)
 		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Cover)
-		if p.notice == noticeNone && p.player.Buffering() {
+		// An engine that has not delivered its first frame is still opening the
+		// stream, which on a slow line is the longest wait of all; one that has
+		// its picture and waits for more data is buffering. Both say so, with the
+		// time they have taken, so neither looks like a stage that stopped. A
+		// notice of its own covers the stage instead.
+		switch {
+		case p.notice != noticeNone:
+		case p.player.Buffering() || !p.player.Ready():
 			p.stageBuffering(c, m)
+		default:
+			// The picture is here and nothing is waited on: the next wait is a new
+			// one, timed from its own start.
+			p.buffered = time.Time{}
 		}
 	} else {
 		p.stageFallback(c, t, m)
@@ -103,13 +117,33 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 	}
 }
 
-// stageBuffering shows a quiet marker while the system player has opened the
-// media but not yet delivered its first frame.
+// stageBuffering shows a quiet marker while the engine has opened the media but
+// not delivered its first frame, or while it waits for more of a stream. A wait
+// that lasts gets the same line the resolution wait has: how long, and how fast.
 func (p *Page) stageBuffering(c *ui.Context, m locales.Messages) {
+	now := time.Now()
+	if p.buffered.IsZero() {
+		p.buffered = now
+	}
+	// The first frame is the opening wait, not a stall in the middle of one, and
+	// the two read differently to a viewer.
+	label := m.Buffering()
+	if !p.player.Ready() {
+		label = m.Preparing()
+	}
+	// Waiting is a state the stage only learns about while it draws, so the line
+	// keeps asking for frames until the engine has its picture.
+	c.After(waitTick)
 	ui.Row(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-		ui.Row(c).Radius(999).Padding(8, 16).Background(ui.RGBA(0, 0, 0, 0.5)).Children(func() {
-			ui.Text(c, m.Buffering()).FontSize(13).TextColor(mediaInk)
+		ui.Row(c).Radius(999).Padding(8, 16).Background(ui.RGBA(0, 0, 0, 0.5)).
+			AlignItems(ui.Center).Gap(10).Children(func() {
+			// A ring that fades in and out: the wait is the engine's, so the
+			// only thing moving is the marker saying so.
+			spin := float32(0.5 + 0.5*math.Sin(float64(now.UnixMilli())/260))
+			ui.Box(c).Width(12).Height(12).Radius(6).Border(1.5, ui.RGBA(255, 255, 255, 0.35+0.5*spin))
+			ui.Text(c, label).FontSize(13).TextColor(mediaInk)
+			ui.Text(c, p.waitText(m, now.Sub(p.buffered))).FontSize(12).TextColor(mediaMuted)
 		})
 	})
 }

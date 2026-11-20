@@ -1614,6 +1614,46 @@ func (msgs Messages) Buffering() string {
 	return Catalog.Format(msgs.locale, "buffering", nil)
 }
 
+// Preparing says "Preparing playback…"
+// in the language the app shows.
+func Preparing() string { return In(i18n.Locale()).Preparing() }
+
+// Preparing says "Preparing playback…"
+// in the language of msgs.
+func (msgs Messages) Preparing() string {
+	return Catalog.Format(msgs.locale, "preparing", nil)
+}
+
+// Waited says "Waiting {time}"
+// in the language the app shows.
+func Waited(time_ string) string { return In(i18n.Locale()).Waited(time_) }
+
+// Waited says "Waiting {time}"
+// in the language of msgs.
+func (msgs Messages) Waited(time_ string) string {
+	return Catalog.Format(msgs.locale, "waited", map[string]any{"time": time_})
+}
+
+// LoadSpeed says "{speed} MB/s"
+// in the language the app shows.
+func LoadSpeed(speed string) string { return In(i18n.Locale()).LoadSpeed(speed) }
+
+// LoadSpeed says "{speed} MB/s"
+// in the language of msgs.
+func (msgs Messages) LoadSpeed(speed string) string {
+	return Catalog.Format(msgs.locale, "loadSpeed", map[string]any{"speed": speed})
+}
+
+// LoadSpeedKB says "{speed} KB/s"
+// in the language the app shows.
+func LoadSpeedKB(speed string) string { return In(i18n.Locale()).LoadSpeedKB(speed) }
+
+// LoadSpeedKB says "{speed} KB/s"
+// in the language of msgs.
+func (msgs Messages) LoadSpeedKB(speed string) string {
+	return Catalog.Format(msgs.locale, "loadSpeedKB", map[string]any{"speed": speed})
+}
+
 // EpisodeNumber says "Episode {number}"
 // in the language the app shows.
 func EpisodeNumber(number string) string { return In(i18n.Locale()).EpisodeNumber(number) }
