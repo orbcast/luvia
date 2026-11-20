@@ -319,3 +319,39 @@ func TestAppShellWindowControlsTakeTheirPlaces(t *testing.T) {
 		prev = box
 	}
 }
+
+// TestAppShellKeepsThePlayersTopButtonsClickable covers the strip that drags
+// the window by its title bar: the player hangs its own cluster of buttons at
+// the top of the picture, and a strip laid over it took their presses and moved
+// the window instead, so the panel toggle did nothing while the player filled
+// the screen.
+func TestAppShellKeepsThePlayersTopButtonsClickable(t *testing.T) {
+	s := appshell.New()
+	pressed := 0
+	// The player's top cluster, at the place the player puts it: the pill
+	// starts below the marker's line, inside the title bar's height.
+	s.SetContent(func(c *ui.Context) ui.Element {
+		button := ui.ButtonBase(c).Key("probe").Absolute().Right(24).Top(9.5).Size(34, 34).
+			Label("Show panel").Background(ui.Transparent)
+		button.Children(func() { ui.Text(c, "Show panel").FontSize(1) })
+		if button.Clicked() {
+			pressed++
+		}
+		return ui.Box(c).Fill()
+	})
+
+	tt := ui.NewTester(s.View, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	// The player owns the window: its own buttons take the presses at the top.
+	s.SetNavigationHidden(true)
+	tt.Frame()
+	if err := tt.Click("Show panel"); err != nil {
+		t.Fatalf("the player's top button is unreachable: %v", err)
+	}
+	tt.Frame()
+	if pressed != 1 {
+		t.Fatalf("the strip took the press meant for the player's button: %d clicks", pressed)
+	}
+}

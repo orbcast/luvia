@@ -15,6 +15,11 @@ import (
 
 //go:generate python3 -B ../../../../scripts/generate-desktop-icons.py
 
+// playerTopEdge is how much of the window's top the player's own buttons
+// leave free to drag the window by: its cluster hangs below the title bar's
+// line, and only the line itself, where no button sits, stays a drag strip.
+const playerTopEdge float32 = 9
+
 // Page identifies an application-level destination. Its content is not implemented yet.
 type Page int
 
@@ -192,8 +197,18 @@ func (s *Shell) View(c *ui.Context) {
 				s.content(c)
 			})
 		}
+		// The strip that drags the window by its title bar gives the player its
+		// top edge: the player hangs its own cluster of buttons there, and a
+		// strip laid over it would take their presses and move the window
+		// instead. The player is the one screen that fills the window and keeps
+		// the whole title line a drag strip of its own, so the shell leaves it
+		// the room its buttons need.
+		strip := max(design.TitleBarHeight, bar.Bottom)
+		if s.navHidden {
+			strip = playerTopEdge
+		}
 		ui.Row(c).Absolute().Top(0).Left(bar.Left).Right(bar.Right).
-			Height(max(design.TitleBarHeight, bar.Bottom)).DragWindow().ZIndex(20)
+			Height(strip).DragWindow().ZIndex(20)
 		if !s.controlsHidden {
 			s.windowControls(c, m, bar, width)
 		}

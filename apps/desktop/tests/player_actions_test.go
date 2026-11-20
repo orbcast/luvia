@@ -8,7 +8,6 @@ import (
 	"image/color"
 	"image/gif"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -45,10 +44,6 @@ func newGIFPlayer(t *testing.T) *ui.VideoPlayer {
 	return pl
 }
 
-// volumeLingerForTest is longer than the player's idle time for the level
-// track, so folding it is due without waiting in a test.
-const volumeLingerForTest = 5 * time.Second
-
 func TestPlayerControlsWithVideo(t *testing.T) {
 	src, _ := sampleTitle()
 	src.playback.URL = "mem://clip"
@@ -69,15 +64,12 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 	tt.SetLocale("en")
 	tt.Frame()
 
-	// The overlay carries the speaker, the danmaku toggle, the panel toggle and
-	// the two ten-second seeks. The level track stays folded until asked for.
-	for _, label := range []string{"Mute", "Danmaku", "Show panel", "Rewind 10 seconds", "Forward 10 seconds"} {
+	// The overlay carries the level track beside the speaker, the danmaku
+	// toggle, the panel toggle and the two ten-second seeks.
+	for _, label := range []string{"Volume", "Mute", "Danmaku", "Show panel", "Rewind 10 seconds", "Forward 10 seconds"} {
 		if !tt.HasText(label) {
 			t.Fatalf("overlay lost %q: %v", label, tt.Texts())
 		}
-	}
-	if tt.HasText("Volume") {
-		t.Fatalf("the level track must stay folded at first: %v", tt.Texts())
 	}
 	for _, label := range []string{"Rewind 10 seconds", "Forward 10 seconds"} {
 		if err := tt.Click(label); err != nil {
@@ -94,49 +86,85 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 	}
 	tt.Frame()
 
-	// A player opens silent, and a press on the speaker unfolds the level track.
+	// A player opens silent, with the level track already beside the speaker
+	// as the system's player keeps it, not a slider that folds out on a press.
 	if page.Audible() {
 		t.Fatal("a fresh player must start muted")
+	}
+	if _, ok := tt.Find("Volume"); !ok {
+		t.Fatalf("the level track is missing among %v", tt.Texts())
 	}
 	if err := tt.Click("Mute"); err != nil {
 		t.Fatalf("click speaker: %v", err)
 	}
 	tt.Frame()
-	if !page.VolumeOpen() {
-		t.Fatal("the speaker did not unfold the level track")
-	}
-	if !tt.HasText("Volume") {
-		t.Fatalf("the unfolded track is missing: %v", tt.Texts())
-	}
-
-	// A second press silences the video and folds the track away.
-	page.ToggleMute()
-	tt.Frame()
 	if !page.Audible() {
-		t.Fatal("unmuting kept the video silent")
+		t.Fatal("the speaker did not unmute the video")
 	}
 	if err := tt.Click("Mute"); err != nil {
 		t.Fatalf("click speaker again: %v", err)
 	}
 	tt.Frame()
-	if page.VolumeOpen() {
-		t.Fatal("the second press must fold the level track away")
-	}
 	if page.Audible() {
-		t.Fatal("the second press must silence the video")
+		t.Fatalf("the second press must silence the video: %v", tt.Texts())
 	}
 
-	// The track folds back on its own once the viewer leaves it alone, from the
-	// moment it unfolds, without waiting for a touch first.
-	page.OpenVolume()
-	tt.Frame()
-	if !page.VolumeOpen() {
-		t.Fatal("opening the level track failed")
+	// The track is the level: pressing it at a place sets the level there, and
+	// dragging along it follows the hand, as the system's player does.
+	track, ok := tt.Find("Volume")
+	if !ok {
+		t.Fatalf("the level track is missing among %v", tt.Texts())
 	}
-	page.FoldVolume(time.Now().Add(volumeLingerForTest + time.Second))
-	tt.Frame()
-	if page.VolumeOpen() {
-		t.Fatal("the level track stayed out after its idle time")
+	const knob float32 = 12
+	// The Tester starts with the pointer outside the window, and a press there
+	// is no press, so the pointer comes onto the track first.
+	tt.Move(track.X+track.W/2, track.Y+track.H/2)
+	// drag travels along the track to x and lets go.
+	drag := func(x float32) {
+		t.Helper()
+		tt.Frame()
+		tt.Press(track.X+track.W/2, track.Y+track.H/2)
+		tt.Frame()
+		tt.Move(x, track.Y+track.H/2)
+		tt.Frame()
+		tt.Release(x, track.Y+track.H/2)
+		tt.Frame()
+	}
+	// levelAt is the level the track reports for a place on it.
+	levelAt := func(x float32) float64 {
+		return float64((x - track.X) / (track.W - knob))
+	}
+	// held reports the level the track sits at, within a pixel or so of the
+	// place the pointer left it.
+	held := func(x float32) bool {
+		want := levelAt(x)
+		return page.Volume() >= want-0.02 && page.Volume() <= want+0.02
+	}
+
+	// Pressing the far end out of silence brings the sound back at that level.
+	drag(track.X + track.W - knob)
+	if !page.Audible() {
+		t.Fatalf("raising the muted level kept the video silent: %v", tt.Texts())
+	}
+	if !held(track.X + track.W - knob) {
+		t.Fatalf("the far end of the track set the level to %v, not %v", page.Volume(), levelAt(track.X+track.W-knob))
+	}
+
+	// A drag back along the track follows the pointer without silencing the
+	// video on the way.
+	drag(track.X + track.W/2)
+	if !page.Audible() {
+		t.Fatalf("a drag to a quieter level silenced the video: %v", tt.Texts())
+	}
+	if !held(track.X + track.W/2) {
+		t.Fatalf("dragging along the track left the level at %v, not %v", page.Volume(), levelAt(track.X+track.W/2))
+	}
+
+	// A level dragged to the near end ends silent, as the system's own level
+	// track does at its bottom.
+	drag(track.X)
+	if page.Audible() {
+		t.Fatal("a level dragged to the near end should sound nothing")
 	}
 
 	// A level left at zero sounds nothing, and unmuting restores the sound
