@@ -205,6 +205,14 @@ func TestKindAndURLKindMapping(t *testing.T) {
 	urlKinds := map[string]string{
 		"": "mp4", "HLS": "hls", "m3u8": "hls", "https://cdn.test/a.m3u8": "hls",
 		"https://cdn.test/a.mp4": "mp4", "https://cdn.test/a": "mp4",
+		// A CDN address carries opaque tokens in its query. A token that
+		// spells a format name is not evidence of that format: this is the
+		// shape the hongguo playback address takes, and reading it as HLS
+		// sends a plain mp4 to the playlist path.
+		"https://v11.example/tos/cn/o8uBXAiHh6/?a=1&mime_type=video_mp4&rc=OWRkOTo2PDZnMzs1NDw3PEBpandvbXc5cmt3ZTMzNGhoM0AvNTE0": "mp4",
+		"https://cdn.test/ep.mp4?sign=hls":  "mp4",
+		"https://cdn.test/ep.m3u8?sign=mp4": "hls",
+		"https://cdn.test/ep#hls":           "mp4",
 	}
 	for raw, want := range urlKinds {
 		if got := inferURLKind(raw); got != want {

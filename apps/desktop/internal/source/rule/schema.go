@@ -132,7 +132,18 @@ type Request struct {
 	Headers []Header         `json:"headers,omitempty"`
 	Body    map[string]Value `json:"body,omitempty"`
 	Sign    *bool            `json:"sign,omitempty"`
+	// Response names the shape the answer arrives in. Empty and "json" read
+	// the body as JSON; "routerData" reads a page whose JSON sits in a
+	// `_ROUTER_DATA = {...}` assignment, which is how a server-rendered site
+	// ships the same payload it serves over its JSON endpoints.
+	Response string `json:"response,omitempty"`
 }
+
+// Response shapes a request may declare.
+const (
+	ResponseJSON       = "json"
+	ResponseRouterData = "routerData"
+)
 
 // Pair is one ordered query parameter. Values are templates so a constant
 // cannot be mistaken for a selector; pairs that render empty are omitted,
@@ -148,6 +159,11 @@ type Step struct {
 	Op string `json:"op"`
 	As string `json:"as,omitempty"`
 	Request
+
+	// When skips the step unless the value is true. A step that carries no
+	// condition always runs, which is how a block picks between the request
+	// that fits a keyword search and the one that browses a category.
+	When Value `json:"when,omitempty"`
 
 	// paginate only.
 	Mode     string `json:"mode,omitempty"`

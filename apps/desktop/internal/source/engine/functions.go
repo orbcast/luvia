@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -16,6 +17,20 @@ type scope struct {
 	vars map[string]any
 	// overrides replace a declared query value for this call, by key.
 	overrides map[string]string
+}
+
+// itemScope binds one item of a mapping walk. A list of plain strings, such as
+// an episode list of bare ids, reads its value as `item` and its position as
+// `index`, one-based. A list of objects keeps reading its own fields, because a
+// field lookup runs before these two names.
+func itemScope(item any, index int, vars map[string]any) scope {
+	bound := make(map[string]any, len(vars)+2)
+	for key, value := range vars {
+		bound[key] = value
+	}
+	bound["item"] = item
+	bound["index"] = index
+	return scope{item: item, vars: bound}
 }
 
 func (s *sourceImpl) resolveSelector(sel rule.Selector, sc scope) (any, bool) {
@@ -162,6 +177,21 @@ func callFunction(name string, args []any, found []bool) (any, bool) {
 			return nil, false
 		}
 		return list[len(list)-1], true
+	case "empty":
+		// A missing value counts as empty, which lets a rule ask whether a
+		// keyword was typed without checking the variable twice.
+		if !found[0] {
+			return true, true
+		}
+		if list, ok := args[0].([]any); ok {
+			return len(list) == 0, true
+		}
+		return toString(args[0]) == "", true
+	case "not":
+		if !found[0] {
+			return nil, false
+		}
+		return !toBool(args[0]), true
 	default:
 		return nil, false
 	}
@@ -296,12 +326,28 @@ func mapKind(raw string) string {
 // like an mp4.
 func kindSignal(raw string) string {
 	text := strings.ToLower(strings.TrimSpace(raw))
-	switch {
-	case text == "":
+	// A bare word is the declared kind, not an address.
+	switch text {
+	case "":
 		return ""
-	case strings.Contains(text, "hls"), strings.Contains(text, "m3u8"):
+	case "hls", "m3u8", "m3u":
 		return "hls"
-	case strings.Contains(text, "mp4"):
+	case "mp4", "m4v", "mov":
+		return "mp4"
+	}
+	// An address is judged by its path, never by its query or fragment: a
+	// CDN address carries opaque tokens in the query, and a token that happens
+	// to spell a format name is not evidence of that format.
+	path := text
+	if parsed, err := url.Parse(text); err == nil && parsed.Path != "" {
+		path = strings.ToLower(parsed.Path)
+	} else if cut := strings.IndexAny(path, "?#"); cut >= 0 {
+		path = path[:cut]
+	}
+	switch {
+	case strings.Contains(path, ".m3u8"), strings.Contains(path, ".m3u"):
+		return "hls"
+	case strings.HasSuffix(path, ".mp4"), strings.HasSuffix(path, ".m4v"), strings.HasSuffix(path, ".mov"):
 		return "mp4"
 	}
 	return ""

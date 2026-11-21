@@ -183,6 +183,10 @@ func TestValidateRejectsEachBrokenArea(t *testing.T) {
 		"resolve prefer":   base(`"resolve": {"steps": [{"op": "request", "as": "res", "path": "/play/{payload}"}], "lines": {"from": "res.lines[*]", "fields": {"id": "id", "url": "url"}, "preferUrlKind": "flv"}}`),
 		"resolve attempts": base(`"resolve": {"steps": [{"op": "request", "as": "res", "path": "/play/{payload}"}], "lines": {"from": "res.lines[*]", "fields": {"id": "id", "url": "url"}, "maxAttempts": -1}}`),
 		"exchange url":     base(`"resolve": {"steps": [{"op": "request", "as": "res", "path": "/play/{payload}"}], "lines": {"from": "res.lines[*]", "fields": {"id": "id", "url": "url"}, "exchange": {"ticket": "ticket", "request": {"path": "/line", "body": {"ticket": "ticket"}}}}}`),
+		"response":         base(`"home": {"steps": [{"op": "request", "as": "res", "path": "/v1/home", "response": "xml"}], "output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"}, "cards": {"from": "cards[*]", "fields": {"id": "id", "title": "t"}}}}`),
+		"when var":         base(`"home": {"steps": [{"op": "request", "as": "res", "path": "/v1/home", "when": {"template": "{bogus}"}}], "output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"}, "cards": {"from": "cards[*]", "fields": {"id": "id", "title": "t"}}}}`),
+		"from candidate":   base(`"home": {"steps": [{"op": "request", "as": "res", "path": "/v1/home"}], "output": {"from": "res.sections[*]|", "fields": {"id": "id", "title": "title"}, "cards": {"from": "cards[*]", "fields": {"id": "id", "title": "t"}}}}`),
+		"cards candidate":  base(`"home": {"steps": [{"op": "request", "as": "res", "path": "/v1/home"}], "output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"}, "cards": {"from": "cards[*]|", "fields": {"id": "id", "title": "t"}}}}`),
 	}
 	for name, text := range cases {
 		parsed, err := Decode([]byte(text))

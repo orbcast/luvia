@@ -27,6 +27,8 @@ var KnownFunctions = map[string]functionSpec{
 	"list":       {minArgs: 1, maxArgs: 1},
 	"first":      {minArgs: 1, maxArgs: 1},
 	"last":       {minArgs: 1, maxArgs: 1},
+	"empty":      {minArgs: 1, maxArgs: 1},
+	"not":        {minArgs: 1, maxArgs: 1},
 }
 
 // FunctionKnown reports whether name is part of the function table.
@@ -222,7 +224,9 @@ func validateBlock(name string, steps []Step, out Output, kind outputKind) error
 		if err := validateStep(name, index, step, declared); err != nil {
 			return err
 		}
-		if declared[step.As] {
+		// A conditional step is one branch of a choice, so it may name a
+		// variable an earlier branch also names: only one of them runs.
+		if declared[step.As] && step.When.IsZero() {
 			return fmt.Errorf("%s.steps[%d]: variable %q is already bound", name, index, step.As)
 		}
 		declared[step.As] = true
@@ -266,6 +270,11 @@ func validateStep(block string, index int, step Step, declared map[string]bool) 
 		scope["page"] = true
 		scope["offset"] = true
 	}
+	if !step.When.IsZero() {
+		if err := validateValue(label+".when", step.When, scope); err != nil {
+			return err
+		}
+	}
 	return validateRequest(label, step.Request, scope)
 }
 
@@ -280,6 +289,11 @@ func validateRequest(label string, req Request, vars map[string]bool) error {
 	case "", "GET", "POST", "PUT", "PATCH", "DELETE":
 	default:
 		return fmt.Errorf("%s: unsupported method %q", label, req.Method)
+	}
+	switch req.Response {
+	case "", ResponseJSON, ResponseRouterData:
+	default:
+		return fmt.Errorf("%s: unsupported response %q", label, req.Response)
 	}
 	if err := checkTemplate(label+".path", req.Path, vars); err != nil {
 		return err
@@ -319,6 +333,26 @@ func validateRequest(label string, req Request, vars map[string]bool) error {
 	return nil
 }
 
+// validateFrom checks a `from` path. A from may list candidates separated by
+// `|`, so a block can read two response shapes; every candidate has to stand on
+// its own, otherwise a typo in one branch hides behind the other.
+func validateFrom(label, from string, vars map[string]bool) error {
+	for _, candidate := range strings.Split(from, "|") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			return fmt.Errorf("%s.from: empty candidate in %q", label, from)
+		}
+		sel, err := ParseSelector(candidate)
+		if err != nil {
+			return fmt.Errorf("%s.from: %w", label, err)
+		}
+		if vars != nil && !vars[sel.Root()] {
+			return fmt.Errorf("%s.from: unknown variable %q", label, sel.Root())
+		}
+	}
+	return nil
+}
+
 func checkTemplate(label, text string, vars map[string]bool) error {
 	parsed, err := ParseTemplate(text)
 	if err != nil {
@@ -334,12 +368,8 @@ func checkTemplate(label, text string, vars map[string]bool) error {
 }
 
 func validateOutput(label string, out Output, kind outputKind, vars map[string]bool) error {
-	sel, err := ParseSelector(out.From)
-	if err != nil {
-		return fmt.Errorf("%s.from: %w", label, err)
-	}
-	if !vars[sel.Root()] {
-		return fmt.Errorf("%s.from: unknown variable %q", label, sel.Root())
+	if err := validateFrom(label, out.From, vars); err != nil {
+		return err
 	}
 	allowed := outputFields[kind]
 	for key, value := range out.Fields {
@@ -418,8 +448,8 @@ func validateShape(label string, shape *Shape, allowed map[string]bool) error {
 	if shape == nil {
 		return fmt.Errorf("%s: mapping is required", label)
 	}
-	if _, err := ParseSelector(shape.From); err != nil {
-		return fmt.Errorf("%s.from: %w", label, err)
+	if err := validateFrom(label, shape.From, nil); err != nil {
+		return err
 	}
 	if len(shape.Fields) == 0 {
 		return fmt.Errorf("%s.fields must not be empty", label)
@@ -450,12 +480,8 @@ func validateResolve(block *ResolveBlock) error {
 		declared[step.As] = true
 	}
 	lines := block.Lines
-	from, err := ParseSelector(lines.From)
-	if err != nil {
-		return fmt.Errorf("resolve.lines.from: %w", err)
-	}
-	if !declared[from.Root()] {
-		return fmt.Errorf("resolve.lines.from: unknown variable %q", from.Root())
+	if err := validateFrom("resolve.lines", lines.From, declared); err != nil {
+		return err
 	}
 	for key, value := range lines.Fields {
 		if !lineFields[key] {

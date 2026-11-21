@@ -25,5 +25,6 @@
 - [0011 超分与杜比止步于系统播放层](0011-playback-layer-boundary.md)
 - [0012 图片缓存按字节预算淘汰](0012-artwork-cache-budget.md)
 - [0013 播放页在一条线路不出画面时换下一条](0013-playback-line-fallback.md)
+- [0014 让源规则同时吃 JSON 接口与服务端渲染页面](0014-html-pages-as-rule-sources.md)
 
 新增决策时在本列表补一行，写完跑 `make rules` 确认索引、文件名和链接都在。

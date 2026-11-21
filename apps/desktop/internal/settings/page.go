@@ -12,12 +12,18 @@ import (
 )
 
 // Deps supplies the stored preferences. The page only reads them: a choice
-// goes back through SetTheme or SetLocale, which own persistence.
+// goes back through SetTheme, SetLocale or SetSource, which own persistence.
 type Deps struct {
 	Theme     func() mygo.ThemeSource
 	SetTheme  func(mygo.ThemeSource)
 	Locale    func() string
 	SetLocale func(string)
+	// Sources lists the source ids a viewer may choose, and Source is the
+	// one in force. The drop-down is drawn only when there is a choice, so
+	// a single source adds no row.
+	Sources   func() []string
+	Source    func() string
+	SetSource func(string)
 }
 
 // themeSources is the order of the appearance drop-down's choices.
@@ -40,6 +46,8 @@ type Page struct {
 	themeSynced  int
 	locale       int
 	localeSynced int
+	source       int
+	sourceSynced int
 }
 
 // New builds the page over the stored preferences.
@@ -51,7 +59,38 @@ func New(deps Deps) *Page {
 	// The language drawn comes from the frame's locale, so the follow
 	// system choice settles on the first frame.
 	p.localeSynced = -1
+	p.source = sourceIndex(p.sources(), p.current())
+	p.sourceSynced = p.source
 	return p
+}
+
+// sourceIndex is where id sits in the offered sources, or 0 when it is not
+// among them, as before the stored choice was made or after it stopped
+// loading.
+func sourceIndex(ids []string, id string) int {
+	for i, it := range ids {
+		if it == id {
+			return i
+		}
+	}
+	return 0
+}
+
+// sources are the ids on offer, asked again on every frame so a rule that
+// was added or dropped shows up without a restart.
+func (p *Page) sources() []string {
+	if p.deps.Sources == nil {
+		return nil
+	}
+	return p.deps.Sources()
+}
+
+// current is the id in force, or "" when no source answered.
+func (p *Page) current() string {
+	if p.deps.Source == nil {
+		return ""
+	}
+	return p.deps.Source()
 }
 
 func themeIndex(source mygo.ThemeSource) int {
@@ -93,6 +132,10 @@ func (p *Page) View(c *ui.Context) ui.Element {
 	if want := localeIndex(tag); want != p.localeSynced {
 		p.locale, p.localeSynced = want, want
 	}
+	ids := p.sources()
+	if want := sourceIndex(ids, p.current()); want != p.sourceSynced {
+		p.source, p.sourceSynced = want, want
+	}
 
 	width, _ := c.Size()
 	inset := design.Inset(width)
@@ -103,6 +146,12 @@ func (p *Page) View(c *ui.Context) ui.Element {
 			ui.Text(c, m.Settings()).FontSize(26).Bold().TextColor(theme.Text)
 			p.row(c, &theme, m.Appearance(), []string{m.FollowSystem(), m.Light(), m.Dark()}, &p.theme)
 			p.row(c, &theme, m.Language(), []string{m.English(), m.SimplifiedChinese()}, &p.locale)
+			// A second source is the first moment choosing one means
+			// anything, so the row appears with it. The ids are the rule
+			// directory names, which is also what a viewer recognises.
+			if len(ids) > 1 {
+				p.row(c, &theme, m.DataSource(), ids, &p.source)
+			}
 		})
 	})
 
@@ -114,6 +163,10 @@ func (p *Page) View(c *ui.Context) ui.Element {
 	if p.locale != p.localeSynced {
 		p.deps.SetLocale(localeTags[p.locale])
 		p.localeSynced = p.locale
+	}
+	if p.source != p.sourceSynced && p.source < len(ids) && p.deps.SetSource != nil {
+		p.deps.SetSource(ids[p.source])
+		p.sourceSynced = p.source
 	}
 	return column
 }

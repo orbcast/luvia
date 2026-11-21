@@ -13,15 +13,11 @@ import (
 
 	"luvia/apps/desktop/internal/appshell"
 	"luvia/apps/desktop/internal/appwindow"
-	"luvia/apps/desktop/internal/catalog"
 	"luvia/apps/desktop/internal/design"
-	"luvia/apps/desktop/internal/home"
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
 	"luvia/apps/desktop/internal/playintro"
 	"luvia/apps/desktop/internal/preferences"
-	"luvia/apps/desktop/internal/screens"
-	"luvia/apps/desktop/internal/search"
 	"luvia/apps/desktop/internal/settings"
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/engine"
@@ -43,11 +39,12 @@ func main() {
 			log.Fatal(err)
 		}
 		themePath := filepath.Join(userData, "theme.json")
+		sourcePath := filepath.Join(userData, "source.json")
 		preferences.RestoreTheme(themePath, mygo.Theme.SetSource)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		profile := openProfile(ctx, userData, cache)
+		profile := openProfile(ctx, userData, cache, preferences.LoadSource(sourcePath))
 		videoCache = profile.video
 		var introCtrl *playintro.Controller
 		window := appwindow.New(func() appwindow.Window {
@@ -77,82 +74,45 @@ func main() {
 			SetTheme: func(source mygo.ThemeSource) { preferences.ChangeTheme(themePath, source, mygo.Theme.SetSource) },
 			Locale:   mygo.App.ChosenLocale, SetLocale: mygo.App.SetLocale,
 		}
-		var router *screens.Router
-		openTitle := func(ref source.Ref) { router.OpenDetail(ref) }
-		discover := home.New(home.Deps{
-			Source:  profile.source,
-			Library: profile.library,
-			Images:  profile.images,
-			// The week strip reads the source's own schedule when the rule
-			// has one; without it the page counts the viewer's follows only.
-			Updates:  profile.updates,
-			Interval: 6 * time.Second,
-			OnPlay:   openTitle,
-			OnDetail: openTitle,
-			OnAll:    func() { shell.Navigate(appshell.Library) },
-		})
-		catalogPage := catalog.New(catalog.Deps{
-			Source:   profile.source,
-			Library:  profile.library,
-			Images:   profile.images,
-			OnPlay:   openTitle,
-			OnDetail: openTitle,
-		})
-		searchPage := search.New(search.Deps{
-			Source:   profile.source,
-			Library:  profile.library,
-			Images:   profile.images,
-			OnPlay:   openTitle,
-			OnDetail: openTitle,
-		})
+
+		// applySource points every source-bound page at id, and is how both the
+		// first frame and a switch in the settings page reach the same build.
+		var pages *pageSet
+		var applySource func(string)
 		settingsPage := settings.New(settings.Deps{
 			Theme: actions.Theme, SetTheme: actions.SetTheme,
 			Locale: actions.Locale, SetLocale: actions.SetLocale,
-		})
-		profile.images.SetChanged(func() { window.Refresh() })
-		router = screens.New(screens.Deps{
-			Source:    profile.source,
-			Library:   profile.library,
-			Images:    profile.images,
-			Cache:     profile.video,
-			Refresh:   window.Refresh,
-			Immersive: shell.SetNavigationHidden,
-			// The player brings its own controls, so the window's stay away
-			// there and return with the navigation pages.
-			WindowButtons: shell.SetWindowControlsHidden,
-			// The player's full-screen button takes the window itself in and
-			// out of full screen; the desktop can also do it on its own, so
-			// the router reads the window back before every player frame.
-			SetFullScreen: func(on bool) {
-				if w := window.Current(); w != nil {
-					w.SetFullScreen(on)
+			// The drop-down lists the rules that loaded, so it fills in as soon
+			// as another rule directory appears.
+			Sources: func() []string { return sourceIDs(profile.rules) },
+			Source:  func() string { return sourceID(profile.source) },
+			SetSource: func(id string) {
+				if sourceID(profile.source) == id {
+					return
 				}
-			},
-			WindowFullScreen: func() bool {
-				if w := window.Current(); w != nil {
-					return w.IsFullScreen()
+				applySource(id)
+				if err := preferences.SaveSource(sourcePath, id); err != nil {
+					log.Printf("source preference %s: %v", sourcePath, err)
 				}
-				return false
-			},
-			Intro: func() { introCtrl.Start(nil) },
-			Base: func(c *ui.Context) ui.Element {
-				switch shell.Selected() {
-				case appshell.Discover:
-					return discover.View(c)
-				case appshell.Library:
-					return catalogPage.View(c)
-				case appshell.Search:
-					return searchPage.View(c)
-				case appshell.Settings:
-					return settingsPage.View(c)
-				}
-				return placeholder(c, shell.Selected())
+				window.Refresh()
 			},
 		})
-		shell.SetContent(router.View)
+		applySource = func(id string) {
+			profile = chooseSource(profile, id)
+			pages = newPageSet(pageDeps{
+				profile: profile, settings: settingsPage,
+				shell: shell, window: window, intro: introCtrl,
+			})
+			// Artwork arriving for the pages just built redraws the window;
+			// the loader keeps one callback, so the newest set owns it.
+			profile.images.SetChanged(func() { window.Refresh() })
+			shell.SetContent(pages.router.View)
+		}
+		applySource(sourceID(profile.source))
+
 		rebuildMenu := func() { mygo.App.SetMenu(shell.Menu(locales.In(mygo.App.Locale()), actions)) }
 		shell.SetOnNavigate(func(appshell.Page) {
-			router.Reset()
+			pages.router.Reset()
 			shell.SyncMenu(mygo.App.Menu())
 			window.Refresh()
 		})
@@ -182,6 +142,9 @@ type profile struct {
 	library *library.Store
 	images  *media.Loader
 	video   *videocache.Cache
+	// rules is the loaded rule set, kept so a switch can reach the source that
+	// was not chosen this time without reading the directory again.
+	rules *loader.Set
 	// updates reports whether the chosen source carries an updates block, so
 	// the Discover page knows whether the week strip can ask it for a day.
 	updates bool
@@ -189,7 +152,7 @@ type profile struct {
 
 // openProfile opens the configured rule directory, the local library and the
 // artwork cache. A missing source is not fatal: the Discover page explains it.
-func openProfile(ctx context.Context, userData, cache string) profile {
+func openProfile(ctx context.Context, userData, cache, wanted string) profile {
 	libraryPath := filepath.Join(userData, "library.json")
 	store, err := library.Open(libraryPath)
 	if err != nil {
@@ -210,11 +173,22 @@ func openProfile(ctx context.Context, userData, cache string) profile {
 	for _, diagnostic := range set.Diagnostics() {
 		log.Printf("rule skipped: %v", diagnostic)
 	}
-	chosen := preferredSource(set)
-	return profile{source: chosen, library: store, images: images, video: video, updates: hasUpdates(ctx, chosen)}
+	chosen := preferredSource(set, wanted)
+	return profile{
+		source: chosen, library: store, images: images, video: video,
+		rules: set, updates: hasUpdates(ctx, chosen),
+	}
 }
 
-func preferredSource(set *loader.Set) source.Source {
+// preferredSource is the stored choice when it still loads, otherwise the
+// source the app opens with, otherwise whichever rule came first. A stored id
+// names a rule directory that may have been removed since.
+func preferredSource(set *loader.Set, wanted string) source.Source {
+	if wanted != "" {
+		if found, ok := set.Get(wanted); ok {
+			return found
+		}
+	}
 	if found, ok := set.Get("kanju"); ok {
 		return found
 	}

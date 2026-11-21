@@ -107,8 +107,8 @@ func (s *sourceImpl) mapLines(lines rule.Lines, vars map[string]any) []lineOptio
 	items := s.resolveText(lines.From, vars)
 	seen := make(map[string]bool, len(items))
 	options := make([]lineOption, 0, len(items))
-	for _, item := range items {
-		sc := scope{item: item, vars: vars}
+	for index, item := range items {
+		sc := itemScope(item, index+1, vars)
 		option := lineOption{
 			id:      s.evalString(field(lines.Fields, "id"), sc),
 			label:   s.evalString(field(lines.Fields, "label"), sc),
@@ -166,7 +166,7 @@ func (s *sourceImpl) lineAddress(ctx context.Context, site callSite, block *rule
 		ticket = stripResolvePrefix(option.lineURL)
 	}
 	if ticket == "" && lines.Exchange != nil {
-		if value, ok := s.eval(lines.Exchange.Ticket, scope{item: option.item, vars: vars}); ok {
+		if value, ok := s.eval(lines.Exchange.Ticket, itemScope(option.item, 1, vars)); ok {
 			ticket = toString(value)
 		}
 	}
@@ -196,7 +196,7 @@ func (s *sourceImpl) lineAddress(ctx context.Context, site callSite, block *rule
 	}
 	declaredKind := option.urlKind
 	if !lines.Exchange.URLKind.IsZero() {
-		if kindValue, ok := s.eval(lines.Exchange.URLKind, scope{item: option.item, vars: vars}); ok {
+		if kindValue, ok := s.eval(lines.Exchange.URLKind, itemScope(option.item, 1, vars)); ok {
 			declaredKind = toString(kindValue)
 		}
 	}

@@ -160,6 +160,20 @@ func (msgs Messages) Language() string {
 	return Catalog.Format(msgs.locale, "language", nil)
 }
 
+// DataSource says "Data source"
+// in the language the app shows.
+//
+// Source the app reads its titles from
+func DataSource() string { return In(i18n.Locale()).DataSource() }
+
+// DataSource says "Data source"
+// in the language of msgs.
+//
+// Source the app reads its titles from
+func (msgs Messages) DataSource() string {
+	return Catalog.Format(msgs.locale, "dataSource", nil)
+}
+
 // FollowSystem says "Follow System"
 // in the language the app shows.
 //

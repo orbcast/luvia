@@ -69,6 +69,8 @@ apps/luvia-rules/
 
 “sign” 存在时，除显式写 “sign”: false 的步骤外，所有请求都带签名头：{method}、{path}（含 query）、{timestamp}、{nonce} 四个变量供 message 模板使用，{signature} 供头模板使用。timestampUnit 取 ms 或 s；nonceBytes 是随机字节数，十六进制编码后使用。sign.secret 支持 `${env:NAME}`，取值在发请求前从环境变量替换；变量缺失时不发送请求，直接按 unauthorized 失败（Detail 里带缺失的变量名），不拿占位符去签名。
 
+`request` 对象（步骤里的与线路兑换里的都算）可以声明 `response`，说明这次响应的形态：缺省与 `"json"` 都按 JSON 解析 body；`"routerData"` 用于服务端渲染的页面——页面把同一份数据塞在脚本的 `_ROUTER_DATA = {...}` 赋值里下发，引擎按这个字面量定位，要求其后（允许空白）确实是 `=` 再跟 `{`，否则跳过——页面别处提到这个名字、或者只是读一下全局，都不能被当成载荷；从那个 `{` 起逐字节配平（跳过字符串字面量与转义，标题里的花括号不会提前结束对象），配平出的对象还要通过 JSON 校验才采用，否则继续找下一次出现。这样同一个源既能读 JSON 接口，也能读分类页，六个操作不必因为响应形态不同拆成两个源；决定与代价见 [ADR 0014](adr/0014-html-pages-as-rule-sources.md)。取值只有 `""`、`"json"`、`"routerData"` 三种，写错时加载规则即报 `unsupported response`。
+
 ## 步骤（steps）
 
 每个块有一个 `steps` 数组，按顺序执行，`as` 把该步的响应文档绑定成命名变量；`request` 与 `paginate` 两种操作。
@@ -99,7 +101,9 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 
 `mode` 为 `page` 或 `offset`。两种模式下都会提供 `{page}` 与 `{offset}`：`page` 模式 `page = start + i`、`offset = i × size`；`offset` 模式反之。`items` 必填，选择器以「单页响应」为根；`hasMore` 可选，解析为 false 即停止；`items` 为空或达到 `maxPages` 也停止。
 
-变量作用域：块内所有已绑定的 `as` 名字可被后续步骤与输出引用；`paginate` 绑定的是合并后的数组。同一块内不允许重复绑定同一个名字。
+步骤还可以带 `when`：它是一个值（选择器、函数、模板或字面量），求值为真才执行这一步，缺省则总执行。它是“一次调用里二选一”的手段——有搜索词走搜索接口、没有搜索词走分类页。求值为假、或求值本身失败时，这一步不绑定任何变量，后续步骤与输出看到的是变量缺失而不是空值：模板里的洞解析不出会让整个模板失败，`from` 则继续试下一个候选。
+
+变量作用域：块内所有已绑定的 `as` 名字可被后续步骤与输出引用；`paginate` 绑定的是合并后的数组。同一块内不允许重复绑定同一个名字，例外是带 `when` 的步骤：它是二选一里的一个分支，可以和另一个分支共用一个 `as`，因为同一次调用里只会有一个真的执行。
 
 ## 当日更新（updates）
 
@@ -154,6 +158,8 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 | `urlKind` | 1 | 推断为 `mp4` 或 `hls`（含 `m3u8` 或 `.m3u8` 结尾视为 hls） |
 | `list` | 1 | 包成数组 |
 | `first` / `last` | 1 | 取数组首尾 |
+| `empty` | 1 | 值缺失、空数组、空字符串为真，其余为假 |
+| `not` | 1 | 布尔取反，参数取不到时不解析 |
 
 `kind` 的识别词：movie / film / documentary / doc → `movie`；anime / animation / donghua / cartoon → `anime`；variety / sports / reality / show → `variety`；series / tv / drama / short_drama / shortdrama → `series`。上游的细分标签保留在 `Tags` 里。
 
@@ -181,6 +187,8 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 
 `cards` 描述分区内卡片的来源与字段。`page` 与 `hasMore` 仅用于列表：`{"from": "res.cards[*]", "page": "res.pagination.page", "hasMore": "res.pagination.has_more", "cards": {...}}`；列表页不允许写 `fields`。
 
+`output.from` 可以写多个候选，用 `|` 隔开，例如 `"res.search.items[*]|res.category.items[*]"`：引擎按顺序取第一个能解析出结果的候选，全部失败才报 `"..." is missing from the response`（`invalid_response`）。它是给带 `when` 的二选一用的——两个分支绑同一个 `as`，`from` 列出各自响应里数组的位置，哪条真的跑了就读哪条。校验阶段每个候选都要单独站得住：能解析成选择器、根名在作用域里，候选之间不许出现空串，这样一个分支里的笔误不会被另一个分支盖住。同一套候选写法也适用于 `cards.from` 与 `resolve.lines.from`，它们各自从自己的根对象往下解析。
+
 首页输出是分区的数组：
 
 ```json
@@ -190,6 +198,8 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 ```
 
 详情与选集必须提供 `title`，并且不允许 `cards`、`page`、`hasMore`。选集缺少 `id` 的项被跳过，`payload` 是不透明字符串，用于把解析所需 token 带到 `resolve`。
+
+映射走过的每一项除了自己的字段，还能读到两个名字：`item` 是这一项本身，`index` 是它在列表里的位置（从 1 开始）。列表项是纯字符串时（详情页只给一串 vid 就是这样）这是唯一能读的东西，`{"id": "item", "number": "index"}` 让选集拿到 id 与集号；对象项的行为不变，字段查找先于这两个名字，只有字段不存在时才落到 `item` / `index`。
 
 首页、列表、详情缺 `id` 的卡片会被跳过。
 
@@ -247,6 +257,8 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 ## 执行与错误
 
 每个源最多 4 个并发请求（可配置），请求受块级超时与 `ctx` 约束，取消优先于重试。响应超过 8 MiB 视为无效响应。
+
+声明 `"response": "routerData"` 的请求，若整页都找不到能配平成合法 JSON 的 `_ROUTER_DATA` 对象，按 `invalid_response` 失败，诊断写 "response carries no router data"；对象抽出来了但内容不是规则以为的结构，错误会出现在后续选择器上（`from` 的候选全空、字段取不到），不在抽取这一步拦下。`when` 为假而跳过的步骤不会产生请求，也就没有错误可报。
 
 错误带分类码、源 ID、出错的块与步骤，上游文案只进诊断字段，界面按分类码取本地化文案：
 

@@ -80,8 +80,8 @@ func (s *sourceImpl) Home(ctx context.Context) (source.Home, error) {
 		return source.Home{}, err
 	}
 	sections := make([]source.Section, 0, len(items))
-	for _, item := range items {
-		sc := scope{item: item, vars: vars}
+	for index, item := range items {
+		sc := itemScope(item, index+1, vars)
 		section := source.Section{
 			ID:       s.evalString(field(block.Output.Fields, "id"), sc),
 			Title:    s.evalString(field(block.Output.Fields, "title"), sc),
@@ -203,8 +203,8 @@ func (s *sourceImpl) Updates(ctx context.Context, day source.Day) ([]source.Upda
 	// answer rather than a broken rule: the player shows the day as empty.
 	items := s.dayItems(selector, vars, day.Weekday)
 	updates := make([]source.Update, 0, len(items))
-	for _, item := range items {
-		sc := scope{item: item, vars: vars}
+	for index, item := range items {
+		sc := itemScope(item, index+1, vars)
 		shape := block.Output.Cards
 		update := source.Update{Note: s.evalString(field(shape.Fields, "note"), sc)}
 		update.Card = cardOf(s.rule.ID, shape.Fields, sc, s)
@@ -229,7 +229,7 @@ func (s *sourceImpl) Detail(ctx context.Context, ref source.Ref) (source.Detail,
 	if err != nil {
 		return source.Detail{}, err
 	}
-	sc := scope{item: object, vars: vars}
+	sc := itemScope(object, 1, vars)
 	fields := block.Output.Fields
 	detail := source.Detail{
 		Ref:          source.Ref{Source: s.rule.ID, ID: firstNonEmpty(s.evalString(field(fields, "id"), sc), ref.ID)},
@@ -273,8 +273,8 @@ func (s *sourceImpl) Episodes(ctx context.Context, ref source.Ref) ([]source.Epi
 	}
 	media := source.Ref{Source: s.rule.ID, ID: ref.ID}
 	episodes := make([]source.Episode, 0, len(items))
-	for _, item := range items {
-		sc := scope{item: item, vars: vars}
+	for index, item := range items {
+		sc := itemScope(item, index+1, vars)
 		episode := source.Episode{
 			Media:   media,
 			ID:      s.evalString(field(block.Output.Fields, "id"), sc),
@@ -316,11 +316,11 @@ func (s *sourceImpl) Comments(ctx context.Context, episode source.Episode, limit
 		return nil, err
 	}
 	comments := make([]source.Danmaku, 0, len(items))
-	for _, item := range items {
+	for index, item := range items {
 		if len(comments) >= limit {
 			break
 		}
-		sc := scope{item: item, vars: vars}
+		sc := itemScope(item, index+1, vars)
 		text := strings.TrimSpace(s.evalString(field(block.Output.Fields, "text"), sc))
 		if text == "" {
 			continue
@@ -363,6 +363,14 @@ func (s *sourceImpl) runStepsWith(ctx context.Context, op string, steps []rule.S
 	}
 	for index, step := range steps {
 		site := callSite{op: op, step: fmt.Sprintf("%s.steps[%d]", op, index)}
+		if !step.When.IsZero() {
+			value, ok := s.eval(step.When, scope{vars: vars, overrides: overrides})
+			if !ok || !toBool(value) {
+				// A step that does not apply binds nothing, so a later step
+				// that names the variable sees it as absent and says so.
+				continue
+			}
+		}
 		switch step.Op {
 		case rule.OpRequest:
 			result, err := s.fetch(ctx, site, step.Request, scope{vars: vars, overrides: overrides})
@@ -425,12 +433,11 @@ func (s *sourceImpl) runPaginate(ctx context.Context, site callSite, step rule.S
 	return all, nil
 }
 
+// collect resolves the output selector. A `from` may name several candidates
+// separated by `|`, which is how a block reads whichever branch of a choice
+// actually ran; the first candidate that resolves wins.
 func (s *sourceImpl) collect(op, from string, vars map[string]any) ([]any, error) {
-	selector, err := rule.ParseSelector(from)
-	if err != nil {
-		return nil, s.fail(callSite{op: op, step: op + ".output.from"}, source.ErrInvalidRule, "bad selector", err)
-	}
-	value, ok := selector.Resolve(vars)
+	value, ok := resolveCandidates(from, vars)
 	if !ok {
 		return nil, s.fail(callSite{op: op, step: op + ".output.from"},
 			source.ErrInvalidResponse, fmt.Sprintf("%q is missing from the response", from), nil)
@@ -482,11 +489,32 @@ func asItems(value any) []any {
 // resolveText resolves selector text. Rules that carry no call-time index, such
 // as the lines of a resolve block, name their list plainly and go through here.
 func (s *sourceImpl) resolveText(selectorText string, root any) []any {
-	selector, err := rule.ParseSelector(selectorText)
-	if err != nil {
+	value, ok := resolveCandidates(selectorText, root)
+	if !ok {
 		return nil
 	}
-	return s.resolveItems(selector, root)
+	return asItems(value)
+}
+
+// resolveCandidates reads a `from` that may list several selectors separated by
+// `|`, returning the first one that resolves. A source uses it when the same
+// block reads two response shapes, such as a keyword endpoint and a category
+// page that carry their cards under different keys.
+func resolveCandidates(selectorText string, root any) (any, bool) {
+	for _, candidate := range strings.Split(selectorText, "|") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		selector, err := rule.ParseSelector(candidate)
+		if err != nil {
+			continue
+		}
+		if value, ok := selector.Resolve(root); ok {
+			return value, true
+		}
+	}
+	return nil, false
 }
 
 // resolveItems resolves a selector into the list its mapping walks: an array
@@ -503,8 +531,8 @@ func (s *sourceImpl) resolveItems(selector rule.Selector, root any) []any {
 func (s *sourceImpl) mapCards(shape *rule.Shape, root any, vars map[string]any) []source.Card {
 	items := s.resolveText(shape.From, root)
 	cards := make([]source.Card, 0, len(items))
-	for _, item := range items {
-		card := cardOf(s.rule.ID, shape.Fields, scope{item: item, vars: vars}, s)
+	for index, item := range items {
+		card := cardOf(s.rule.ID, shape.Fields, itemScope(item, index+1, vars), s)
 		if card.ID == "" {
 			continue
 		}

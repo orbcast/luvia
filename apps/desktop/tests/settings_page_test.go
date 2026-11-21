@@ -10,8 +10,10 @@ import (
 
 // fakePreferences records what the page writes, as the window would.
 type fakePreferences struct {
-	theme  mygo.ThemeSource
-	locale string
+	theme   mygo.ThemeSource
+	locale  string
+	sources []string
+	source  string
 }
 
 func (p *fakePreferences) deps() settings.Deps {
@@ -20,6 +22,9 @@ func (p *fakePreferences) deps() settings.Deps {
 		SetTheme:  func(source mygo.ThemeSource) { p.theme = source },
 		Locale:    func() string { return p.locale },
 		SetLocale: func(tag string) { p.locale = tag },
+		Sources:   func() []string { return p.sources },
+		Source:    func() string { return p.source },
+		SetSource: func(id string) { p.source = id },
 	}
 }
 
@@ -113,6 +118,39 @@ func TestSettingsLanguageChoiceIsSaved(t *testing.T) {
 	choose(t, tt, "简体中文", "英文")
 	if prefs.locale != "en" {
 		t.Fatalf("locale = %q, want en", prefs.locale)
+	}
+}
+
+func TestSettingsHidesTheSourceChoiceWithOneSource(t *testing.T) {
+	prefs := newPreferences()
+	prefs.sources, prefs.source = []string{"kanju"}, "kanju"
+	page := settings.New(prefs.deps())
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
+	tt.SetLocale("en")
+	tt.Frame()
+	if tt.HasText("Data source") {
+		t.Fatalf("a single source still drew the row: %v", tt.Texts())
+	}
+	prefs.sources = nil
+	tt.Frame()
+	if tt.HasText("Data source") {
+		t.Fatalf("no source still drew the row: %v", tt.Texts())
+	}
+}
+
+func TestSettingsSourceChoiceIsSaved(t *testing.T) {
+	prefs := newPreferences()
+	prefs.sources, prefs.source = []string{"kanju", "hongguo"}, "kanju"
+	page := settings.New(prefs.deps())
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
+	tt.SetLocale("en")
+	tt.Frame()
+	if !tt.HasText("Data source") {
+		t.Fatalf("source row missing with two sources: %v", tt.Texts())
+	}
+	choose(t, tt, "kanju", "hongguo")
+	if prefs.source != "hongguo" {
+		t.Fatalf("source = %q, want hongguo", prefs.source)
 	}
 }
 

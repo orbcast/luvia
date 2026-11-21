@@ -36,6 +36,10 @@
   "@language": {
     "description": "Application language submenu"
   },
+  "dataSource": "Data source",
+  "@dataSource": {
+    "description": "Source the app reads its titles from"
+  },
   "followSystem": "Follow System",
   "@followSystem": {
     "description": "Use the operating system theme or language preference"

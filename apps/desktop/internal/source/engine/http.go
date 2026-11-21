@@ -124,13 +124,95 @@ func (s *sourceImpl) fetch(ctx context.Context, site callSite, req rule.Request,
 	if len(bytes.TrimSpace(body)) == 0 {
 		return nil, nil
 	}
-	dec := json.NewDecoder(bytes.NewReader(body))
+	return decodeResponse(site, body, req.Response, s.fail)
+}
+
+// decodeResponse reads the answer in the shape the request declared. A page
+// that renders its payload into a script assignment is read the same way as a
+// JSON endpoint, so one rule can browse a category page and search an API.
+func decodeResponse(site callSite, body []byte, response string, fail func(callSite, source.ErrorKind, string, error) *source.Error) (any, error) {
+	payload := body
+	if response == rule.ResponseRouterData {
+		extracted, ok := routerData(body)
+		if !ok {
+			return nil, fail(site, source.ErrInvalidResponse, "response carries no router data", nil)
+		}
+		payload = extracted
+	}
+	dec := json.NewDecoder(bytes.NewReader(payload))
 	dec.UseNumber()
 	var decoded any
 	if err := dec.Decode(&decoded); err != nil {
-		return nil, s.fail(site, source.ErrInvalidResponse, "response is not JSON", err)
+		return nil, fail(site, source.ErrInvalidResponse, "response is not JSON", err)
 	}
 	return decoded, nil
+}
+
+// routerData pulls the JSON object out of a `_ROUTER_DATA = {...}` assignment.
+// The literal appears several times on a page, so the first balanced object that
+// also parses as JSON wins.
+func routerData(body []byte) ([]byte, bool) {
+	const marker = "_ROUTER_DATA"
+	rest := body
+	for {
+		at := bytes.Index(rest, []byte(marker))
+		if at < 0 {
+			return nil, false
+		}
+		rest = rest[at+len(marker):]
+		// The assignment form is `_ROUTER_DATA = {...}`. Anything else that
+		// mentions the name, such as a guard that reads the global, is skipped
+		// instead of being mistaken for the payload.
+		after := bytes.TrimLeft(rest, " \t\r\n")
+		if len(after) == 0 || after[0] != '=' {
+			continue
+		}
+		after = bytes.TrimLeft(after[1:], " \t\r\n")
+		if len(after) == 0 || after[0] != '{' {
+			continue
+		}
+		if object, ok := scanObject(after); ok && json.Valid(object) {
+			return object, true
+		}
+	}
+}
+
+// scanObject returns the object that starts at the first byte of body. It
+// counts braces while stepping over string literals, so a brace inside a title
+// does not end the object early.
+func scanObject(body []byte) ([]byte, bool) {
+	if len(body) == 0 || body[0] != '{' {
+		return nil, false
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for index := 0; index < len(body); index++ {
+		char := body[index]
+		if inString {
+			switch {
+			case escaped:
+				escaped = false
+			case char == '\\':
+				escaped = true
+			case char == '"':
+				inString = false
+			}
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return body[:index+1], true
+			}
+		}
+	}
+	return nil, false
 }
 
 func (s *sourceImpl) encodeBody(fields map[string]rule.Value, sc scope, site callSite) ([]byte, error) {
