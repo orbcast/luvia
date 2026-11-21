@@ -98,3 +98,55 @@ func TestPlayerShowsCommentsAsDanmaku(t *testing.T) {
 		t.Fatal("turning danmaku off left a comment on the picture")
 	}
 }
+
+// TestPlayerSpreadsUntimedComments covers a source that ships reviews instead of
+// timed comments: every entry carries no moment, so they drift across the
+// episode one after another rather than all landing at the start.
+func TestPlayerSpreadsUntimedComments(t *testing.T) {
+	base, _ := sampleTitle()
+	src := &commentingSource{
+		detail:   base.detail,
+		episodes: base.episodes,
+		comments: []source.Danmaku{
+			{Text: "First review", Author: "ann"},
+			{Text: "Second review", Author: "bo"},
+			{Text: "Third review", Author: "cy"},
+		},
+	}
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := make(chan func(), 8)
+	page := player.New(player.Deps{
+		Source: src, Library: store, Run: func(fn func()) { run <- fn },
+		OpenVideo: func(string) (*ui.VideoPlayer, error) { return newGIFPlayer(t), nil },
+	})
+	page.Open(src.detail, src.episodes, 0)
+	apply(t, run)
+	apply(t, run)
+
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(ui.DarkTheme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 1280, 900)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	if !tt.HasText("First review") {
+		t.Fatalf("the first untimed review is not on the picture: %v", tt.Texts())
+	}
+	if tt.HasText("Third review") {
+		t.Fatal("a review far into the episode must not show at the start")
+	}
+
+	page.SelectTab(1)
+	page.RevealPanel()
+	tt.Frame()
+	for _, want := range []string{"First review", "Second review", "Third review", "ann", "cy"} {
+		if !tt.HasText(want) {
+			t.Fatalf("the comments tab is missing %q: %v", want, tt.Texts())
+		}
+	}
+}

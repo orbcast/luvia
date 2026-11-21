@@ -128,6 +128,23 @@
       }
     }
   },
+  "comments": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/player/{id}/{payload}",
+        "response": "routerData"
+      }
+    ],
+    "output": {
+      "from": "res.loaderData[\"player_(series_id)/(vid)/page\"].episodeSocialInfo.reviews.reviews[*]",
+      "fields": {
+        "text": "content",
+        "author": "user_name"
+      }
+    }
+  },
   "resolve": {
     "steps": [
       {

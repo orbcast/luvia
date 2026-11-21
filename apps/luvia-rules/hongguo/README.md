@@ -12,6 +12,7 @@
 - 详情：`/detail?series_id={id}`，`loaderData.detail_page.seriesDetail` 给 `series_name`、`episode_cnt`、`accessible_episode_cnt`、`episode_right_text`、`tags`、`celebrities[*].nickname` 与全量 `vid_list`。
 - 选集：`seriesDetail.vid_list` 是纯字符串的 vid 数组，上游不提供集号，规则用 `{"id": "item", "number": "index"}` 按位置编号，`index` 从 1 开始。
 - 播放地址：`POST /api/video/protected/fallback-play-info`，请求体 `{"item_id": "<vid>"}`，返回 `main_url`（未加密的普通 mp4）与 `url_expire`。`url_expire` 是绝对 unix 秒、约二十分钟后过期，规则不声明 `expiresIn`，地址失效时由播放器重新解析。
+- 评论：`/player/{id}/{payload}` 的 `loaderData["player_(series_id)/(vid)/page"].episodeSocialInfo.reviews.reviews`，字段 `content`、`user_name`，按 vid 变（同一部剧不同集评论不同）。这是剧评，不是带时间轴的弹幕。
 
 ## 已知限制
 
@@ -19,9 +20,11 @@
 - 搜索必须带桌面 UA，且 `count` 最大 10、`offset` 无效；分类页的 `sort_type`、`gender`、`tab`、`keyword` 参数在 301 后都被丢弃，不能用来筛选。
 - 首页与分类页的卡片 `vid_list` 为空，选集必须进详情页，多一次请求。
 - 播放地址没有扩展名，靠响应头的 `video/mp4` 判定；上游若改走 HLS 或加密，`urlKind` 与 `preferUrlKind` 要一起改。
+- 网页端没有时间轴弹幕。播放器上的弹幕开关铺的是剧评（上面 `comments` 块取到的条目），播放器把没有时间点的评论均匀铺在整集时长上，同时在侧栏评论页签里列出。官方弹幕接口在 `api5-normal-sinfonlineb.fqnovel.com`，未签名一律返回 `{"Code":110001}`，要拿得复刻整套 xGorgon/ladon/argus 签名与设备指纹，因此不接。
+- 剧评按页只给 15 条（`total_count` 是总数），`page`、`offset`、`limit` 参数都被忽略，所以评论数量有上限。
 - 上游若调整 `_ROUTER_DATA` 的键名或字段，`fixtures/` 与 `rule.json` 要一同更新，`make rules-verify` 会在离线用例里先暴露。
 
 ## 文件
 
 - `rule.json`：规则本体。
-- `fixtures/`：`home.page.txt`、`category.page.txt`、`detail.page.txt` 三个内嵌 `_ROUTER_DATA` 的页面样例（含同名标记的干扰项），`search.json`、`play.json`、`play-locked.json` 三个接口样例，覆盖正常、锁定集与缺字段等边界，`make rules-verify` 用它们离线验证。
+- `fixtures/`：`home.page.txt`、`category.page.txt`、`detail.page.txt`、`player.page.txt` 四个内嵌 `_ROUTER_DATA` 的页面样例（含同名标记的干扰项），`search.json`、`play.json`、`play-locked.json` 三个接口样例，覆盖正常、锁定集与缺字段等边界，`make rules-verify` 用它们离线验证。

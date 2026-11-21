@@ -68,6 +68,9 @@ const (
 	segAll
 	segKey
 	segBy
+	// segQuoted steps to a field whose name a dot cannot carry, such as a
+	// server-rendered route key like "player_(series_id)/(vid)/page".
+	segQuoted
 )
 
 type segment struct {
@@ -103,6 +106,14 @@ func ParseSelector(text string) (Selector, error) {
 			switch {
 			case inner == "*":
 				segments = append(segments, segment{kind: segAll})
+			case len(inner) > 1 && (inner[0] == '"' || inner[0] == '\'') && inner[len(inner)-1] == inner[0]:
+				// A quoted name reads a field a dot cannot spell, which is how
+				// a page keeps its data under a route key with brackets in it.
+				field, err := strconv.Unquote(inner)
+				if err != nil || field == "" {
+					return Selector{}, fmt.Errorf("selector %q: bad quoted field %q", text, inner)
+				}
+				segments = append(segments, segment{kind: segQuoted, name: field})
 			case strings.HasPrefix(inner, "by:"):
 				// A "by" step looks an array up by one field instead of by
 				// position: "days[by:weekday]" is the day whose weekday equals
@@ -224,6 +235,8 @@ func (s Selector) String() string {
 			out.WriteString("[" + item.name + "]")
 		case segBy:
 			out.WriteString("[by:" + item.name + "]")
+		case segQuoted:
+			out.WriteString("[" + strconv.Quote(item.name) + "]")
 		case segAll:
 			out.WriteString("[*]")
 		}
@@ -249,7 +262,7 @@ func (s Selector) Resolve(root any) (any, bool) {
 	for index, item := range s.segments {
 		isLast := index == len(s.segments)-1
 		switch item.kind {
-		case segField:
+		case segField, segQuoted:
 			object, ok := current.(map[string]any)
 			if !ok {
 				return nil, false

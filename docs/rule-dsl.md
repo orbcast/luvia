@@ -24,6 +24,7 @@
 | 详情 | `Detail(ctx, Ref)` | `detail` |
 | 选集 | `Episodes(ctx, Ref)` | `episodes` |
 | 解析播放地址 | `Resolve(ctx, Episode, lineID)` | `resolve` |
+| 评论与弹幕 | `Comments(ctx, Episode, limit)` | `comments` |
 
 块存在即代表支持，缺少该块时调用返回 `unsupported` 分类的错误。没有隐式的兜底逻辑，例如 `list` 不会自动复用 `home` 的规则。
 
@@ -130,7 +131,7 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 
 ## 选择器、模板与函数
 
-选择器是受限的点路径：`a.b`、`res.cards[0].title`、`res.cards[*]`。`[n]` 取下标，`[*]` 展开成数组，根名是变量名（内建变量见下）。`[*]` 在最后一段时就是该数组本身；出现在中间时逐级展开并合并成一层，`res.days[*].groups.preview[*]` 是所有天合并后的预览列表。`[字段名]` 取调用方传入的位置（如 `res.days[weekday]`），`[by:字段]` 按字段值匹配数组中的一项（如 `res.days[by:weekday]`），两者都只读播放器传入的内建变量，其他情况加载规则时报错。
+选择器是受限的点路径：`a.b`、`res.cards[0].title`、`res.cards[*]`。`[n]` 取下标，`[*]` 展开成数组，根名是变量名（内建变量见下）。`[*]` 在最后一段时就是该数组本身；出现在中间时逐级展开并合并成一层，`res.days[*].groups.preview[*]` 是所有天合并后的预览列表。`[字段名]` 取调用方传入的位置（如 `res.days[weekday]`），`[by:字段]` 按字段值匹配数组中的一项（如 `res.days[by:weekday]`），两者都只读播放器传入的内建变量，其他情况加载规则时报错。字段名里带括号、斜杠这类不能写成标识符的字符时用引号包起来：`res.loaderData["player_(series_id)/(vid)/page"].episodeSocialInfo` 取的是键为 `player_(series_id)/(vid)/page` 的那一项。
 
 模板是带花括号的插值串：`/v1/playback/resolve/{payload}`、`{method}\n{path}`。任一洞解析失败，整个模板失败。
 
@@ -183,6 +184,7 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 | 卡片 / 列表项 | `id`、`title`、`kind`、`year`、`area`、`tags`、`remarks`、`overview`、`posterUrl`、`backdropUrl` |
 | 详情 | 卡片字段 + `overview`、`actors`、`directors`、`episodeCount` |
 | 选集 | `id`、`number`、`title`、`payload` |
+| 评论 | `at`、`text`、`author`、`color`、`episode` |
 | 首页分区 | `id`、`title`、`subtitle`（分区必须另有 `cards`） |
 
 `cards` 描述分区内卡片的来源与字段。`page` 与 `hasMore` 仅用于列表：`{"from": "res.cards[*]", "page": "res.pagination.page", "hasMore": "res.pagination.has_more", "cards": {...}}`；列表页不允许写 `fields`。
@@ -202,6 +204,22 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 映射走过的每一项除了自己的字段，还能读到两个名字：`item` 是这一项本身，`index` 是它在列表里的位置（从 1 开始）。列表项是纯字符串时（详情页只给一串 vid 就是这样）这是唯一能读的东西，`{"id": "item", "number": "index"}` 让选集拿到 id 与集号；对象项的行为不变，字段查找先于这两个名字，只有字段不存在时才落到 `item` / `index`。
 
 首页、列表、详情缺 `id` 的卡片会被跳过。
+
+## 评论与弹幕
+
+`comments` 块取当前这一集的评论，`text` 必填，其余可省。`from` 的根对象里能读到 `id`（剧集所属的剧）与 `payload`（选集给的 token），所以既可以按集请求，也可以只按剧请求。
+
+```json
+"comments": {
+  "steps": [{"op": "request", "as": "res", "path": "/player/{id}/{payload}", "response": "routerData"}],
+  "output": {"from": "res.loaderData[\"player_(series_id)/(vid)/page\"].episodeSocialInfo.reviews.reviews[*]",
+             "fields": {"text": "content", "author": "user_name"}}
+}
+```
+
+`at` 是这一条出现的时间点（秒，从片头算起），不填就是 `0`。这两件事在播放器里表现不同：只要有任意一条带了 `at`，就按各自的时间点飘过画面；全部没带 `at` 时（上游只给剧评、没有时间轴弹幕的站点就是这样），播放器把它们均匀铺在整集时长上，并同时列出在侧栏的评论页签里。缺 `at` 不是错误，但填一个上游根本没有的时间点会让弹幕挤在一起或整集不出现，所以宁可留空。
+
+`color` 是 `0xRRGGBB`，`episode` 填了的话只保留属于该集 token 的条目，用来在按剧请求时过滤掉别的集。
 
 ## 线路与播放地址
 
@@ -244,6 +262,7 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 | `detail` | `id` |
 | `episodes` | `id` |
 | `resolve` | `id`、`payload`、`media`、`lineId` |
+| `comments` | `id`、`payload` |
 | `paginate` 步骤 | 额外 `page`、`offset`、`size` |
 
 引用未声明的变量是规则错误，加载时即被拒绝，不会拖到运行时。

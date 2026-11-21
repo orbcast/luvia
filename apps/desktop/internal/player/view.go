@@ -514,7 +514,7 @@ func (p *Page) panelBody(c *ui.Context, t *ui.Theme, m locales.Messages, width f
 
 		switch p.tab {
 		case tabComments:
-			ui.Text(c, m.EmptyTab()).FontSize(13).TextColor(t.TextMuted)
+			p.panelComments(c, t, m)
 		default:
 			ui.Text(c, m.EpisodesTitle()).FontSize(12).TextColor(t.TextMuted)
 			p.panelEpisodes(c, t, m, width)
@@ -613,6 +613,25 @@ func (p *Page) sourceSelector(c *ui.Context, t *ui.Theme, m locales.Messages, wi
 				item.Children(func() { ui.Text(c, lineLabelText(line)).FontSize(12.5).TextColor(t.Text) })
 			}
 		})
+	})
+}
+
+// panelComments lists the comments the episode carries. The same entries fly
+// over the picture, so this tab is the readable copy of that layer.
+func (p *Page) panelComments(c *ui.Context, t *ui.Theme, m locales.Messages) {
+	if len(p.comments) == 0 {
+		ui.Text(c, m.EmptyTab()).FontSize(13).TextColor(t.TextMuted)
+		return
+	}
+	ui.Column(c).FillWidth().Gap(10).Children(func() {
+		for _, comment := range p.comments {
+			ui.Column(c).FillWidth().Gap(3).Children(func() {
+				if comment.Author != "" {
+					ui.Text(c, comment.Author).FontSize(11.5).Bold().TextColor(t.TextMuted).MaxLines(1)
+				}
+				ui.Text(c, comment.Text).FontSize(12.5).LineHeight(1.5).TextColor(t.Text)
+			})
+		}
 	})
 }
 

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>少夫人来自东北3 第1集 - 红果短剧</title>
+<script>window.__glue_t = 1;</script>
+</head>
+<body>
+<div id="root"></div>
+<script async="" data-script-src="modern-inline">_ROUTER_DATA = {"loaderData":{"player_layout":{},"player_(series_id)/(vid)/layout":{},"player_(series_id)/(vid)/page":{"protectedPlayback":{"error_code":0},"publicVideoSeo":{},"req":{"series_id":"7706512650816982040","vid":"7706514645208534041"},"isSuccess":true,"series_id":"7706512650816982040","vid":"7706514645208534041","seriesSocialInfo":{},"episodeSocialInfo":{"total_count":170,"reviews":{"total_count":170,"reviews":[{"create_time":"1794997999","digg_count":12,"user_name":"佘鸯","user_avatar":"https://p3-novel.byteimg.com/fixture/avatar-1.jpg","content":"自从接触了短剧，我就再也没看过长剧了"},{"create_time":"1794998123","digg_count":3,"user_name":"等一辈子","user_avatar":"https://p3-novel.byteimg.com/fixture/avatar-2.jpg","content":"许瀚文，我爱你，你听到了没有"},{"create_time":"1794998250","digg_count":0,"user_name":"晚风","user_avatar":"https://p3-novel.byteimg.com/fixture/avatar-3.jpg","content":"这配音一开口我就知道是他"}]}}}}},"errors":null}</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

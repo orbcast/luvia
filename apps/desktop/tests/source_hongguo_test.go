@@ -326,6 +326,54 @@ func TestHongguoResolveReportsLockedEpisodes(t *testing.T) {
 	}
 }
 
+// TestHongguoCommentsReadTheEpisodeReviews checks the comment layer: the site
+// keeps its reviews on the player page under a route-shaped key, and every entry
+// arrives without a moment of its own, so the player spreads them across the
+// episode instead of pinning them to a time the upstream never sent.
+func TestHongguoCommentsReadTheEpisodeReviews(t *testing.T) {
+	stub, client := newStubUpstream(t, func(record recordedRequest) (int, string) {
+		if record.Path != "/player/7706512650816982040/7706514645208534041" {
+			return http.StatusNotFound, `{"error":"unexpected path"}`
+		}
+		return http.StatusOK, hongguoFixture(t, "player.page.txt")
+	})
+	hongguo := hongguoSource(t, client)
+
+	comments, err := hongguo.(source.Commenter).Comments(context.Background(), source.Episode{
+		Media:   source.Ref{Source: "hongguo", ID: "7706512650816982040"},
+		ID:      "7706514645208534041",
+		Payload: "7706514645208534041",
+		Number:  1,
+	}, 0)
+	if err != nil {
+		t.Fatalf("comments: %v", err)
+	}
+	if len(comments) != 3 {
+		t.Fatalf("want 3 reviews, got %d", len(comments))
+	}
+	if comments[0].Text != "自从接触了短剧，我就再也没看过长剧了" {
+		t.Fatalf("first review = %q", comments[0].Text)
+	}
+	if comments[0].Author != "佘鸯" {
+		t.Fatalf("first author = %q", comments[0].Author)
+	}
+	// The reviews carry no playback moment, so the rule leaves the moment out
+	// and the player spreads them over the episode.
+	for i, comment := range comments {
+		if comment.At != 0 {
+			t.Fatalf("review %d is pinned to %v, want no moment", i, comment.At)
+		}
+	}
+
+	requests := stub.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("want 1 request, got %d", len(requests))
+	}
+	if requests[0].Path != "/player/7706512650816982040/7706514645208534041" {
+		t.Fatalf("path = %q", requests[0].Path)
+	}
+}
+
 // TestHongguoLiveSmoke talks to the real site. It never runs in CI or in make
 // check: set LUVIA_LIVE_SMOKE=1 when the network is available and the fixtures
 // may be stale. The paywall is expected: only the first few episodes resolve,

@@ -259,7 +259,7 @@ func (p *Page) resolve() {
 				p.lineID = playback.Line.ID
 			}
 			p.record(episode, playback)
-			p.loadComments(ctx, episode, gen)
+			p.loadComments(episode, gen)
 			p.warmNext(episode, line, gen)
 			// The stream opens off this thread: an engine that opened and never
 			// drew would otherwise hold the page, and the wait it owes the viewer
@@ -323,8 +323,10 @@ func (p *Page) adjacent(current source.Episode, offset int) (source.Episode, boo
 
 // loadComments asks the source for the comments an episode carries. A source
 // without the capability leaves the layer empty and the switch off, rather than
-// pretending to show one.
-func (p *Page) loadComments(ctx context.Context, episode source.Episode, gen uint64) {
+// pretending to show one. It runs on its own context: the caller resolves the
+// playback and drops its deadline as soon as it has an address, which would
+// cancel a request that has not been sent yet.
+func (p *Page) loadComments(episode source.Episode, gen uint64) {
 	commenter, ok := p.deps.Source.(source.Commenter)
 	if !ok {
 		p.comments, p.commentsNote = nil, true
@@ -334,6 +336,8 @@ func (p *Page) loadComments(ctx context.Context, episode source.Episode, gen uin
 	epoch := p.commentGen
 	run := p.deps.Run
 	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
 		got, err := commenter.Comments(ctx, episode, 0)
 		run(func() {
 			if epoch != p.commentGen || gen != p.gen {
@@ -373,9 +377,14 @@ func (p *Page) flyingComments(now time.Duration) []flying {
 	if !p.danmaku || len(p.comments) == 0 {
 		return nil
 	}
+	spread := !timedComments(p.comments)
 	var out []flying
 	for i, comment := range p.comments {
-		from := comment.At - danmakuLead
+		at := comment.At
+		if spread {
+			at = p.spreadMoment(i, len(p.comments))
+		}
+		from := at - danmakuLead
 		if now < from || now-from > danmakuWindow {
 			continue
 		}
@@ -389,6 +398,33 @@ func (p *Page) flyingComments(now time.Duration) []flying {
 		}
 	}
 	return out
+}
+
+// timedComments reports whether any comment carries a moment of its own. A
+// source that only ships a list of reviews leaves every moment at zero.
+func timedComments(comments []source.Danmaku) bool {
+	for _, comment := range comments {
+		if comment.At > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// spreadMoment places an untimed comment evenly across the episode, so a list
+// of reviews drifts over the picture instead of piling up in the first seconds.
+// The step never drops below one crossing, which keeps two comments from
+// entering at once when the episode is short or the list is long.
+func (p *Page) spreadMoment(index, count int) time.Duration {
+	span := p.duration()
+	if span <= 0 {
+		span = time.Duration(count) * danmakuWindow
+	}
+	step := span / time.Duration(count)
+	if step < danmakuWindow {
+		step = danmakuWindow
+	}
+	return time.Duration(index)*step + step/2
 }
 
 // open starts a system player for url, off the page's thread, which the engine
