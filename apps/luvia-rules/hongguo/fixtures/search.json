@@ -1,0 +1,58 @@
+{
+  "searchList": [
+    {
+      "doc_type": 23,
+      "name": "莞城往事：八十五块闯出亿万身家",
+      "keyword": "7698351941423729689",
+      "video_data": {
+        "series_id": "7698351941423729689",
+        "episode_cnt": 150,
+        "pay_type": 0,
+        "series_title": "莞城往事：八十五块闯出亿万身家",
+        "series_name": null,
+        "series_intro": "",
+        "series_cover": "https://p3-novel.byteimg.com/fixture/search-1.jpg",
+        "episode_right_text": "全150集",
+        "vid_list": ["7698352000000000001", "7698352000000000002", "7698352000000000003", "7698352000000000004", "7698352000000000005"],
+        "category_list": [
+          { "category_id": "5031", "name": "逆袭" },
+          { "category_id": "316", "name": "剧情" },
+          { "category_id": "37", "name": "穿越" },
+          { "category_id": "739", "name": "逆袭" },
+          { "category_id": "1001", "name": "校园" },
+          { "category_id": "1002", "name": "都市" }
+        ],
+        "genre": "205",
+        "accessible_episode_cnt": null,
+        "tags": null
+      }
+    },
+    {
+      "doc_type": 23,
+      "name": "神豪外挂第一季",
+      "keyword": "7694114000000000020",
+      "video_data": {
+        "series_id": "7694114000000000020",
+        "episode_cnt": 96,
+        "pay_type": 0,
+        "series_title": "神豪外挂第一季",
+        "series_name": null,
+        "series_intro": "",
+        "series_cover": "https://p3-novel.byteimg.com/fixture/search-2.jpg",
+        "episode_right_text": "全96集",
+        "vid_list": ["7694114000000000021"],
+        "category_list": [
+          { "category_id": "5031", "name": "逆袭" }
+        ],
+        "genre": "205",
+        "accessible_episode_cnt": null,
+        "tags": null
+      }
+    }
+  ],
+  "totalCount": 109,
+  "accessibleEpisodeCnt": 5,
+  "pageNum": 1,
+  "totalPages": 11,
+  "hasMore": true
+}

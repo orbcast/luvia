@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>分类 - 红果短剧</title>
+<script>window.__glue_t = 1;</script>
+</head>
+<body>
+<div id="root"></div>
+<script async="" data-script-src="modern-inline">_ROUTER_DATA = {"loaderData":{"category_layout":{},"category_page":{"req":{"page":2},"isSuccess":true,"selectorList":[{"row_id":1,"row_name":"全部分类","items":[{"selector_item_id":"romance","show_name":"爱情","category_json_ids":["5000"]},{"selector_item_id":"comeback","show_name":"逆袭","category_json_ids":["5031"]}]}],"recommendList":[{"episode_cnt":70,"accessible_episode_cnt":3,"pay_type":0,"series_id":"7694114123456789012","series_name":"二婚嫁对人，前夫悔破防","series_cover":"https://p6-novel.byteimg.com/fixture/category-1.jpg","series_intro":"","tags":["爱情","都市爱情","日久生情","逆风翻盘"],"episode_right_text":"全70集","celebrities":[],"series_episode_info":{"episode_cnt":70,"episode_total_cnt":70,"series_status":1},"vid_list":[],"record_number":"(豫)微短剧备字(2026)第057号"},{"episode_cnt":88,"accessible_episode_cnt":3,"pay_type":0,"series_id":"7694114000000000010","series_name":"贪恋她","series_cover":"https://p6-novel.byteimg.com/fixture/category-2.jpg","series_intro":"","tags":["爱情","现代"],"episode_right_text":"全88集","celebrities":[],"series_episode_info":{"episode_cnt":88,"episode_total_cnt":88,"series_status":1},"vid_list":[],"record_number":""}],"pagination":{"total":800,"pageNum":2,"pageSize":24,"totalPages":34}}},"errors":null}</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

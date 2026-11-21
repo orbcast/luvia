@@ -80,7 +80,7 @@ rules:
 
 ## rules-verify: 用规则自带 fixtures 离线验证 luvia-rules 的每个源（不访问真实上游）
 rules-verify:
-	@cd $(APP) && CGO_ENABLED=0 go test ./tests -run '^(TestKanju|TestFakeUpstream|TestLoaderLoadsCheckedInRules|TestRule|TestSelector|TestTemplate)' -count=1 -v
+	@cd $(APP) && CGO_ENABLED=0 go test ./tests -run '^(TestKanju|TestHongguo|TestFakeUpstream|TestLoaderLoadsCheckedInRules|TestRule|TestSelector|TestTemplate)' -count=1 -v
 
 ## i18n: 校验多语言 catalogs 的占位符与复数形式（译文完整性由 make rules 检查）
 i18n:

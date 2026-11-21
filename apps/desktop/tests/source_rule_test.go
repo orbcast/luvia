@@ -282,11 +282,20 @@ func TestLoaderLoadsCheckedInRules(t *testing.T) {
 		t.Fatalf("checked-in rules must load cleanly: %v", diagnostics)
 	}
 	sources := set.Sources()
-	if len(sources) != 1 || sources[0].ID() != "kanju" {
-		t.Fatalf("sources = %v", sources)
+	// Every checked-in rule must load, so the assertion names all of them
+	// instead of only counting: a rule that silently stops loading shows up as
+	// a shorter list here.
+	want := []string{"hongguo", "kanju"}
+	if len(sources) != len(want) {
+		t.Fatalf("want %d sources, got %d: %v", len(want), len(sources), sources)
 	}
-	if sources[0].Name() == "" {
-		t.Fatal("source name is empty")
+	for index, id := range want {
+		if sources[index].ID() != id {
+			t.Fatalf("source %d = %q, want %q", index, sources[index].ID(), id)
+		}
+		if sources[index].Name() == "" {
+			t.Fatalf("source %q has no name", id)
+		}
 	}
 	if set.Dir() != rulesDir {
 		t.Fatalf("dir = %q", set.Dir())

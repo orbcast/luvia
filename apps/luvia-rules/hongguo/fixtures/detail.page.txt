@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>少夫人来自东北3 - 红果短剧</title>
+<script>window.__glue_t = 1;</script>
+</head>
+<body>
+<div id="root"></div>
+<script async="" data-script-src="modern-inline">_ROUTER_DATA = {"loaderData":{"detail_layout":{},"detail_page":{"seriesDetail":{"episode_cnt":3,"accessible_episode_cnt":3,"pay_type":0,"series_id":"7706512650816982040","series_name":"少夫人来自东北3","series_cover":"https://p3-novel.byteimg.com/fixture/detail.jpg","series_intro":"","tags":["家庭","家庭温情","团宠","直爽女主","豪门","现代"],"episode_right_text":"全3集","celebrities":[{"is_label":false,"nickname":"梁雯晶","avatar":"https://p3-novel.byteimg.com/fixture/actor-1.jpg","sub_title":"饰 钱小卉","celebrity_id":"7497215074432455960"},{"is_label":false,"nickname":"王沐轩","avatar":"https://p3-novel.byteimg.com/fixture/actor-2.jpg","sub_title":"饰 陆行舟","celebrity_id":"7497215074432455961"}],"series_episode_info":{"episode_cnt":3,"episode_total_cnt":3,"series_status":1},"vid_list":["7706514645208534041","7706514815799282713","7706514815799282714"],"first_visible_time":"1763600000","season_info":{"series_group_id":"7612205792048974873"},"record_number":"(豫)微短剧备字(2026)第057号"}}},"errors":null}</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

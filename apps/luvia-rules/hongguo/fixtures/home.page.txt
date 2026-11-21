@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>红果短剧</title>
+<script>window.__glue_t = 1;</script>
+<script>
+// A decoy: the marker appears in a comment and in an assignment that is not
+// the payload, so the extractor has to look for the object after the equals.
+// _ROUTER_DATA is only real when it is followed by a JSON object.
+window._ROUTER_DATA_GUARD = 1;
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script async="" data-script-src="modern-inline">_ROUTER_DATA = {"loaderData":{"page":{"initialHomeTab":"all","isSuccess":true,"bannerList":[],"mBannerList":[],"homeSections":[{"tab_type":"all","tab_name":"热播短剧","video_list":[{"series_id":"7698351941423729689","episode_cnt":150,"series_status":1,"pay_type":0,"series_title":"莞城往事：八十五块闯出亿万身家","series_intro":"","series_cover":"https://p3-novel.byteimg.com/fixture/home-1.jpg","episode_right_text":"全150集","vid_list":[],"category_list":[{"category_id":"5031","name":"逆袭"},{"category_id":"316","name":"剧情"}],"genre":"205","celebrities":[],"recommend_tags":[],"tag_infos":[]},{"series_id":"7706512650816982040","episode_cnt":96,"series_status":1,"pay_type":0,"series_title":"少夫人来自东北3","series_intro":"","series_cover":"https://p3-novel.byteimg.com/fixture/home-2.jpg","episode_right_text":"全96集","vid_list":[],"category_list":[{"category_id":"5000","name":"爱情"},{"category_id":"5021","name":"年代"}],"genre":"101","celebrities":[],"recommend_tags":[],"tag_infos":[]}]},{"tab_type":"human","tab_name":"热播真人剧","video_list":[{"series_id":"7694114123456789012","episode_cnt":70,"series_status":1,"pay_type":0,"series_title":"二婚嫁对人，前夫悔破防","series_intro":"","series_cover":"https://p6-novel.byteimg.com/fixture/home-3.jpg","episode_right_text":"全70集","vid_list":[],"category_list":[{"category_id":"5000","name":"爱情"},{"category_id":"316","name":"剧情"}],"genre":"101","celebrities":[],"recommend_tags":[],"tag_infos":[]}]},{"tab_type":"comic","tab_name":"热播漫剧","video_list":[{"series_id":"7694114000000000001","episode_cnt":60,"series_status":1,"pay_type":0,"series_title":"我在异界开客栈","series_intro":"","series_cover":"https://p3-novel.byteimg.com/fixture/home-4.jpg","episode_right_text":"全60集","vid_list":[],"category_list":[{"category_id":"37","name":"穿越"}],"genre":"301","celebrities":[],"recommend_tags":[],"tag_infos":[]}]},{"tab_type":"ai","tab_name":"热播AI剧","video_list":[{"series_id":"7694114000000000002","episode_cnt":40,"series_status":1,"pay_type":0,"series_title":"星海拾荒者","series_intro":"","series_cover":"https://p3-novel.byteimg.com/fixture/home-5.jpg","episode_right_text":"全40集","vid_list":[],"category_list":[{"category_id":"316","name":"剧情"}],"genre":"401","celebrities":[],"recommend_tags":[],"tag_infos":[]}]}]}},"errors":null}</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

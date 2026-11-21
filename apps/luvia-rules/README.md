@@ -19,6 +19,7 @@ apps/luvia-rules/
 | 目录 | 来源 | 覆盖 | 说明 |
 | --- | --- | --- | --- |
 | `kanju/` | `https://kanju1.com/` 的公开接口 | 首页、列表与搜索、当日更新、详情、选集、线路解析 | 带 HMAC 签名的 JSON 接口；搜索靠 `intent=search` 才按关键词匹配；当日更新取 `/v1/watch-calendar` 的周表，每天每类上游只给 6 条预览 |
+| `hongguo/` | `https://hongguoduanju.com/` 的网页端 | 首页、列表与搜索、详情、选集、播放地址 | 除搜索外数据在 HTML 的 `_ROUTER_DATA` 里，规则用 `response: routerData` 取；只有前 3~5 集能拿到播放地址，其余是官方付费墙 |
 
 同一上游的多条播放源与线路是运行时数据（响应中的线路数组），不拆成多个目录；分类差异用规则里的 `kindValues` 处理。
 

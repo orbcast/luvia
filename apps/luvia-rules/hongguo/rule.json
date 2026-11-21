@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "id": "hongguo",
+  "name": "红果短剧",
+  "baseURL": "https://hongguoduanju.com",
+  "http": {
+    "timeoutMs": 30000,
+    "retries": 2,
+    "concurrency": 4,
+    "maxPages": 20,
+    "headers": [
+      { "name": "User-Agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" },
+      { "name": "Accept", "value": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8" },
+      { "name": "Accept-Language", "value": "zh-CN,zh;q=0.9" }
+    ]
+  },
+  "home": {
+    "steps": [
+      { "op": "request", "as": "res", "path": "/", "response": "routerData" }
+    ],
+    "output": {
+      "from": "res.loaderData.page.homeSections[*]",
+      "fields": {
+        "id": "tab_type",
+        "title": "tab_name"
+      },
+      "cards": {
+        "from": "video_list[*]",
+        "fields": {
+          "id": "series_id",
+          "title": { "fn": "coalesce", "args": ["series_title", "series_name"] },
+          "kind": { "fn": "kind", "args": [{ "literal": "short_drama" }] },
+          "tags": "category_list[*].name",
+          "remarks": { "template": "短剧 · {episode_right_text}" },
+          "overview": "series_intro",
+          "posterUrl": "series_cover"
+        }
+      }
+    }
+  },
+  "list": {
+    "kindValues": {},
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "when": { "fn": "not", "args": [{ "fn": "empty", "args": ["keyword"] }] },
+        "path": "/api/search/result",
+        "query": [
+          { "key": "query", "value": "{keyword}" },
+          { "key": "page", "value": "{page}" },
+          { "key": "count", "value": "10" }
+        ]
+      },
+      {
+        "op": "request",
+        "as": "res",
+        "when": { "fn": "empty", "args": ["keyword"] },
+        "path": "/category",
+        "response": "routerData",
+        "query": [
+          { "key": "page", "value": "{page}" }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res.searchList[*].video_data|res.loaderData.category_page.recommendList[*]",
+      "page": { "fn": "coalesce", "args": ["res.pageNum", "res.loaderData.category_page.pagination.pageNum"] },
+      "cards": {
+        "from": "res.searchList[*].video_data|res.loaderData.category_page.recommendList[*]",
+        "fields": {
+          "id": "series_id",
+          "title": { "fn": "coalesce", "args": ["series_title", "series_name"] },
+          "kind": { "fn": "kind", "args": [{ "literal": "short_drama" }] },
+          "tags": { "fn": "list", "args": ["tags"] },
+          "remarks": { "template": "短剧 · {episode_right_text}" },
+          "overview": "series_intro",
+          "posterUrl": "series_cover"
+        }
+      }
+    }
+  },
+  "detail": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/detail",
+        "response": "routerData",
+        "query": [
+          { "key": "series_id", "value": "{id}" }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res.loaderData.detail_page.seriesDetail",
+      "fields": {
+        "id": "series_id",
+        "title": "series_name",
+        "kind": { "fn": "kind", "args": [{ "literal": "short_drama" }] },
+        "tags": { "fn": "list", "args": ["tags"] },
+        "overview": "series_intro",
+        "posterUrl": "series_cover",
+        "remarks": { "template": "短剧 · {episode_right_text}" },
+        "episodeCount": "episode_cnt",
+        "actors": "celebrities[*].nickname"
+      }
+    }
+  },
+  "episodes": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "path": "/detail",
+        "response": "routerData",
+        "query": [
+          { "key": "series_id", "value": "{id}" }
+        ]
+      }
+    ],
+    "output": {
+      "from": "res.loaderData.detail_page.seriesDetail.vid_list[*]",
+      "fields": {
+        "id": "item",
+        "payload": "item",
+        "number": "index"
+      }
+    }
+  },
+  "resolve": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "res",
+        "method": "POST",
+        "path": "/api/video/protected/fallback-play-info",
+        "body": {
+          "item_id": { "template": "{payload}" }
+        }
+      }
+    ],
+    "lines": {
+      "from": "res",
+      "fields": {
+        "id": { "literal": "public" },
+        "label": { "literal": "public" },
+        "url": "main_url",
+        "urlKind": { "literal": "mp4" },
+        "default": { "literal": true }
+      },
+      "maxAttempts": 1
+    }
+  }
+}
