@@ -72,7 +72,13 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 		p.stageOpening(c, m)
 	} else if p.player != nil {
 		p.stageFallback(c, t, m)
-		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Cover)
+		// The stage keeps the whole frame. Cover scales a picture by the larger
+		// of the two ratios, which for a portrait series (short dramas ship
+		// 360x640) crops it to a centre band of a wide stage: the picture reads
+		// as zoomed in and cut off. Contain scales by the smaller ratio, so the
+		// frame fits whole and the backdrop behind it fills the sides; a frame
+		// that already matches the stage's ratio fills it either way.
+		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Contain)
 		// An engine that has not delivered its first frame is still opening the
 		// stream, which on a slow line is the longest wait of all; one that has
 		// its picture and waits for more data is buffering. Both say so, with the
