@@ -54,7 +54,7 @@ func (p *Page) backdrop(c *ui.Context, t *ui.Theme) {
 	if p.deps.Images != nil && url != "" {
 		if bitmap := p.deps.Images.Bitmap(url); bitmap != nil {
 			ui.Image(c, bitmap).Absolute().Left(0).Right(0).Top(0).Bottom(0).
-				Fit(ui.Cover).Blur(40).Opacity(0.95).ZIndex(-2)
+				Fit(ui.Cover).Blur(design.ArtworkBlur()).Opacity(0.95).ZIndex(-2)
 		}
 	}
 	scrim := design.DetailBackdrop(t)

@@ -20,15 +20,22 @@ const (
 	// minCardWidth keeps a continue-watching card legible when the window
 	// narrows; the column count follows from it.
 	minCardWidth  = 150
-	heroMinHeight = 380
+	heroMinHeight = 320
 	heroMaxHeight = 620
-	captionWidth  = 760
-	actionHeight  = 46
-	sectionGap    = 44
-	cardGap       = 12
-	slideWidth    = 66
-	slideHeight   = 38
-	posterGap     = 14
+	// heroCoverShare is how much of the window's height the banner's cover
+	// takes in the wide layout, and heroBreath the room the banner leaves below
+	// the cover and its copy. A docked page sizes its banner by heroDockedShare
+	// instead, because its copy sits beside a smaller cover.
+	heroCoverShare  = 0.38
+	heroBreath      = 48
+	heroDockedShare = 0.52
+	captionWidth    = 760
+	actionHeight    = 46
+	sectionGap      = 44
+	cardGap         = 12
+	slideWidth      = 66
+	slideHeight     = 38
+	posterGap       = 14
 
 	// dayPosterRows caps what one day shows: two rows of posters, which is six
 	// cards in the wide layout's three columns.
@@ -36,6 +43,16 @@ const (
 	// dayPosterMinWidth is the narrowest artwork a title stays recognizable
 	// at, and what decides how many columns a day's row takes.
 	dayPosterMinWidth = 110
+
+	// coverGap separates the banner's cover from its copy, coverRadius rounds
+	// that cover, and heroSynopsisLines is how much of a title's synopsis the
+	// banner shows before an ellipsis.
+	coverGap          = 28
+	coverRadius       = 16
+	heroSynopsisLines = 3
+	// coverRatio is a poster's height over its width, so the hero cover keeps
+	// the artwork's own shape instead of a hero-sized crop.
+	coverRatio = 1.5
 )
 
 // View builds the Discover page inside the AppShell's content area.
@@ -69,10 +86,7 @@ func (p *Page) View(c *ui.Context) ui.Element {
 func (p *Page) heroView(c *ui.Context, t *ui.Theme, m locales.Messages, width, height float32) {
 	art := design.OnArtwork(t)
 	card := p.featured[p.hero]
-	heroHeight := clamp(height*0.62, heroMinHeight, heroMaxHeight)
-	if design.Docked(width) {
-		heroHeight = clamp(height*0.58, 300, heroMaxHeight)
-	}
+	heroHeight, coverHeight := heroBand(c.TitleBar().Bottom, width, height)
 	hero := ui.Box(c).FillWidth().Height(heroHeight).Clip()
 	hero.Children(func() {
 		p.artwork(c, t, card.BackdropURL, card.PosterURL)
@@ -108,15 +122,38 @@ func (p *Page) heroView(c *ui.Context, t *ui.Theme, m locales.Messages, width, h
 			},
 		})
 
-		p.heroCaption(c, t, m, card, heroHeight, width)
+		bandBottom := p.heroCaption(c, t, m, card, heroHeight, coverHeight, width)
 		if !design.Docked(width) {
-			p.heroSlides(c, t, width, false)
+			p.heroSlides(c, t, width, false, bandBottom)
 		}
 	})
 	p.hovering = hero.Hovered()
 }
 
-// artwork paints the slide image, or a quiet gradient while it downloads.
+// heroBand returns the banner's height and its cover's height. The cover follows
+// the window's height, and the banner hugs it: the cover hangs from the chrome
+// line, the copy sits on its bottom edge, and heroBreath is the room the banner
+// leaves below that band before the page's sections begin. A docked page stacks
+// the copy beside the cover instead, so its banner keeps to a share of the window
+// and the cover stays a thumbnail.
+func heroBand(barBottom, width, height float32) (heroHeight, coverHeight float32) {
+	if design.Docked(width) {
+		heroHeight = clamp(height*heroDockedShare, 300, heroMaxHeight)
+		coverHeight = clamp(heroHeight*0.5, 138, 200)
+		return heroHeight, coverHeight
+	}
+	coverHeight = clamp(height*heroCoverShare, 200, 380)
+	heroHeight = design.ChromeTop(barBottom) + coverHeight + heroBreath
+	if heroHeight < heroMinHeight {
+		heroHeight = heroMinHeight
+	}
+	return heroHeight, coverHeight
+}
+
+// artwork paints the slide's cover across the banner, blurred: the still is
+// the hero's ground, a wash of its own colors, while the cover card and the
+// copy carry the details. It stays opaque long enough to meet the page, so the
+// banner still ends without a line.
 func (p *Page) artwork(c *ui.Context, t *ui.Theme, backdrop, poster string) {
 	url := backdrop
 	if url == "" {
@@ -124,9 +161,8 @@ func (p *Page) artwork(c *ui.Context, t *ui.Theme, backdrop, poster string) {
 	}
 	if p.deps.Images != nil {
 		if bitmap := p.deps.Images.Bitmap(url); bitmap != nil {
-			// Masking the artwork keeps the banner immersive: it melts into
-			// the page instead of ending on a hard edge, whatever it shows.
 			ui.Image(c, bitmap).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Cover).
+				Blur(design.ArtworkBlur()).
 				MaskLinearGradient(ui.LinearGradient{
 					Angle: 180,
 					Stops: []ui.GradientStop{
@@ -141,39 +177,108 @@ func (p *Page) artwork(c *ui.Context, t *ui.Theme, backdrop, poster string) {
 	ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).Gradient(t.Surface, t.Background, 160)
 }
 
-func (p *Page) heroCaption(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card, heroHeight, width float32) {
+// heroCaption lays the banner's cover and copy on one band: the cover hangs
+// from the chrome line, and the copy sits on the cover's own bottom edge, so the
+// two read as one block rather than the copy sinking to the banner's floor. It
+// returns how far that band ends from the banner's bottom, which is where the
+// slides' thumbnails sit. A docked page has no chrome line to hang from, so the
+// cover and copy share the floor instead.
+func (p *Page) heroCaption(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card, heroHeight, coverHeight, width float32) float32 {
 	art := design.OnArtwork(t)
 	inset := design.Inset(width)
 	titleSize := clamp(heroHeight*0.135, 32, 54)
-	column := ui.Column(c).Absolute().Left(inset).Bottom(36).Gap(14)
-	if design.Docked(width) {
-		// Narrow: copy owns the full width and keeps clear of the dock.
+	available := width - 2*inset
+	copyWidth := clamp(width*0.52, 420, captionWidth)
+	bottom, gap := float32(36), float32(coverGap)
+	chromeTop := design.ChromeTop(c.TitleBar().Bottom)
+	coverWidth := coverHeight / coverRatio
+	docked := design.Docked(width)
+	if docked {
+		// Narrow: the copy owns what the cover leaves and keeps clear of the
+		// dock.
 		titleSize = clamp(heroHeight*0.12, 24, 34)
-		column.Right(inset).Bottom(20).Gap(10)
-	} else {
-		column.Width(clamp(width*0.52, 420, captionWidth))
+		copyWidth = available
+		bottom, gap = 20, 14
 	}
-	column.Children(func() {
-		ui.Text(c, card.Title).FontSize(titleSize).Bold().
-			TextColor(art.Ink).MaxLines(1)
+	// A poster never takes more than its share of the line, and the copy keeps
+	// its own room beside it.
+	coverWidth = clamp(coverWidth, 120, available*0.38)
+	if room := available - coverWidth - gap; copyWidth > room {
+		copyWidth = room
+	}
 
-		p.heroMeta(c, t, m, card)
-
-		if card.Overview != "" {
-			ui.Text(c, card.Overview).FontSize(13).LineHeight(1.6).
-				TextColor(art.Muted).MaxLines(2)
+	row := ui.Row(c).Absolute().Left(inset).Gap(gap).AlignItems(ui.End).
+		Width(coverWidth + gap + copyWidth)
+	if docked {
+		row.Bottom(bottom)
+	} else {
+		row.Top(chromeTop).Height(coverWidth * coverRatio)
+	}
+	row.Children(func() {
+		cover := p.heroCover(c, t, card, coverWidth)
+		if !docked {
+			cover.AlignSelf(ui.Start)
 		}
 
-		p.heroActions(c, t, m, card)
-
-		if message, ok := p.noticeText(m); ok {
-			ui.Text(c, message).FontSize(11).TextColor(art.Muted)
+		column := ui.Column(c).Width(copyWidth).Gap(14)
+		if docked {
+			column.Gap(10)
 		}
+		column.Children(func() {
+			title := ui.Text(c, card.Title).FontSize(titleSize).Bold().TextColor(art.Ink)
+			if docked {
+				title.MaxLines(2)
+			} else {
+				title.MaxLines(1)
+			}
 
-		if design.Docked(width) {
-			p.heroSlides(c, t, width, true)
+			p.heroMeta(c, t, m, card)
+
+			if card.Overview != "" {
+				// Three lines of synopsis, cut with an ellipsis: enough to place
+				// the title without turning the banner into a page of text.
+				ui.Text(c, card.Overview).FontSize(13).LineHeight(1.6).
+					TextColor(art.Muted).MaxLines(heroSynopsisLines)
+			}
+
+			p.heroActions(c, t, m, card)
+
+			if message, ok := p.noticeText(m); ok {
+				ui.Text(c, message).FontSize(11).TextColor(art.Muted)
+			}
+
+			if docked {
+				p.heroSlides(c, t, width, true, 0)
+			}
+		})
+	})
+
+	if docked {
+		return bottom
+	}
+	return heroHeight - chromeTop - coverWidth*coverRatio
+}
+
+// heroCover is the banner's own cover: the poster card floating beside the
+// copy, so a slide reads as a title with its artwork rather than as a
+// photograph with text laid over it.
+func (p *Page) heroCover(c *ui.Context, t *ui.Theme, card source.Card, w float32) ui.Element {
+	shadow, border := design.HeroCover(t)
+	frame := ui.Box(c).Width(w).Height(w*coverRatio).Radius(coverRadius).Clip().
+		Background(t.Surface).Border(1, border).Shadow(0, 18, 40, 0, shadow)
+	frame.Children(func() {
+		if p.deps.Images == nil {
+			return
+		}
+		url := card.PosterURL
+		if url == "" {
+			url = card.BackdropURL
+		}
+		if bitmap := p.deps.Images.Bitmap(url); bitmap != nil {
+			ui.Image(c, bitmap).Fill().Fit(ui.Cover)
 		}
 	})
+	return frame
 }
 
 func (p *Page) heroMeta(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
@@ -302,7 +407,10 @@ func (p *Page) heroActions(c *ui.Context, t *ui.Theme, m locales.Messages, card 
 	})
 }
 
-func (p *Page) heroSlides(c *ui.Context, t *ui.Theme, width float32, inline bool) {
+// heroSlides is the slide picker: inline under the copy on a docked page, and
+// in the banner's bottom-right corner otherwise, where it sits on the same line
+// as the copy's own bottom so the slide's two clusters read together.
+func (p *Page) heroSlides(c *ui.Context, t *ui.Theme, width float32, inline bool, bottom float32) {
 	art := design.OnArtwork(t)
 	if len(p.featured) < 2 {
 		return
@@ -313,7 +421,7 @@ func (p *Page) heroSlides(c *ui.Context, t *ui.Theme, width float32, inline bool
 		w, h = 46, 28
 		row.FillWidth().Gap(6)
 	} else {
-		row.Absolute().Right(design.ContentMargin).Bottom(30)
+		row.Absolute().Right(design.ContentMargin).Bottom(bottom)
 	}
 	row.Children(func() {
 		ui.Text(c, fmt.Sprintf("%02d / %02d", p.hero+1, len(p.featured))).FontSize(11).

@@ -209,13 +209,14 @@ func TestAppShellMovesBetweenColumnAndDock(t *testing.T) {
 }
 
 // TestChromeTopClearsTheSystemTitleBar covers where the window's chrome starts:
-// on its own inset where no title bar holds the system's controls, and the same inset
-// the panels keep from the window's edges, under the room they take where one does, so a panel never touches them.
+// on the shell's top margin where no title bar holds the system's controls, and
+// under that bar's room plus the same margin where one does, so the column never
+// tucks under the buttons.
 func TestChromeTopClearsTheSystemTitleBar(t *testing.T) {
-	if got := design.ChromeTop(0); got != design.WindowControlTop {
-		t.Fatalf("chrome starts at %v without a title bar, not at %v", got, design.WindowControlTop)
+	if got := design.ChromeTop(0); got != design.ShellTop {
+		t.Fatalf("chrome starts at %v without a title bar, not at %v", got, design.ShellTop)
 	}
-	if got, want := design.ChromeTop(28), float32(28+design.ShellInset); got != want {
+	if got, want := design.ChromeTop(28), float32(28+design.ShellTop); got != want {
 		t.Fatalf("chrome starts at %v under a 28 title bar, not %v", got, want)
 	}
 }

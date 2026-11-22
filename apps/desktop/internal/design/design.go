@@ -6,11 +6,15 @@ import "github.com/egoist/mygo/ui"
 
 // AppShell geometry in logical pixels; keep synchronized with DESIGN.md.
 const (
-	ShellInset         = 12
-	ShellWidth         = 56
-	ShellPadding       = 6
-	ShellGap           = 6
-	ShellRadius        = 22
+	ShellInset   = 12
+	ShellWidth   = 56
+	ShellPadding = 6
+	ShellGap     = 6
+	ShellRadius  = 22
+	// ShellTop is the room the AppShell column, the window controls' capsule
+	// and a page's back button keep from the window's top edge; under a title
+	// bar holding the system's buttons it is added below that bar.
+	ShellTop           = 20
 	NavigationWidth    = 44
 	NavigationHeight   = NavigationWidth
 	NavigationRadius   = 13
@@ -22,8 +26,8 @@ const (
 	// button in the capsule the shell draws in place of the system's, and
 	// WindowControlGap the space between them. WindowControlPadding is the room
 	// between the buttons and the capsule's edge, WindowControlInset the room
-	// between the capsule and the window's edge, and WindowControlTop where the
-	// capsule starts.
+	// between the capsule and the window's right edge; the capsule starts on
+	// ChromeTop with the AppShell column.
 	WindowControlWidth    = 38
 	WindowControlHeight   = 32
 	WindowControlGap      = 2
@@ -31,7 +35,6 @@ const (
 	WindowControlIconSize = 16
 	WindowControlPadding  = 5
 	WindowControlInset    = 12
-	WindowControlTop      = 12
 
 	// ContentInset is where page content starts, clear of the floating AppShell.
 	ContentInset  = ShellInset + ShellWidth
@@ -94,13 +97,13 @@ func ShellGroupHeight(count int) float32 {
 // controls' capsule, the AppShell column and a page's back button all begin
 // there, so the top corners read as one row. A window whose title bar holds the
 // system's controls, as macOS's traffic lights, keeps that bar's room first and
-// then the same inset a panel keeps from the window's own edges, so the corner
-// reads as evenly framed rather than tucked under the buttons.
+// then ShellTop, so the corner reads as evenly framed rather than tucked under
+// the buttons.
 func ChromeTop(barBottom float32) float32 {
 	if barBottom <= 0 {
-		return WindowControlTop
+		return ShellTop
 	}
-	return barBottom + ShellInset
+	return barBottom + ShellTop
 }
 
 // Docked reports whether the AppShell docks at the bottom at this width.
@@ -227,6 +230,21 @@ func OnArtwork(t *ui.Theme) Artwork {
 // MaskOpaque is the opaque stop of a mask that fades artwork out.
 func MaskOpaque() ui.Color     { return ui.RGB(0, 0, 0) }
 func TrackOnArtwork() ui.Color { return ui.RGBA(255, 255, 255, 0.30) }
+
+// ArtworkBlur is the sigma a page blurs a full-bleed still by when copy and
+// surfaces sit on it, so the picture reads as a wash of its own colors. The
+// hero backdrop and the detail page share it.
+func ArtworkBlur() float32 { return 40 }
+
+// HeroCover dresses the banner's cover card, which floats beside the copy over
+// the blurred still: the shadow that lifts it off that wash, and the hairline
+// along its edge.
+func HeroCover(t *ui.Theme) (shadow, border ui.Color) {
+	if t.Dark {
+		return ui.RGBA(0, 0, 0, 0.55), ui.RGBA(255, 255, 255, 0.16)
+	}
+	return ui.RGBA(0, 0, 0, 0.30), ui.RGBA(255, 255, 255, 0.50)
+}
 
 // CategoryTint is the pill color of one resource-library category. The tints
 // are fixed category colors, the same in both themes: the "all" tab is warm

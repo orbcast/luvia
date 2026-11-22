@@ -13,7 +13,7 @@
 
 按平台分工：`appshell.NativeWindowButtons(goos)` 在 macOS 返回真，窗口以 `TitleBarHidden` 创建且**不**隐藏系统按钮，`appshell` 也不接收按钮布局，因此不画胶囊；Windows 与 Linux 保持原做法，隐藏系统按钮并按桌面布局自绘。
 
-顶线 `design.ChromeTop` 相应改成：系统标题栏按钮存在时取「其底边 + `ShellInset`（12）」，否则取 `WindowControlTop`（12）。左列导航、详情页返回按钮都从这条线开始，因此不会贴到红黄绿上；窗口拖动条仍从 `bar.Left` 起，红绿灯本身可点。
+顶线 `design.ChromeTop` 相应改成：系统标题栏按钮存在时取「其底边 + `ShellTop`」，否则取 `ShellTop`。左列导航、详情页返回按钮、发现页 Hero 封面容器都从这条线开始，因此不会贴到红黄绿上；窗口拖动条仍从 `bar.Left` 起，红绿灯本身可点。
 
 自绘胶囊的 Token 与 `internal/glass` 的 `Surface` 保留，只服务 Windows 与 Linux；`Shell.SetWindowControlsHidden` 在 macOS 上不再隐藏原生按钮，播放页期间红绿灯留在左上角，进入系统全屏时由 AppKit 隐藏。
 
@@ -21,6 +21,6 @@
 
 代价是三个平台的外观不再一致：macOS 的窗口按钮看不出来自应用主题，Windows 与 Linux 仍是自绘胶囊。这是有意的，系统原生控件在自己的平台上比统一皮肤更可靠。
 
-`ChromeTop` 在系统按钮下方留的 12 个单位与面板距窗口左边缘的 12 相同，实测红绿灯底边距窗口顶部 23，导航列顶边因此落在 35，左上角读作等距内缩而非被按钮压住；先前的 6 个单位看起来仍偏紧。若以后改用 `TitleBarHiddenInset` 或给窗口设置 `TrafficLightPosition`，`TitleBar` 报告的底边会随之变化，`ChromeTop` 不需要改，但视觉间距需要在 macOS 上重新看一次。
+`ChromeTop` 起初在系统按钮下方留 12 个单位，与面板距窗口左边缘的 12 相同；后来按用户要求把顶部间距加宽为 `ShellTop`（20），左右与底边仍是 12，实测红绿灯底边距窗口顶部 23，导航列顶边因此落在 43，左上角读作内缩而非被按钮压住。若以后改用 `TitleBarHiddenInset` 或给窗口设置 `TrafficLightPosition`，`TitleBar` 报告的底边会随之变化，`ChromeTop` 不需要改，但视觉间距需要在 macOS 上重新看一次。
 
 macOS 上播放页无法隐藏红绿灯（MyGo 没有运行期切换 `HideWindowButtons` 的接口），沉浸感略低于 Windows 与 Linux。若这一点日后成为问题，需要在 MyGo 侧提供运行期隐藏，或让播放页进入系统全屏，而不是在本应用里再画一套控件。
