@@ -1,0 +1,10 @@
+{
+  "schema_version": "danmuku.segment.v1",
+  "timebase": "milliseconds",
+  "from_ms": 0,
+  "to_ms": 300000,
+  "items": [
+    [0, 1, 14463824, 25, "左上角笑死我了!!", "dmc_sample1"],
+    [17000, 1, 16777215, 25, "这是在练习台词吗", "dmc_sample2"]
+  ]
+}

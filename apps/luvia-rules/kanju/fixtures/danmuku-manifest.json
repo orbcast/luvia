@@ -1,0 +1,33 @@
+{
+  "schema_version": "danmuku.manifest.v1",
+  "danmuku_id": "episode:sample:f260b6480926213ee3ba",
+  "stream_id": "dmu_sample",
+  "revision": 19,
+  "title": "示例剧集 第1集",
+  "duration_ms": 600000,
+  "timebase": "milliseconds",
+  "style_profile": {
+    "schema_version": "danmuku.style.v1",
+    "font_size_unit": "reference_css_px",
+    "reference_player_height": 720,
+    "normal_font_size": 25
+  },
+  "comment_count": 4,
+  "segment_duration_ms": 300000,
+  "segments": [
+    {
+      "from_ms": 0,
+      "to_ms": 300000,
+      "count": 2,
+      "url": "../segments/0-300000.sample.json.gz",
+      "content_encoding": "gzip"
+    },
+    {
+      "from_ms": 300000,
+      "to_ms": 600000,
+      "count": 2,
+      "url": "../segments/300000-600000.sample.json.gz",
+      "content_encoding": "gzip"
+    }
+  ]
+}

@@ -203,3 +203,52 @@ func TestValidateRejectsEachBrokenArea(t *testing.T) {
 		t.Fatalf("valid rule: %v", err)
 	}
 }
+
+// TestValidateChecksTheWindowBlocks covers the pair a per-window source needs.
+// A segments block alone has no manifest to read windows from, and a manifest
+// alone is a request whose answer nobody reads, so both are rule errors rather
+// than a source that quietly has no comments.
+func TestValidateChecksTheWindowBlocks(t *testing.T) {
+	const (
+		manifest = `"manifest": {"steps": [{"op": "request", "as": "source", "path": "/v1/c/{id}"}],
+			"output": {"from": "source", "fields": {"source": "source.url"}}}`
+		windows = `"output": {"from": "document.items[*]", "fields": {"at": "0", "text": "4"}},
+			"list": {"from": "document.segments[*]", "url": "url"}`
+	)
+	cases := map[string]string{
+		"segments alone":  `"segments": {` + windows + `}`,
+		"manifest alone":  manifest,
+		"manifest fields": strings.Replace(manifest, `"fields": {"source": "source.url"}`, `"fields": {"url": "source.url"}`, 1),
+		"manifest var":    strings.Replace(manifest, `"source.url"`, `"{bogus}"`, 1),
+		"list negative":   `"segments": {"steps": [], ` + strings.Replace(windows, `"url": "url"`, `"url": "url", "maxSegments": -1`, 1) + `}, ` + manifest,
+		"list selector":   `"segments": {"steps": [], ` + strings.Replace(windows, `"document.segments[*]"`, `"not a selector!"`, 1) + `}, ` + manifest,
+		"list url":        `"segments": {"steps": [], ` + strings.Replace(windows, `"url": "url"`, `"url": ""`, 1) + `}, ` + manifest,
+		"episodes list":   `"episodes": {"list": {"from": "a[*]", "url": "url"}, "steps": [{"op": "paginate", "as": "pages", "mode": "page", "size": 1, "maxPages": 1, "items": "list[*]", "path": "/v1/e/{id}"}], "output": {"from": "pages[*]", "fields": {"title": "title"}}}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			text := `{"schemaVersion": 1, "id": "sample", "name": "Sample", "baseURL": "https://sample.test", ` + body + `}`
+			// Decoding reads the selectors a block holds, so a broken one is
+			// refused there; the rest is caught by validation. Either way the
+			// rule must not load.
+			parsed, err := Decode([]byte(text))
+			if err == nil {
+				err = parsed.Validate()
+			}
+			if err == nil {
+				t.Fatal("the rule must not load")
+			}
+		})
+	}
+	t.Run("a complete pair", func(t *testing.T) {
+		text := `{"schemaVersion": 1, "id": "sample", "name": "Sample", "baseURL": "https://sample.test",
+			` + manifest + `, "segments": {"steps": [], ` + windows + `}}`
+		parsed, err := Decode([]byte(text))
+		if err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if err := parsed.Validate(); err != nil {
+			t.Fatalf("a manifest and a segments block must validate: %v", err)
+		}
+	})
+}

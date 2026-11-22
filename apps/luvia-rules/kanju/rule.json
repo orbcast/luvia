@@ -449,5 +449,48 @@
         "episode": "metadata.playback_context.episode_id"
       }
     }
+  },
+  "manifest": {
+    "steps": [
+      {
+        "op": "request",
+        "as": "source",
+        "path": "/v1/danmuku/episodes/{payload}/source"
+      }
+    ],
+    "output": {
+      "from": "source",
+      "fields": {
+        "source": {
+          "fn": "coalesce",
+          "args": [
+            "source.manifestUrl",
+            "source.manifest_url"
+          ]
+        }
+      }
+    }
+  },
+  "segments": {
+    "steps": [],
+    "output": {
+      "from": "document.items[*]",
+      "fields": {
+        "at": {
+          "fn": "seconds",
+          "args": [
+            "0"
+          ]
+        },
+        "text": "4",
+        "color": "2"
+      }
+    },
+    "list": {
+      "from": "document.segments[*]",
+      "url": "url",
+      "count": "count",
+      "maxSegments": 40
+    }
   }
 }

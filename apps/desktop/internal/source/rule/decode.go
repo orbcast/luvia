@@ -98,6 +98,18 @@ func (r *Rule) forEachBlock(fn func(steps []Step)) {
 	if r.Resolve != nil {
 		blocks = append(blocks, r.Resolve.Steps)
 	}
+	if r.Updates != nil {
+		blocks = append(blocks, r.Updates.Steps)
+	}
+	if r.Comments != nil {
+		blocks = append(blocks, r.Comments.Steps)
+	}
+	if r.Manifest != nil {
+		blocks = append(blocks, r.Manifest.Steps)
+	}
+	if r.Segments != nil {
+		blocks = append(blocks, r.Segments.Steps)
+	}
 	for _, steps := range blocks {
 		fn(steps)
 	}

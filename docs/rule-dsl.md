@@ -25,6 +25,7 @@
 | 选集 | `Episodes(ctx, Ref)` | `episodes` |
 | 解析播放地址 | `Resolve(ctx, Episode, lineID)` | `resolve` |
 | 评论与弹幕 | `Comments(ctx, Episode, limit)` | `comments` |
+| 分段弹幕清单 | `Manifest(ctx, Episode)` | `manifest`、`segments` |
 
 块存在即代表支持，缺少该块时调用返回 `unsupported` 分类的错误。没有隐式的兜底逻辑，例如 `list` 不会自动复用 `home` 的规则。
 
@@ -221,7 +222,38 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 
 `color` 是 `0xRRGGBB`，`episode` 填了的话只保留属于该集 token 的条目，用来在按剧请求时过滤掉别的集。
 
-`comments` 块不是弹幕层的唯一来源。播放页会先按剧名与集数去站外弹幕源找（见 [ADR 0015](adr/0015-danmaku-from-outside-the-rule.md)），找到就用站外的，站外说没有这一集、这一集为空或连不上时才回落到本块的条目；两边都没有时，评论页签会说明是哪一边没给。因此规则不填 `comments` 也不会让弹幕层变空，填了则是站外匹配失败时的兜底。
+`comments` 块不是弹幕层的唯一来源。播放页会先按剧名与集数去站外弹幕源找（见 [ADR 0015](adr/0015-danmaku-from-outside-the-rule.md)），找到就用站外的，站外说没有这一集、这一集为空或连不上时才回落到本块的条目；两边都没有时，评论页签会说明是哪一边没给。因此规则不填 `comments` 也不会让弹幕层变空，填了则是站外匹配失败时的兜底。上游自己就带时间轴弹幕时，`comments` 块也是它的入口（见下一节）。
+
+## 分段弹幕与 `list`
+
+有的上游把一集的弹幕切成若干时间窗口，每窗口一个文件，先给一份描述文件（下称清单）再逐窗口下载。这种结构用 `comments` 一次请求表达不了，所以有两个额外的块：
+
+```json
+"manifest": {
+  "steps": [{"op": "request", "as": "source",
+              "path": "/v1/upstream/episodes/{payload}/source"}],
+  "output": {"from": "source",
+             "fields": {"source": {"fn": "coalesce",
+                                 "args": ["manifestUrl", "manifest_url"]}}}
+},
+"segments": {
+  "steps": [{"op": "request", "as": "document", "path": "{source}"}],
+  "output": {"from": "document.items[*]",
+             "fields": {"at": {"fn": "int", "args": ["0"]},
+                        "text": "4", "color": "2"}},
+  "list": {"from": "document.segments[*]", "url": "url", "count": "count", "maxSegments": 40}
+}
+```
+
+- `manifest` 按集向源取清单地址，`output` 允许一个字段 `source`，必填。地址是绝对 http(s) 时直接就位；相对地址按 `baseURL` 解析。
+- `segments` 的 `steps` 在**每个窗口**各跑一次，`path` 里用 `{source}` 引用清单地址；请求 `sign: false` 才对，因为地址通常不在源自己的域名下。
+- `segments.output` 与 `comments.output` 同一套字段（`at`、`text`、`author`、`color`、`episode`），`text` 必填。**窗口里的一项往往是数组而不是对象**（`[时间, 模式, 颜色, 字号, 文本]` 这种紧凑写法），选择器可以直接写数字下标：`"text": "4"` 取第五个元素，`"at": {"fn": "int", "args": ["0"]}` 取第一个。
+- `segments.list` 把清单里那组窗口展开成多次请求：`from` 选择器相对本步的应答取数组，`url` 是每一项的地址（相对清单地址解析），`count` 是这一窗口的条数（引擎据此在累够上限后收手），`maxSegments` 封顶。**`from` 里的根变量就是本步的 `as`**。
+- 引擎不信任 `content-encoding` 声明：body 以 gzip 或 deflate 魔数开头就先解压，否则按明文 JSON 读。上游把文件命名成 `.json.gz` 却发明文是常见做法，不能当错误对待。
+- `at` 在这个块里只有按**秒**计才有意义；上游以毫秒计时刻时，用 `int` 取到毫秒数再交给按秒推进的播放器会把弹幕全推到片尾，所以这类上游需要在清单里换算（见 `apps/luvia-rules/kanju` 的说明）。
+
+播放页的取值顺序因此是四段：分段弹幕 → `manifest` 指向的源 → 站外按标题匹配 → `comments` 块的条目。前两段是同一个上游自己的时间轴弹幕，命中就用它；后两段依次兜底。
+
 
 ## 线路与播放地址
 
@@ -265,6 +297,8 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 | `episodes` | `id` |
 | `resolve` | `id`、`payload`、`media`、`lineId` |
 | `comments` | `id`、`payload` |
+| `manifest` | `id`、`payload` |
+| `segments` | `id`、`payload`，以及 `manifest` 绑定的 `source` |
 | `paginate` 步骤 | 额外 `page`、`offset`、`size` |
 
 引用未声明的变量是规则错误，加载时即被拒绝，不会拖到运行时。

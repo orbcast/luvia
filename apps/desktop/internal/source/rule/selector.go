@@ -95,7 +95,20 @@ func ParseSelector(text string) (Selector, error) {
 		if name == "" {
 			return Selector{}, fmt.Errorf("selector %q: expected a field name at offset %d", text, start)
 		}
-		segments = append(segments, segment{kind: segField, name: name})
+		if len(segments) == 0 && isNumber(name) {
+			// A whole selector that is a number reads that position of the
+			// current item. An upstream that packs a comment into an array
+			// ([moment, mode, colour, size, text]) has no field name to read,
+			// and making every rule nest it under a wildcard just to get an
+			// index would hide what the mapping means.
+			index, err := strconv.Atoi(name)
+			if err != nil {
+				return Selector{}, fmt.Errorf("selector %q: bad index %q", text, name)
+			}
+			segments = append(segments, segment{kind: segIndex, index: index})
+		} else {
+			segments = append(segments, segment{kind: segField, name: name})
+		}
 		if pos < len(trimmed) && trimmed[pos] == '[' {
 			end := strings.IndexByte(trimmed[pos:], ']')
 			if end < 0 {
@@ -247,12 +260,20 @@ func (s Selector) String() string {
 // HasIndices reports whether the selector steps through an array anywhere but
 // its last segment. Rules that read a nested shape use it to tell a mapping
 // that walks a list apart from one that only names fields.
-// Root names the first field of the selector, which is the variable it reads.
+// Root names the variable the selector reads, which is its first field. A
+// selector that starts with an index reads the current item instead and names
+// no variable at all, which is how a mapping reaches into a packed array.
 func (s Selector) Root() string {
 	if len(s.segments) == 0 {
 		return ""
 	}
 	return s.segments[0].name
+}
+
+// ReadsItem reports whether the selector starts at the item being mapped rather
+// than at a step variable, which is the case for a number-only selector.
+func (s Selector) ReadsItem() bool {
+	return len(s.segments) > 0 && s.segments[0].kind == segIndex
 }
 
 // Resolve walks root with the selector. The bool is false when any step is

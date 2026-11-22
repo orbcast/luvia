@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/engine"
@@ -53,6 +54,9 @@ func verifyKanjuSignature(t *testing.T, record recordedRequest, secret string) {
 	if len(nonce) != 32 {
 		t.Fatalf("nonce %q is not 16 bytes of hex", nonce)
 	}
+	// `path` is the catalogue's own route with its query, which is what an
+	// upstream signs: absolute URLs are how a request travels, not what it
+	// claims to be.
 	message := record.Method + "\n" + record.RequestURI() + "\n" + timestamp + "\n" + nonce
 	mac := hmac.New(sha256.New, []byte(secret))
 	if _, err := mac.Write([]byte(message)); err != nil {
@@ -503,5 +507,105 @@ func TestKanjuUnsupportedOperationWhenBlockMissing(t *testing.T) {
 	_, err = built.Resolve(context.Background(), source.Episode{}, "")
 	if kind, ok := source.KindOf(err); !ok || kind != source.ErrUnsupported {
 		t.Fatalf("error kind = %v (%v)", kind, err)
+	}
+}
+
+// TestKanjuManifestPublishesItsOwnDanmaku walks the danmuku chain the way the
+// player does: the source names a manifest, the manifest lists windows, and
+// each window packs its comments as arrays of milliseconds and text.
+func TestKanjuManifestPublishesItsOwnDanmaku(t *testing.T) {
+	sourceBody := kanjuFixture(t, "danmuku-source.json")
+	manifestBody := kanjuFixture(t, "danmuku-manifest.json")
+	firstWindow := kanjuFixture(t, "danmuku-segment-1.json")
+	secondWindow := kanjuFixture(t, "danmuku-segment-2.json")
+	stub, client := newStubUpstream(t, func(request recordedRequest) (int, string) {
+		switch {
+		case strings.Contains(request.Path, "/v1/danmuku/episodes/"):
+			return http.StatusOK, sourceBody
+		case strings.HasSuffix(request.Path, "/manifests/19.json"):
+			return http.StatusOK, manifestBody
+		case strings.HasSuffix(request.Path, "/segments/0-300000.sample.json.gz"):
+			return http.StatusOK, firstWindow
+		case strings.HasSuffix(request.Path, "/segments/300000-600000.sample.json.gz"):
+			return http.StatusOK, secondWindow
+		}
+		return http.StatusNotFound, `{}`
+	})
+	kanju := kanjuSource(t, client)
+
+	publisher, ok := kanju.(source.Manifest)
+	if !ok {
+		t.Fatal("kanju must publish its own dated comments")
+	}
+	episode := source.Episode{
+		Media:   source.Ref{Source: "kanju", ID: "sample-series"},
+		ID:      "ep-1",
+		Number:  1,
+		Payload: "token-1",
+	}
+	comments, err := publisher.Manifest(context.Background(), episode, 0)
+	if err != nil {
+		t.Fatalf("manifest: %v", err)
+	}
+	if len(comments) != 4 {
+		t.Fatalf("want 4 comments across two windows, got %d: %+v", len(comments), comments)
+	}
+	first := comments[0]
+	if first.Text != "左上角笑死我了!!" || first.At != 0 {
+		t.Fatalf("first comment = %+v", first)
+	}
+	if first.Color != 14463824 {
+		t.Fatalf("color must keep the upstream int, got %#x", first.Color)
+	}
+	if comments[1].At != 17*time.Second {
+		t.Fatalf("milliseconds must become seconds, got %v", comments[1].At)
+	}
+	if comments[2].At != 312*time.Second+500*time.Millisecond {
+		t.Fatalf("comment in the second window = %v", comments[2].At)
+	}
+	if comments[3].At != 480*time.Second {
+		t.Fatalf("comments must stay ordered, got %v", comments[3].At)
+	}
+
+	requests := stub.Requests()
+	if len(requests) != 4 {
+		t.Fatalf("want 1 source, 1 manifest and 2 windows, got %d", len(requests))
+	}
+	if !strings.HasSuffix(requests[0].URL, "/v1/danmuku/episodes/ep-1/source") {
+		t.Fatalf("episode id must ride the danmuku path, got %s", requests[0].URL)
+	}
+	for _, request := range requests[1:] {
+		if request.Header.Get("x-ai-movie-signature") != "" {
+			t.Fatalf("a file server outside the catalogue must not be signed: %s", request.URL)
+		}
+	}
+}
+
+// TestKanjuManifestKeepsReadingWhenAWindowFails proves one broken window does
+// not cost the player the rest of the track.
+func TestKanjuManifestKeepsReadingWhenAWindowFails(t *testing.T) {
+	sourceBody := kanjuFixture(t, "danmuku-source.json")
+	manifestBody := kanjuFixture(t, "danmuku-manifest.json")
+	firstWindow := kanjuFixture(t, "danmuku-segment-1.json")
+	_, client := newStubUpstream(t, func(request recordedRequest) (int, string) {
+		switch {
+		case strings.Contains(request.Path, "/v1/danmuku/episodes/"):
+			return http.StatusOK, sourceBody
+		case strings.HasSuffix(request.Path, "/manifests/19.json"):
+			return http.StatusOK, manifestBody
+		case strings.HasSuffix(request.Path, "/segments/0-300000.sample.json.gz"):
+			return http.StatusOK, firstWindow
+		}
+		return http.StatusInternalServerError, `{}`
+	})
+	kanju := kanjuSource(t, client)
+
+	comments, err := kanju.(source.Manifest).Manifest(context.Background(),
+		source.Episode{Media: source.Ref{Source: "kanju", ID: "sample-series"}, Payload: "token-1"}, 0)
+	if err != nil {
+		t.Fatalf("manifest: %v", err)
+	}
+	if len(comments) != 2 {
+		t.Fatalf("the readable window must survive, got %d: %+v", len(comments), comments)
 	}
 }

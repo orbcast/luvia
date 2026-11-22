@@ -349,13 +349,17 @@ func (p *Page) adjacent(current source.Episode, offset int) (source.Episode, boo
 	return source.Episode{}, false
 }
 
-// loadComments fills the layer over the picture. Two things can feed it: the
-// source rule's own comments, and a lookup on a site that pins its comments to
-// a moment. The lookup is preferred, because a comment with a moment is what
-// the stage can lay over the picture; a rule's comments are usually reviews,
-// which have no moment and can only be spread across the episode. Either way
-// the panel is told why the layer is what it is, so an empty layer never looks
-// like a broken one.
+// loadComments fills the layer over the picture. Three things can feed it: the
+// comments the source itself publishes on a timeline, its review list, and a
+// lookup on a site that pins comments to a moment.
+//
+// The order is deliberate. A source that publishes its own dated comments is
+// describing this very copy of the title, so it wins outright. A lookup from
+// outside comes next, because a comment with a moment is something the stage
+// can lay over the picture, where a rule's review list usually has no moment
+// at all and can only be spread across the episode. The rule's own list is the
+// last resort. Either way the panel is told why the layer is what it is, so an
+// empty layer never looks like a broken one.
 //
 // It runs on its own context: the caller resolves the playback and drops its
 // deadline as soon as it has an address, which would cancel a request that has
@@ -368,14 +372,15 @@ func (p *Page) loadComments(episode source.Episode, gen uint64) {
 	title := p.detail.Title
 	lookup := p.deps.Danmaku
 	commenter, canComment := p.deps.Source.(source.Commenter)
-	if lookup == nil && !canComment {
+	publisher, publishes := p.deps.Source.(source.Manifest)
+	if lookup == nil && !canComment && !publishes {
 		p.commentWhy = commentUnsupported
 		return
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		items, why := p.commentsFor(ctx, lookup, commenter, canComment, title, episode)
+		items, why := p.commentsFor(ctx, lookup, commenter, canComment, publisher, publishes, title, episode)
 		run(func() {
 			if epoch != p.commentGen || gen != p.gen {
 				return
@@ -386,12 +391,15 @@ func (p *Page) loadComments(episode source.Episode, gen uint64) {
 	}()
 }
 
-// commentsFor asks the lookup first and the rule second, and reports what came
-// back. A lookup that matched the title but carries nothing for this episode is
-// a different answer from one that matched nothing at all, and the panel says
-// which. The lookup is an addition, not the source of truth: when it has
-// nothing, the rule's own comments still get their turn.
-func (p *Page) commentsFor(ctx context.Context, lookup danmaku.Source, commenter source.Commenter, canComment bool, title string, episode source.Episode) ([]source.Danmaku, commentWhy) {
+// commentsFor asks the source's own timeline first, the lookup second and the
+// rule's review list last, and reports what came back. A lookup that matched
+// the title but carries nothing for this episode is a different answer from one
+// that matched nothing at all, and the panel says which. Neither the lookup nor
+// the review list is the source of truth: the source's own timeline is.
+func (p *Page) commentsFor(ctx context.Context, lookup danmaku.Source, commenter source.Commenter, canComment bool, publisher source.Manifest, publishes bool, title string, episode source.Episode) ([]source.Danmaku, commentWhy) {
+	if items, ok := p.publishedComments(ctx, publisher, publishes, episode); ok {
+		return items, commentReady
+	}
 	if lookup == nil {
 		return p.ruleComments(ctx, commenter, canComment, episode)
 	}
@@ -414,6 +422,20 @@ func (p *Page) commentsFor(ctx context.Context, lookup danmaku.Source, commenter
 		return items, commentReady
 	}
 	return nil, why
+}
+
+// publishedComments asks the source for the comments it publishes on its own
+// timeline. The bool is false when it has nothing to say, so the caller falls
+// through to the outside lookup rather than settling for an empty layer.
+func (p *Page) publishedComments(ctx context.Context, publisher source.Manifest, publishes bool, episode source.Episode) ([]source.Danmaku, bool) {
+	if !publishes {
+		return nil, false
+	}
+	items, err := publisher.Manifest(ctx, episode, 0)
+	if err != nil || len(items) == 0 {
+		return nil, false
+	}
+	return items, true
 }
 
 // ruleComments asks the source rule for the comments it carries. A rule

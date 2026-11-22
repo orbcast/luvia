@@ -1,0 +1,6 @@
+{
+  "protocol": "aimovie.danmu-source.v1",
+  "episodeId": "av_sample_episode_1",
+  "status": "ready",
+  "manifestUrl": "https://files.example/dmu_sample/manifests/19.json"
+}

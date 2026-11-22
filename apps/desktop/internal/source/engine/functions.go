@@ -34,6 +34,12 @@ func itemScope(item any, index int, vars map[string]any) scope {
 }
 
 func (s *sourceImpl) resolveSelector(sel rule.Selector, sc scope) (any, bool) {
+	// A number-only selector reads the item being mapped, which is how a rule
+	// reaches into an upstream that packs a comment into an array instead of an
+	// object. Any other selector starts at a step variable.
+	if sel.ReadsItem() {
+		return sel.Resolve(sc.item)
+	}
 	if _, ok := sc.item.(map[string]any); ok {
 		if value, found := sel.Resolve(sc.item); found {
 			return value, true
@@ -150,6 +156,21 @@ func callFunction(name string, args []any, found []bool) (any, bool) {
 			return nil, false
 		}
 		return toInt(args[0])
+	case "seconds":
+		// An upstream that stamps its comments in milliseconds has to be read
+		// in seconds, because that is the unit a mapped `at` is written in.
+		// Dividing here keeps that conversion in the rule rather than making
+		// every reader of the field guess which unit it got. The result is an
+		// exact value, so a comment at 312.5s stays on its half second instead
+		// of drifting to the nearest whole one.
+		if len(args) == 0 || !found[0] {
+			return nil, false
+		}
+		milliseconds, ok := toFloat(args[0])
+		if !ok {
+			return nil, false
+		}
+		return milliseconds / 1000, true
 	case "kind":
 		if len(args) == 0 || !found[0] {
 			return nil, false
@@ -257,6 +278,30 @@ func toInt(value any) (any, bool) {
 		return parsed, true
 	default:
 		return nil, false
+	}
+}
+
+// toFloat reads a number as a float so a conversion can keep its fraction.
+func toFloat(value any) (float64, bool) {
+	switch item := value.(type) {
+	case json.Number:
+		parsed, err := item.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	case float64:
+		return item, true
+	case int:
+		return float64(item), true
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(item), 64)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
 	}
 }
 

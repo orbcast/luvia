@@ -22,6 +22,7 @@ var KnownFunctions = map[string]functionSpec{
 	"lower":      {minArgs: 1, maxArgs: 1},
 	"upper":      {minArgs: 1, maxArgs: 1},
 	"int":        {minArgs: 1, maxArgs: 1},
+	"seconds":    {minArgs: 1, maxArgs: 1},
 	"kind":       {minArgs: 1, maxArgs: 1},
 	"urlKind":    {minArgs: 1, maxArgs: 1},
 	"list":       {minArgs: 1, maxArgs: 1},
@@ -46,6 +47,7 @@ const (
 	outEpisodes outputKind = "episodes"
 	outUpdates  outputKind = "updates"
 	outComments outputKind = "comments"
+	outManifest outputKind = "manifest"
 )
 
 var cardFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "overview",
@@ -58,6 +60,7 @@ var updateFields = fieldSet("id", "title", "kind", "year", "area", "tags", "rema
 	"posterUrl", "backdropUrl", "note")
 var lineFields = fieldSet("id", "label", "urlKind", "url", "ticket", "default")
 var commentFields = fieldSet("at", "text", "author", "color", "episode")
+var manifestFields = fieldSet("source")
 
 var outputFields = map[outputKind]map[string]bool{
 	outSections: sectionFields,
@@ -66,6 +69,7 @@ var outputFields = map[outputKind]map[string]bool{
 	outEpisodes: episodeFields,
 	outUpdates:  updateFields,
 	outComments: commentFields,
+	outManifest: manifestFields,
 }
 
 var builtinVars = map[string][]string{
@@ -76,6 +80,8 @@ var builtinVars = map[string][]string{
 	"episodes": {"id"},
 	"resolve":  {"id", "payload", "media", "lineId"},
 	"comments": {"id", "payload"},
+	"manifest": {"id", "payload"},
+	"segments": {"id", "payload", "source", "document"},
 }
 
 func fieldSet(names ...string) map[string]bool {
@@ -106,7 +112,7 @@ func (r *Rule) Validate() error {
 			return err
 		}
 	}
-	if r.Home == nil && r.List == nil && r.Updates == nil && r.Detail == nil && r.Episodes == nil && r.Resolve == nil && r.Comments == nil {
+	if r.Home == nil && r.List == nil && r.Updates == nil && r.Detail == nil && r.Episodes == nil && r.Resolve == nil && r.Comments == nil && r.Manifest == nil {
 		return fmt.Errorf("rule declares no operation block")
 	}
 	if r.Home != nil {
@@ -142,6 +148,9 @@ func (r *Rule) Validate() error {
 		if err := validateBlock("episodes", r.Episodes.Steps, r.Episodes.Output, outEpisodes); err != nil {
 			return err
 		}
+		if r.Episodes.List != nil {
+			return fmt.Errorf("episodes must not declare list; only segments runs per window")
+		}
 	}
 	if r.Resolve != nil {
 		if err := validateResolve(r.Resolve); err != nil {
@@ -152,6 +161,59 @@ func (r *Rule) Validate() error {
 		if err := validateBlock("comments", r.Comments.Steps, r.Comments.Output, outComments); err != nil {
 			return err
 		}
+	}
+	if err := validateManifest(r.Manifest, r.Segments); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateManifest checks the pair of blocks that reads an upstream's windowed
+// comments: the manifest names where the window list lives, the segments block
+// turns one window into comments. They only make sense together, so one without
+// the other is a rule mistake rather than an optional shape.
+func validateManifest(manifest, segments *Block) error {
+	if manifest == nil && segments == nil {
+		return nil
+	}
+	if manifest == nil {
+		return fmt.Errorf("segments is declared without a manifest block to point at its windows")
+	}
+	if segments == nil {
+		return fmt.Errorf("manifest is declared without a segments block to read its windows")
+	}
+	if err := validateBlock("manifest", manifest.Steps, manifest.Output, outManifest); err != nil {
+		return err
+	}
+	if err := validateBlockSteps("segments", segments.Steps, segments.Output, outComments, false); err != nil {
+		return err
+	}
+	return validateList("segments.list", segments.List)
+}
+
+// validateList checks a list mapping. The address is the point of it, so both
+// it and the array it reads are mandatory; a window count is only there to let
+// the engine stop early.
+func validateList(label string, list *ListSpec) error {
+	if list == nil {
+		return fmt.Errorf("%s is required", label)
+	}
+	if _, err := ParseSelector(strings.TrimSpace(list.From)); err != nil {
+		return fmt.Errorf("%s.from: %w", label, err)
+	}
+	if list.URL.IsZero() {
+		return fmt.Errorf("%s.url is required", label)
+	}
+	if err := validateValue(label+".url", list.URL, nil); err != nil {
+		return err
+	}
+	if !list.Count.IsZero() {
+		if err := validateValue(label+".count", list.Count, nil); err != nil {
+			return err
+		}
+	}
+	if list.MaxSegments < 0 {
+		return fmt.Errorf("%s.maxSegments must not be negative", label)
 	}
 	return nil
 }
@@ -186,6 +248,19 @@ func validateKindValues(values map[string]string) error {
 
 var signVars = fieldSet("method", "path", "timestamp", "nonce")
 
+// namesWholeAddress reports whether a path template is a complete http(s)
+// address once its holes are filled, such as "{source}" standing for a file the
+// catalogue handed out.
+func namesWholeAddress(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	if strings.Contains(trimmed, "{") {
+		// The placeholder is the whole path, so whatever it renders to is what
+		// the request asks for; checking it here would mean running the rule.
+		return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://")
+	}
+	return strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://")
+}
+
 func validateSign(sign *Sign) error {
 	if strings.TrimSpace(sign.Secret) == "" {
 		return fmt.Errorf("sign.secret is required")
@@ -215,7 +290,15 @@ func validateSign(sign *Sign) error {
 }
 
 func validateBlock(name string, steps []Step, out Output, kind outputKind) error {
-	if len(steps) == 0 {
+	return validateBlockSteps(name, steps, out, kind, true)
+}
+
+// validateBlockSteps checks a block, optionally allowing it to declare no steps
+// at all. A segments block reads the window the engine already downloaded, so
+// its steps refine that document rather than fetch one; a rule that needs no
+// refinement leaves them out.
+func validateBlockSteps(name string, steps []Step, out Output, kind outputKind, requireSteps bool) error {
+	if requireSteps && len(steps) == 0 {
 		return fmt.Errorf("%s.steps must not be empty", name)
 	}
 	declared := fieldSet(builtinVars[name]...)
@@ -282,8 +365,12 @@ func validateRequest(label string, req Request, vars map[string]bool) error {
 	if req.Path == "" {
 		return fmt.Errorf("%s: path is required", label)
 	}
-	if !strings.HasPrefix(req.Path, "/") {
-		return fmt.Errorf("%s: path must start with /, got %q", label, req.Path)
+	// A path is either rooted at the baseURL or a whole address the template
+	// fills in, which is how a step reaches a file server the catalogue names
+	// rather than its own host. A bare relative path is neither, so it stays a
+	// mistake.
+	if !strings.HasPrefix(req.Path, "/") && !namesWholeAddress(req.Path) {
+		return fmt.Errorf("%s: path must start with / or be an absolute address, got %q", label, req.Path)
 	}
 	switch req.Method {
 	case "", "GET", "POST", "PUT", "PATCH", "DELETE":
@@ -346,6 +433,11 @@ func validateFrom(label, from string, vars map[string]bool) error {
 		if err != nil {
 			return fmt.Errorf("%s.from: %w", label, err)
 		}
+		if sel.ReadsItem() {
+			// A number-only selector reads the item being walked, so it names
+			// no variable and cannot be a typo.
+			continue
+		}
 		if vars != nil && !vars[sel.Root()] {
 			return fmt.Errorf("%s.from: unknown variable %q", label, sel.Root())
 		}
@@ -359,6 +451,9 @@ func checkTemplate(label, text string, vars map[string]bool) error {
 		return fmt.Errorf("%s: %w", label, err)
 	}
 	for _, sel := range parsed.Selectors() {
+		if sel.ReadsItem() {
+			continue
+		}
 		root := sel.Root()
 		if !vars[root] {
 			return fmt.Errorf("%s: unknown variable %q in {%s}", label, root, sel.String())
@@ -429,13 +524,16 @@ func validateOutput(label string, out Output, kind outputKind, vars map[string]b
 			return fmt.Errorf("%s: %s must not declare page or hasMore", label, kind)
 		}
 		// Each mapping kind names the field it cannot do without: a detail
-		// without a title, an episode without an id, a comment without text.
+		// without a title, an episode without an id, a comment without text,
+		// a manifest without a source to point at.
 		required := "title"
 		switch kind {
 		case outEpisodes:
 			required = "id"
 		case outComments:
 			required = "text"
+		case outManifest:
+			required = "source"
 		}
 		if _, ok := out.Fields[required]; !ok {
 			return fmt.Errorf("%s.fields: %s is required", label, required)
@@ -534,6 +632,9 @@ func validateValue(label string, value Value, vars map[string]bool) error {
 	switch value.Kind() {
 	case "selector":
 		sel, _ := value.Selector()
+		if sel.ReadsItem() {
+			return nil
+		}
 		if vars != nil && !vars[sel.Root()] {
 			return fmt.Errorf("%s: unknown variable %q", label, sel.Root())
 		}
@@ -544,6 +645,9 @@ func validateValue(label string, value Value, vars map[string]bool) error {
 			return nil
 		}
 		for _, sel := range tpl.Selectors() {
+			if sel.ReadsItem() {
+				continue
+			}
 			if !vars[sel.Root()] {
 				return fmt.Errorf("%s: unknown variable %q in {%s}", label, sel.Root(), sel.String())
 			}

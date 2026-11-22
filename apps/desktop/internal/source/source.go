@@ -215,3 +215,19 @@ type Commenter interface {
 	// of them. An empty list is not an error: an episode may have none.
 	Comments(ctx context.Context, episode Episode, limit int) ([]Danmaku, error)
 }
+
+// Manifest is a Source that publishes its own dated comments for an episode,
+// shipped as the windows the upstream cut the episode into.
+//
+// This is the capability a rule declares with its manifest and segments blocks.
+// It differs from Commenter in intent rather than shape: comments a rule reads
+// from a review list are a fallback, while comments an upstream publishes on
+// its own timeline are the title's real layer and are preferred over anything
+// matched from outside. A source that has neither keeps the switch off; a
+// source that has only Commenter falls back to it.
+type Manifest interface {
+	// Manifest returns the dated comments of episode, oldest first, at most
+	// limit of them. An episode the upstream published none for returns an
+	// empty list, not an error.
+	Manifest(ctx context.Context, episode Episode, limit int) ([]Danmaku, error)
+}

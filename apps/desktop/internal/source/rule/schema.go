@@ -23,6 +23,14 @@ type Rule struct {
 	Episodes *Block        `json:"episodes,omitempty"`
 	Resolve  *ResolveBlock `json:"resolve,omitempty"`
 	Comments *Block        `json:"comments,omitempty"`
+	// Manifest reads the pointer an upstream hands out for a title's pinned
+	// comments, which is where an upstream that ships them as dated segments
+	// says where to fetch each one from.
+	Manifest *Block `json:"manifest,omitempty"`
+	// Segments turns a segment document — one window of a long title's
+	// comments, far too big to be read as a single list — into the comments
+	// the player lays over the picture.
+	Segments *Block `json:"segments,omitempty"`
 }
 
 // HTTP holds transport policy. Zero values are replaced by engine defaults
@@ -62,10 +70,13 @@ type Sign struct {
 	Headers       []Header `json:"headers"`
 }
 
-// Block is one operation: a step pipeline plus the mapping of its result.
+// Block is one operation: a step pipeline plus the mapping of its result. A
+// segments block also carries the list its steps run over, one window at a
+// time, which is the only block that is not a single request.
 type Block struct {
-	Steps  []Step `json:"steps"`
-	Output Output `json:"output"`
+	Steps  []Step    `json:"steps"`
+	Output Output    `json:"output"`
+	List   *ListSpec `json:"list,omitempty"`
 }
 
 // ListBlock is the listing operation, which also maps player kinds onto the
@@ -112,6 +123,36 @@ type Lines struct {
 	// PreferURLKind makes the engine walk the remaining lines until one yields
 	// this url kind (mp4 or hls). Without it the first playable line wins.
 	PreferURLKind string `json:"preferUrlKind,omitempty"`
+	// List compresses an answer that names every part in one document into
+	// the parts the engine reads through, so a block need not know whether
+	// the upstream paginates its episodes.
+	List *ListSpec `json:"list,omitempty"`
+}
+
+// ListSpec names the array a flattened answer keeps its parts in.
+//
+// An upstream that answers one document per window of comments hands out the
+// windows as a list; the engine reads them one by one, each a request of its
+// own, so the rule describes one window instead of repeating itself N times.
+//
+// The upstream's file may be served without its content encoding honoured by
+// anything but a browser, and a window may be sent either way, so a body that
+// arrives compressed as gzip or deflate is unpacked before it is parsed. A body
+// that arrives as plain JSON is read as it stands, because an upstream that
+// names its windows `.json.gz` and serves them uncompressed is the normal case
+// rather than a broken one.
+type ListSpec struct {
+	// From is the selector the step's answer resolves to, for the array of
+	// windows.
+	From string `json:"from"`
+	// URL is the mapping of one window's address, relative to the document the
+	// request asked for.
+	URL Value `json:"url"`
+	// Count is the mapping of how many comments a window holds, so the engine
+	// stops before it has read more than the caller asked for.
+	Count Value `json:"count,omitempty"`
+	// MaxSegments caps how many windows one call reads.
+	MaxSegments int `json:"maxSegments,omitempty"`
 }
 
 // Exchange is the second phase of line resolution: a ticket from the first

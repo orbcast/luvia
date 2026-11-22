@@ -31,6 +31,12 @@ func (l *lookupSource) Lookup(_ context.Context, title string, episode int) (dan
 	return danmaku.Result{Items: l.items, Reason: l.reason}, nil
 }
 
+// catalogue reports the show a source hands to the page, so a wrapper that
+// carries its own dated comments is opened the same way as a plain one.
+func (s *commentingSource) catalogue() (source.Detail, []source.Episode) {
+	return s.detail, s.episodes
+}
+
 // plainSource is a source with no comments of its own, which is what a rule
 // without a comments block looks like.
 type plainSource struct{ *commentingSource }
@@ -51,7 +57,11 @@ func newDanmakuPage(t *testing.T, src source.Source, lookup danmaku.Source) (*pl
 		Source: src, Danmaku: lookup, Library: store, Run: func(fn func()) { run <- fn },
 		OpenVideo: func(string) (*ui.VideoPlayer, error) { return newGIFPlayer(t), nil },
 	})
-	page.Open(src.(*commentingSource).detail, src.(*commentingSource).episodes, 0)
+	opened := src.(interface {
+		catalogue() (source.Detail, []source.Episode)
+	})
+	detail, episodes := opened.catalogue()
+	page.Open(detail, episodes, 0)
 	apply(t, run)
 	apply(t, run)
 	tt := ui.NewTester(func(c *ui.Context) {
@@ -242,5 +252,81 @@ func TestPlayerAsksForTheEpisodesNumber(t *testing.T) {
 	}
 	if len(lookup.asked) < 2 {
 		t.Fatalf("looked up %d times, want the second episode too", len(lookup.asked))
+	}
+}
+
+// publishingSource is a source that carries its own dated comments, which is
+// what a rule with manifest and segments blocks looks like.
+type publishingSource struct {
+	*commentingSource
+	items []source.Danmaku
+	asked []source.Episode
+}
+
+func (s *publishingSource) Manifest(_ context.Context, episode source.Episode, _ int) ([]source.Danmaku, error) {
+	s.asked = append(s.asked, episode)
+	return s.items, nil
+}
+
+// TestPlayerPrefersTheSourcesOwnDanmakuOverTheLookup covers the top of the
+// order: a show that ships its own timeline comments is already matched, so
+// looking somewhere else would swap a track recorded for this episode for
+// whatever a stranger uploaded under a similar title.
+func TestPlayerPrefersTheSourcesOwnDanmakuOverTheLookup(t *testing.T) {
+	base, _ := sampleTitle()
+	src := &publishingSource{
+		commentingSource: &commentingSource{
+			detail: base.detail, episodes: base.episodes,
+			comments: []source.Danmaku{{Text: "A review with no moment"}},
+		},
+		items: []source.Danmaku{{At: 0, Text: "The source's own comment"}},
+	}
+	lookup := &lookupSource{
+		reason: danmaku.ReasonReady,
+		items:  []source.Danmaku{{At: 0, Text: "Found elsewhere"}},
+	}
+	page, run, tt := newDanmakuPage(t, src, lookup)
+
+	if !pumpUntil(t, run, tt, "The source's own comment") {
+		t.Fatalf("the source's own comment is not on the picture: %v", tt.Texts())
+	}
+	if tt.HasText("Found elsewhere") {
+		t.Fatal("the lookup answered even though the source had its own track")
+	}
+	if len(lookup.asked) != 0 {
+		t.Fatalf("looked up %d times, want none", len(lookup.asked))
+	}
+	if len(src.asked) != 1 {
+		t.Fatalf("asked the source %d times, want once", len(src.asked))
+	}
+	if src.asked[0].ID == "" {
+		t.Fatal("the source must be asked about the episode, not the show")
+	}
+	page.SelectTab(1)
+	page.RevealPanel()
+	tt.Frame()
+	if tt.HasText("A review with no moment") {
+		t.Fatal("the rule's review is in the panel after the source answered")
+	}
+}
+
+// TestPlayerFallsBackWhenTheSourceHasNoDanmaku covers a source that ships the
+// blocks but has nothing for this episode: the lookup still gets its turn.
+func TestPlayerFallsBackWhenTheSourceHasNoDanmaku(t *testing.T) {
+	base, _ := sampleTitle()
+	src := &publishingSource{
+		commentingSource: &commentingSource{detail: base.detail, episodes: base.episodes},
+	}
+	lookup := &lookupSource{
+		reason: danmaku.ReasonReady,
+		items:  []source.Danmaku{{At: 0, Text: "Found elsewhere"}},
+	}
+	_, run, tt := newDanmakuPage(t, src, lookup)
+
+	if !pumpUntil(t, run, tt, "Found elsewhere") {
+		t.Fatalf("the lookup never got its turn: %v", tt.Texts())
+	}
+	if len(src.asked) != 1 || len(lookup.asked) != 1 {
+		t.Fatalf("source asked %d, lookup asked %d; want one each", len(src.asked), len(lookup.asked))
 	}
 }

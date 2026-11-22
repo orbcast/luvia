@@ -1,0 +1,10 @@
+{
+  "schema_version": "danmuku.segment.v1",
+  "timebase": "milliseconds",
+  "from_ms": 300000,
+  "to_ms": 600000,
+  "items": [
+    [312500, 1, 14463824, 25, "这段配乐真好", "dmc_sample3"],
+    [480000, 4, 16711680, 30, "完了完了", "dmc_sample4"]
+  ]
+}

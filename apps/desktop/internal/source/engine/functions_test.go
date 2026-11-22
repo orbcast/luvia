@@ -280,3 +280,56 @@ func TestEvalPrefersItemThenVars(t *testing.T) {
 		t.Fatal("render of a broken template must fail")
 	}
 }
+
+// TestSecondsKeepsTheFraction checks the unit conversion a millisecond-heavy
+// upstream needs: a comment stamped at 312.5s has to stay on its half second,
+// because a duration that rounds would drift from the line it comments on.
+func TestSecondsKeepsTheFraction(t *testing.T) {
+	impl := &sourceImpl{}
+	cases := map[string]float64{
+		`{"fn": "seconds", "args": [{"literal": 312500}]}`: 312.5,
+		`{"fn": "seconds", "args": [{"literal": 17000}]}`:  17,
+		`{"fn": "seconds", "args": [{"literal": 0}]}`:      0,
+		`{"fn": "seconds", "args": [{"literal": 480000}]}`: 480,
+	}
+	for text, want := range cases {
+		got, ok := impl.eval(value(t, text), scope{vars: map[string]any{}})
+		if !ok {
+			t.Fatalf("%s did not resolve", text)
+		}
+		number, ok := toFloat(got)
+		if !ok || number != want {
+			t.Fatalf("%s = %#v, want %v", text, got, want)
+		}
+	}
+	if _, ok := impl.eval(value(t, `{"fn": "seconds", "args": [{"literal": "not a number"}]}`), scope{vars: map[string]any{}}); ok {
+		t.Fatal("a non-number must not convert")
+	}
+}
+
+// TestEvalIndexesAPackedComment covers an upstream that packs each comment into
+// an array of positions: a bare number is the item itself, so the count is what
+// the rule reads instead of a field name.
+func TestEvalIndexesAPackedComment(t *testing.T) {
+	impl := &sourceImpl{}
+	sc := scope{
+		item: []any{json.Number("17000"), json.Number("1"), json.Number("14463824"), json.Number("25"), "这是在练习台词吗", "dmc_1"},
+		vars: map[string]any{"document": map[string]any{"items": []any{}}},
+	}
+	if got := impl.evalString(value(t, `"4"`), sc); got != "这是在练习台词吗" {
+		t.Fatalf("text = %q", got)
+	}
+	if got, ok := impl.eval(value(t, `"0"`), sc); !ok || toString(got) != "17000" {
+		t.Fatalf("timestamp = %#v (%v)", got, ok)
+	}
+	if got := impl.evalString(value(t, `{"fn": "seconds", "args": ["0"]}`), sc); got != "17" {
+		t.Fatalf("converted timestamp = %q", got)
+	}
+	// A named path still reaches the block's variables, so a packed item does
+	// not stop a block reading the document it came from.
+	if got, ok := impl.eval(value(t, `"document.items[*]"`), sc); !ok {
+		t.Fatal("a vars path must still resolve")
+	} else if items, ok := got.([]any); !ok || len(items) != 0 {
+		t.Fatalf("vars path = %#v", got)
+	}
+}
