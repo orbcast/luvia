@@ -190,6 +190,10 @@ func TestHeroBlendsIntoThePage(t *testing.T) {
 	}
 }
 
+// coverEdgeGap is how far a sampled pixel sits from the cover card's edge: a
+// column on the border itself is the card's own hairline, not a gap.
+const coverEdgeGap = 2
+
 // TestHeroCoverLeadsWithThePoster checks the banner's two layers: the poster
 // keeps its own colors in the cover card at the left of the copy, while the
 // ground behind is the backdrop, not a sharp copy of that poster. Different
@@ -257,16 +261,34 @@ func TestHeroCoverLeadsWithThePoster(t *testing.T) {
 			if !ok {
 				t.Fatalf("no hero title in %v", tt.Texts())
 			}
-			// The copy starts after the poster's own edge, never on top of it.
+			// The copy starts after the poster's own edge, never on top of it. A
+			// run of poster colour counts only once it is wider than a glyph: the
+			// title's antialiasing over the backdrop's blue throws single red
+			// pixels well to its right, which a bare per-column test would call
+			// poster.
 			right := inset
 			for x := inset; x < width/2; x++ {
 				c := sampleAt(nil, canvas, x, y)
 				if c[0] > 140 && c[2] < 110 {
 					right = x
 				}
+				if run := x - right; run >= 16 {
+					break
+				}
 			}
 			if title.X < float32(right)+8 {
 				t.Fatalf("title starts at %v, inside the cover that reaches %d", title.X, right)
+			}
+
+			// The cover card is a solid block while the copy beside it is not, so
+			// every column between the card and the title stays clear of poster
+			// colour. One scan stop cannot prove that on its own: a pixel of the
+			// title's own antialiasing over the backdrop's blue passes the colour
+			// test and would carry the reach forward by tens of pixels.
+			for x := right + coverEdgeGap; x < int(title.X); x++ {
+				if c := sampleAt(nil, canvas, x, y); c[0] > 140 && c[2] < 110 {
+					t.Fatalf("column %d is %v, poster colour inside the gap before the copy at %v", x, c, title.X)
+				}
 			}
 		})
 	}
