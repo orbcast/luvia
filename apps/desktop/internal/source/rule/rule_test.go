@@ -252,3 +252,34 @@ func TestValidateChecksTheWindowBlocks(t *testing.T) {
 		}
 	})
 }
+
+func TestValidateChecksRetryWhen(t *testing.T) {
+	home := `"home": {"steps": [{"op": "request", "as": "res", "path": "/v1/home"}],
+		"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+			"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}}`
+	cases := map[string]struct {
+		retryWhen string
+		ok        bool
+	}{
+		"a marker":            {`[{"status": 503, "contains": "project_auth_unavailable"}]`, true},
+		"an empty body":       {`[{"status": 200, "empty": true}]`, true},
+		"any status":          {`[{"contains": "try later"}]`, true},
+		"nothing to match":    {`[{}]`, false},
+		"status out of range": {`[{"status": 700, "contains": "x"}]`, false},
+		"status zero is fine": {`[{"status": 0, "empty": true}]`, true},
+	}
+	for name, testCase := range cases {
+		text := `{"schemaVersion": 1, "id": "sample", "name": "Sample", ` +
+			`"baseURL": "https://sample.test", "http": {"retryWhen": ` + testCase.retryWhen + `}, ` + home + `}`
+		parsed, err := Decode([]byte(text))
+		if err == nil {
+			err = parsed.Validate()
+		}
+		if testCase.ok && err != nil {
+			t.Fatalf("%s: want it to load, got %v", name, err)
+		}
+		if !testCase.ok && err == nil {
+			t.Fatalf("%s: want it rejected", name)
+		}
+	}
+}

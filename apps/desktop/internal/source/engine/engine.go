@@ -29,6 +29,9 @@ type sourceImpl struct {
 	sem     chan struct{}
 	retries int
 	timeout time.Duration
+	// retryWhen is the rule's own list of answers worth another try, copied
+	// out of the rule so a request does not walk a slice it cannot own.
+	retryWhen []rule.RetryWhen
 }
 
 // New validates the rule and builds a Source. A rule that fails validation is
@@ -50,11 +53,12 @@ func New(parsed *rule.Rule, opts Options) (source.Source, error) {
 		concurrency = 1
 	}
 	return &sourceImpl{
-		rule:    parsed,
-		client:  client,
-		sem:     make(chan struct{}, concurrency),
-		retries: retries,
-		timeout: time.Duration(parsed.HTTP.TimeoutMs) * time.Millisecond,
+		rule:      parsed,
+		client:    client,
+		sem:       make(chan struct{}, concurrency),
+		retries:   retries,
+		timeout:   time.Duration(parsed.HTTP.TimeoutMs) * time.Millisecond,
+		retryWhen: parsed.HTTP.RetryWhen,
 	}, nil
 }
 

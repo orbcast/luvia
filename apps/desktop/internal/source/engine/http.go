@@ -392,6 +392,14 @@ func (s *sourceImpl) attempt(ctx context.Context, site callSite, method, target 
 		return nil, true, s.fail(site, source.ErrNetwork, "response read failed", readErr)
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		// An upstream can answer 200 and mean it took nothing: kanju's
+		// catalogue returns an empty page and a retryable flag while its auth
+		// service is down. The rule names those answers, and they cost the
+		// same retry budget as a 5xx.
+		if s.retryableBody(resp.StatusCode, body) {
+			return nil, true, s.fail(site, source.ErrNetwork,
+				fmt.Sprintf("%s %s answered %d: %s", method, site.step, resp.StatusCode, excerpt(body)), nil)
+		}
 		return body, false, nil
 	}
 	detail := fmt.Sprintf("%s %s returned %d: %s", method, site.step, resp.StatusCode, excerpt(body))
@@ -407,6 +415,29 @@ func (s *sourceImpl) attempt(ctx context.Context, site callSite, method, target 
 	default:
 		return nil, false, s.fail(site, source.ErrInvalidResponse, detail, nil)
 	}
+}
+
+// retryableBody reports whether the rule counts this answer as worth another
+// try. A 5xx is retried without being named; this covers the answers an
+// upstream dresses up as success or as its own kind of outage.
+func (s *sourceImpl) retryableBody(status int, body []byte) bool {
+	if len(s.retryWhen) == 0 {
+		return false
+	}
+	text := string(body)
+	for _, entry := range s.retryWhen {
+		if entry.Status != 0 && entry.Status != status {
+			continue
+		}
+		if entry.Contains != "" && !strings.Contains(text, entry.Contains) {
+			continue
+		}
+		if entry.Empty && len(bytes.TrimSpace(body)) > 0 {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 const maxResponseBytes = 8 << 20

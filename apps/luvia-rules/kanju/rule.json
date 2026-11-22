@@ -8,6 +8,10 @@
     "retries": 2,
     "concurrency": 4,
     "maxPages": 20,
+    "retryWhen": [
+      {"status": 503, "contains": "project_auth_unavailable"},
+      {"status": 200, "empty": true}
+    ],
     "headers": [
       {
         "name": "Accept",

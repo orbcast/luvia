@@ -41,6 +41,26 @@ type HTTP struct {
 	Concurrency int      `json:"concurrency,omitempty"`
 	MaxPages    int      `json:"maxPages,omitempty"`
 	Headers     []Header `json:"headers,omitempty"`
+	// RetryWhen names failures the upstream reports inside a response that
+	// looks successful or merely unavailable: an outage it answers as 503
+	// with a marker of its own, or a 200 carrying an empty result for a page
+	// that has something. Each entry turns a matching answer into a retry, on
+	// the same budget and backoff as a 5xx.
+	RetryWhen []RetryWhen `json:"retryWhen,omitempty"`
+}
+
+// RetryWhen describes one answer worth retrying.
+type RetryWhen struct {
+	// Status is the HTTP status the answer must carry. Zero means any status
+	// that the engine would otherwise accept, so a rule can retry an empty
+	// page without naming a code.
+	Status int `json:"status,omitempty"`
+	// Contains is matched against the response body as raw text. It is a
+	// needle, not a pattern: rule authors copy the upstream's own marker.
+	Contains string `json:"contains,omitempty"`
+	// Empty asks for a body that carries no content of its own, which is how
+	// some upstreams answer a page they have nothing for yet.
+	Empty bool `json:"empty,omitempty"`
 }
 
 // Defaults used when a rule leaves transport policy unset.

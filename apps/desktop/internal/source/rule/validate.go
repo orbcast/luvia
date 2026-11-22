@@ -112,6 +112,9 @@ func (r *Rule) Validate() error {
 			return err
 		}
 	}
+	if err := validateRetryWhen(r.HTTP.RetryWhen); err != nil {
+		return err
+	}
 	if r.Home == nil && r.List == nil && r.Updates == nil && r.Detail == nil && r.Episodes == nil && r.Resolve == nil && r.Comments == nil && r.Manifest == nil {
 		return fmt.Errorf("rule declares no operation block")
 	}
@@ -164,6 +167,25 @@ func (r *Rule) Validate() error {
 	}
 	if err := validateManifest(r.Manifest, r.Segments); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateRetryWhen checks the answers a rule asks to retry.
+//
+// An entry with nothing to match would retry every answer it sees, including a
+// good one, so it is refused: retries are meant for a failure the rule can
+// name, not for turning a healthy source into a loop. A status outside the
+// HTTP range is refused for the same reason — it would never match.
+func validateRetryWhen(entries []RetryWhen) error {
+	for i, entry := range entries {
+		label := fmt.Sprintf("http.retryWhen[%d]", i)
+		if entry.Status != 0 && (entry.Status < 100 || entry.Status > 599) {
+			return fmt.Errorf("%s.status %d is not an HTTP status", label, entry.Status)
+		}
+		if entry.Contains == "" && !entry.Empty {
+			return fmt.Errorf("%s must name what to retry with contains or empty", label)
+		}
 	}
 	return nil
 }

@@ -375,3 +375,127 @@ func TestMissingClientUsesDefaultTransport(t *testing.T) {
 		t.Fatal("New must reject an invalid rule")
 	}
 }
+
+// A rule can name the answers its upstream dresses up as a timeout, which
+// kanju does: 503 with project_auth_unavailable while its auth service is
+// down, and an empty page for the same reason.
+func TestHomeRetriesTheAnswersTheRuleNames(t *testing.T) {
+	ruleText := `{
+	"schemaVersion": 1, "id": "sample", "name": "Sample", "baseURL": "https://sample.test",
+	"http": {"retries": 2, "retryWhen": [{"status": 503, "contains": "project_auth_unavailable"}]},
+	"home": {
+		"steps": [{"op": "request", "as": "res", "path": "/v1/home"}],
+		"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+			"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}
+	}
+}`
+	const unavailable = `{"error":"project_auth_unavailable","retryable":true}`
+	var mu sync.Mutex
+	attempts := 0
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		attempts++
+		if attempts < 3 {
+			return reply(http.StatusServiceUnavailable, unavailable), nil
+		}
+		return reply(http.StatusOK, `{"sections":[]}`), nil
+	})}
+	built := buildSource(t, ruleText, client)
+	if _, err := built.Home(context.Background()); err != nil {
+		t.Fatalf("home after retries: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
+	}
+}
+
+func TestHomeGivesUpWhenTheNamedAnswerRepeats(t *testing.T) {
+	ruleText := `{
+	"schemaVersion": 1, "id": "sample", "name": "Sample", "baseURL": "https://sample.test",
+	"http": {"retries": 1, "retryWhen": [{"status": 503, "contains": "project_auth_unavailable"}]},
+	"home": {
+		"steps": [{"op": "request", "as": "res", "path": "/v1/home"}],
+		"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+			"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}
+	}
+}`
+	var mu sync.Mutex
+	attempts := 0
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		attempts++
+		return reply(http.StatusServiceUnavailable, `{"error":"project_auth_unavailable"}`), nil
+	})}
+	built := buildSource(t, ruleText, client)
+	_, err := built.Home(context.Background())
+	if err == nil {
+		t.Fatal("want an error once the budget is spent")
+	}
+	if kind, ok := source.KindOf(err); !ok || kind != source.ErrNetwork {
+		t.Fatalf("kind = %v (%v)", kind, err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+// An answer the rule does not name keeps passing straight through: a body
+// that is not empty is content, whatever a neighbouring entry says.
+func TestHomeKeepsAnAnswerTheRuleDoesNotName(t *testing.T) {
+	ruleText := `{
+	"schemaVersion": 1, "id": "sample", "name": "Sample", "baseURL": "https://sample.test",
+	"http": {"retries": 2, "retryWhen": [{"status": 200, "empty": true}]},
+	"home": {
+		"steps": [{"op": "request", "as": "res", "path": "/v1/home"}],
+		"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+			"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}
+	}
+}`
+	var mu sync.Mutex
+	attempts := 0
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		attempts++
+		return reply(http.StatusOK, `{"sections":[]}`), nil
+	})}
+	built := buildSource(t, ruleText, client)
+	if _, err := built.Home(context.Background()); err != nil {
+		t.Fatalf("home: %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
+	}
+}
+
+func TestHomeRetriesAnEmptyPageTheRuleNames(t *testing.T) {
+	ruleText := `{
+	"schemaVersion": 1, "id": "sample", "name": "Sample", "baseURL": "https://sample.test",
+	"http": {"retries": 2, "retryWhen": [{"status": 200, "empty": true}]},
+	"home": {
+		"steps": [{"op": "request", "as": "res", "path": "/v1/home"}],
+		"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+			"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}
+	}
+}`
+	var mu sync.Mutex
+	attempts := 0
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		attempts++
+		if attempts < 2 {
+			return reply(http.StatusOK, ""), nil
+		}
+		return reply(http.StatusOK, `{"sections":[]}`), nil
+	})}
+	built := buildSource(t, ruleText, client)
+	if _, err := built.Home(context.Background()); err != nil {
+		t.Fatalf("home after retries: %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
