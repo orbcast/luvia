@@ -46,6 +46,8 @@ ICONS = (
     ("playlist", "linear"),
     ("document-text", "linear"),
     ("bookmark", "bold"),
+    ("slider-horizontal", "linear"),
+    ("slider-horizontal", "bold"),
 )
 
 OUTPUT = "apps/desktop/internal/icons/icons_gen.go"

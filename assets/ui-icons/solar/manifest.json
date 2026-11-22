@@ -570,6 +570,36 @@
       "sha256": "8a2cb54df93098d895596567ebd45e7d32c2f52b169d186e700ca03394de070f",
       "source": "https://api.iconify.design/solar/skip-previous-linear.svg"
     },
+    "solar:slider-horizontal-bold": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/slider-horizontal-bold/",
+      "file": "solar--slider-horizontal-bold.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "229771835d61697d5d71fb20e136676204d593893a6afe41045e3d09bc12697c",
+      "source": "https://api.iconify.design/solar/slider-horizontal-bold.svg"
+    },
+    "solar:slider-horizontal-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/slider-horizontal-linear/",
+      "file": "solar--slider-horizontal-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "c8e020b5618a1cad5db936dec2f541dd43eb98a55d7622e3f82909910545f630",
+      "source": "https://api.iconify.design/solar/slider-horizontal-linear.svg"
+    },
     "solar:subtitles-linear": {
       "author": {
         "name": "480 Design",
