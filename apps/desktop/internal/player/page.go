@@ -307,9 +307,11 @@ func (p *Page) resolve() {
 			}
 			p.playback = playback
 			p.appliedLine = playback.Line.ID
-			if line == "" || passesOver(passed, line) {
-				p.lineID = playback.Line.ID
-			}
+			// The selector names the line the picture came from, whatever was
+			// asked for: a source that answers on another line (its ids moved
+			// on, or the line it was asked for now serves a neighbour) would
+			// otherwise leave the panel pointing at a line that is not playing.
+			p.lineID = playback.Line.ID
 			p.record(episode, playback)
 			p.loadComments(episode, gen)
 			p.warmNext(episode, line, gen)
