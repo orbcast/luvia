@@ -85,7 +85,7 @@ func TestPlayerShowsCommentsAsDanmaku(t *testing.T) {
 	tt.SetLocale("en")
 	tt.Frame()
 
-	if !tt.HasText("Opening line") {
+	if !pumpUntil(t, run, tt, "Opening line") {
 		t.Fatalf("the comment at the start of the episode is not on the picture: %v", tt.Texts())
 	}
 	if tt.HasText("Far away line") {
@@ -134,7 +134,7 @@ func TestPlayerSpreadsUntimedComments(t *testing.T) {
 	tt.SetLocale("en")
 	tt.Frame()
 
-	if !tt.HasText("First review") {
+	if !pumpUntil(t, run, tt, "First review") {
 		t.Fatalf("the first untimed review is not on the picture: %v", tt.Texts())
 	}
 	if tt.HasText("Third review") {
@@ -145,7 +145,7 @@ func TestPlayerSpreadsUntimedComments(t *testing.T) {
 	page.RevealPanel()
 	tt.Frame()
 	for _, want := range []string{"First review", "Second review", "Third review", "ann", "cy"} {
-		if !tt.HasText(want) {
+		if !pumpUntil(t, run, tt, want) {
 			t.Fatalf("the comments tab is missing %q: %v", want, tt.Texts())
 		}
 	}

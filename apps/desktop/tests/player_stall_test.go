@@ -41,7 +41,10 @@ func openStage(t *testing.T, open func() (*ui.VideoPlayer, error)) *stage {
 // its line not resolved yet.
 func newStage(t *testing.T, src *titleSource, open func() (*ui.VideoPlayer, error)) *stage {
 	t.Helper()
-	src.playback.URL = "https://example.invalid/clip.mp4"
+	// A port nothing listens on, so the media probe fails at once instead of
+	// waiting on a real name: the stage's cases are about what it draws, not
+	// about the network.
+	src.playback.URL = "http://127.0.0.1:1/clip.mp4"
 	store, err := library.Open("")
 	if err != nil {
 		t.Fatal(err)

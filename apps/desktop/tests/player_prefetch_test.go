@@ -104,11 +104,14 @@ func TestPlayerWarmsTheNextEpisode(t *testing.T) {
 
 	// The second episode is resolved and warmed; the first is only played. The
 	// warm-up resolves on a goroutine and hands its fetch back to the main
-	// thread, so the queued callbacks are drained until the fetch shows up.
+	// thread, so the queued callbacks are drained until the fetch shows up. The
+	// segment is what the warm-up is for, and it is fetched after the playlist
+	// is read, so the wait is on both: stopping at the playlist asserts on a
+	// fetch that has not been asked for yet.
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		mu.Lock()
-		warmed := hits["/"+episodes[1].ID+"/index.m3u8"] > 0
+		warmed := hits["/"+episodes[1].ID+"/index.m3u8"] > 0 && hits["/"+episodes[1].ID+"/seg0.ts"] > 0
 		mu.Unlock()
 		if warmed {
 			break
