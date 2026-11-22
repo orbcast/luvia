@@ -6,7 +6,6 @@ import (
 	"compress/zlib"
 	"context"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -27,9 +26,9 @@ import (
 // pinned to a moment of the picture and its catalogue is public, which is what
 // a source rule's catalogue usually is not.
 const (
-	searchEndpoint = "https://api.bilibili.com/x/web-interface/wbi/search/type"
-	pagesEndpoint  = "https://api.bilibili.com/x/player/pagelist"
-	dmEndpoint     = "https://api.bilibili.com/x/v1/dm/list.so"
+	searchEndpoint   = "https://api.bilibili.com/x/web-interface/wbi/search/type"
+	pagesEndpoint    = "https://api.bilibili.com/x/player/pagelist"
+	segmentsEndpoint = "https://api.bilibili.com/x/v2/dm/web/seg.so"
 
 	// browserUA is what the endpoints answer to. A bare Go user agent is
 	// refused, and the desktop string is what a browser sends.
@@ -39,9 +38,16 @@ const (
 	// maxBody bounds one response so a wrong address cannot fill memory.
 	maxBody = 8 << 20
 	// maxCandidates is how many search hits are weighed per title.
-	maxCandidates = 20
+	maxCandidates = 40
+	// searchPageSize is how many hits one page of a search asks for.
+	searchPageSize = 20
 	// maxCachedPages is how many episodes' comments stay in memory.
 	maxCachedPages = 24
+	// maxSegments caps the segments one episode's comments are read from.
+	maxSegments = 24
+	// segmentSpan is how much of the picture one segment's comments cover; a
+	// part longer than this spreads its comments over more than one segment.
+	segmentSpan = 6 * time.Minute
 	// requestTimeout bounds one HTTP round trip.
 	requestTimeout = 15 * time.Second
 )
@@ -71,6 +77,14 @@ type candidate struct {
 	Title    string
 	Duration int
 	Play     int
+	// Uploaded is when the video was posted, in Unix seconds, as the site's
+	// search reports it. A freshly posted show buries its own series under
+	// whatever mentions it this week, so the age of a hit decides between a
+	// review of one episode and the upload that carries all of them.
+	Uploaded int64
+	// Parts is how many parts the site lists for the video, which says whether
+	// the upload holds a series at all.
+	Parts int
 }
 
 // page is one part of a video, as the site splits long uploads.
@@ -89,37 +103,185 @@ func (b *Bilibili) Lookup(ctx context.Context, title string, episode int) (Resul
 	if query == "" {
 		return Result{Reason: ReasonNoMatch}, nil
 	}
-	found, err := b.search(ctx, query)
-	if err != nil {
-		return Result{Reason: ReasonFailed}, err
+	// The show's name is searched for three ways: alone, with the episode, and
+	// with the range a series upload is named by. A name alone answers with
+	// whatever mentions it, which for a popular show is a wall of reaction
+	// videos and analysis breakdowns, and the site's own upload of the series
+	// ranks below them; a name and an episode answers with that one clip; a
+	// name and a range answers with the upload that holds every episode as a
+	// part. Any one of them misses what the others find, so all are collected.
+	queries := []string{query}
+	if episode > 0 {
+		queries = append(queries, query+" 第"+strconv.Itoa(episode)+"集")
+		queries = append(queries, query+"（1-"+strconv.Itoa(seriesRange)+"）")
 	}
-	best, ok := bestCandidate(found, query, episode)
-	if !ok {
+	var found []candidate
+	for _, one := range queries {
+		hits, err := b.search(ctx, one)
+		if err != nil {
+			return Result{Reason: ReasonFailed}, err
+		}
+		found = mergeHits(found, hits)
+	}
+	// A site's catalogue is a search engine's, and a title answers with
+	// whatever mentions it: for a popular show that is a wall of reaction
+	// videos, analysis breakdowns and wallpapers, and the show's own upload
+	// sits somewhere among them. So the hits are tried in order of how likely
+	// each is to be that upload, until one carries a part for this episode with
+	// comments in it, rather than the first hit alone deciding the layer.
+	ordered := candidates(found, query, episode)
+	if len(ordered) == 0 {
 		return Result{Reason: ReasonNoMatch}, nil
 	}
-	pages, err := b.pages(ctx, best.BVID)
-	if err != nil {
-		return Result{Reason: ReasonFailed}, err
+	// The show's own upload is near the top of the hits and not necessarily the
+	// first. Its part count is not in the search answer either, only the upload
+	// itself lists it, so the first few are opened for their parts before any is
+	// judged on its comments. The order the hits were ranked in is kept: what
+	// makes an upload the show's own is its name, and a radio play of the same
+	// show is split into more parts than the show is.
+	width := min(len(ordered), maxProbes)
+	var probes []probe
+	for i := 0; i < width; i++ {
+		pages, err := b.pages(ctx, ordered[i].BVID)
+		if err != nil {
+			continue
+		}
+		probes = append(probes, probe{hit: ordered[i], pages: pages})
 	}
-	target, ok := pickPage(pages, episode)
-	if !ok {
-		return Result{Reason: ReasonNoEpisode}, nil
+	for _, hit := range ordered[width:] {
+		probes = append(probes, probe{hit: hit})
 	}
-	items, err := b.comments(ctx, target.CID)
-	if err != nil {
-		return Result{Reason: ReasonFailed}, err
+	why := ReasonNoMatch
+	for _, one := range probes[:min(len(probes), maxTries)] {
+		if why == ReasonNoMatch {
+			why = ReasonNoEpisode
+		}
+		if one.pages == nil {
+			pages, err := b.pages(ctx, one.hit.BVID)
+			if err != nil {
+				return Result{Reason: ReasonFailed}, err
+			}
+			one.pages = pages
+		}
+		target, ok := pickPage(one.pages, episode)
+		if !ok {
+			continue
+		}
+		items, err := b.comments(ctx, target.CID, time.Duration(target.Duration)*time.Second)
+		if err != nil {
+			continue
+		}
+		if len(items) == 0 {
+			why = ReasonEmpty
+			continue
+		}
+		return Result{Items: items, Reason: ReasonReady}, nil
 	}
-	if len(items) == 0 {
-		return Result{Reason: ReasonEmpty}, nil
-	}
-	return Result{Items: items, Reason: ReasonReady}, nil
+	return Result{Reason: why}, nil
 }
 
-// search asks the site for videos whose title mentions query.
+// maxTries bounds how many hits have their parts opened and their comments
+// fetched before the layer is called empty or unmatched: each costs two
+// requests, and the show is either near the top or not on the site.
+const maxTries = 5
+
+// seriesMark pulls the range a series upload is named by, as in "（1-100）" or
+// "(1-100)": the first episode and the last.
+var seriesMark = regexp.MustCompile(`[（(]\s*(\d+)\s*[-–~]\s*(\d+)\s*[）)]`)
+
+// namesTheSeries reports whether a title is the show's name and a range of
+// episodes, as the site's own catalogue names a series: "凡人修仙传（1-100）".
+// Anything else wrapped round the range is somebody's own cut of the show, a
+// reaction series or a radio play of it.
+func namesTheSeries(title, query string) bool {
+	if !seriesMark.MatchString(title) {
+		return false
+	}
+	return normalizeTitle(seriesMark.ReplaceAllString(title, "")) == query
+}
+
+// coversEpisode reports whether a title names a range of episodes that holds
+// this one, which is what the site's own catalogue of a series does.
+func coversEpisode(title string, episode int) bool {
+	for _, match := range seriesMark.FindAllStringSubmatch(title, -1) {
+		low, errLow := strconv.Atoi(match[1])
+		high, errHigh := strconv.Atoi(match[2])
+		if errLow == nil && errHigh == nil && low <= episode && episode <= high {
+			return true
+		}
+	}
+	return false
+}
+
+// maxProbes bounds how many hits are opened just for their part count, which
+// is what ranks a series above a clip of one episode.
+const maxProbes = 5
+
+// seriesRange is the upper bound a series upload is named by: the site's own
+// catalogue lists the show as "凡人修仙传（1-100）", every episode a part.
+const seriesRange = 100
+
+// probe is one candidate and the parts the site listed for it, when it was
+// opened.
+type probe struct {
+	hit   candidate
+	pages []page
+}
+
+// maxSearchPages is how many pages of one search are read. The site answers
+// twenty hits a page and orders them by relevance to the words searched for, so
+// a show airing right now buries its own first episodes under the current ones:
+// the upload that carries episode thirty is not on the first page of a search
+// for it.
+const maxSearchPages = 3
+
+// mergeHits appends the hits one search answered that the earlier ones did not
+// carry, so a video found by both searches is weighed once.
+func mergeHits(into, more []candidate) []candidate {
+	seen := make(map[string]bool, len(into)+len(more))
+	for _, hit := range into {
+		seen[hit.BVID] = true
+	}
+	for _, hit := range more {
+		if seen[hit.BVID] {
+			continue
+		}
+		seen[hit.BVID] = true
+		into = append(into, hit)
+	}
+	return into
+}
+
+// search asks the site for videos whose title mentions query, and for the next
+// pages of that answer until it has enough hits to weigh.
 func (b *Bilibili) search(ctx context.Context, query string) ([]candidate, error) {
+	var out []candidate
+	for page := 1; page <= maxSearchPages; page++ {
+		hits, err := b.searchPage(ctx, query, page)
+		if err != nil {
+			if page == 1 {
+				return nil, err
+			}
+			break
+		}
+		if len(hits) == 0 {
+			break
+		}
+		out = append(out, hits...)
+		if len(out) >= maxCandidates {
+			break
+		}
+	}
+	return out, nil
+}
+
+// searchPage asks for one page of the site's answer.
+func (b *Bilibili) searchPage(ctx context.Context, query string, page int) ([]candidate, error) {
 	values := url.Values{}
 	values.Set("search_type", "video")
 	values.Set("keyword", query)
+	values.Set("page", strconv.Itoa(page))
+	values.Set("page_size", strconv.Itoa(searchPageSize))
 	var payload struct {
 		Code int `json:"code"`
 		Data struct {
@@ -128,6 +290,10 @@ func (b *Bilibili) search(ctx context.Context, query string) ([]candidate, error
 				Title    string `json:"title"`
 				Duration string `json:"duration"`
 				Play     int    `json:"play"`
+				Pubdate  int64  `json:"pubdate"`
+				// Videos is the part count the site puts on a search hit, the
+				// same number Page carries for one of an upload's parts.
+				Videos int `json:"videos"`
 			} `json:"result"`
 		} `json:"data"`
 	}
@@ -147,6 +313,8 @@ func (b *Bilibili) search(ctx context.Context, query string) ([]candidate, error
 			Title:    stripTags(hit.Title),
 			Duration: clockSeconds(hit.Duration),
 			Play:     hit.Play,
+			Uploaded: hit.Pubdate,
+			Parts:    hit.Videos,
 		})
 		if len(out) >= maxCandidates {
 			break
@@ -182,20 +350,58 @@ func (b *Bilibili) pages(ctx context.Context, bvid string) ([]page, error) {
 }
 
 // comments fetches and caches one part's comments.
-func (b *Bilibili) comments(ctx context.Context, cid int64) ([]source.Danmaku, error) {
+//
+// The endpoint the site used to hand out the whole list as XML now answers
+// 412, so the comments are read segment by segment, in the protobuf the
+// segment endpoint replies with.
+func (b *Bilibili) comments(ctx context.Context, cid int64, span time.Duration) ([]source.Danmaku, error) {
 	if items, ok := b.cached(cid); ok {
 		return items, nil
 	}
-	values := url.Values{}
-	values.Set("oid", strconv.FormatInt(cid, 10))
-	body, err := b.body(ctx, dmEndpoint+"?"+values.Encode())
-	if err != nil {
-		return nil, err
+	// A part's length says how many segments to read: an upload that folds ten
+	// episodes into one file spreads its comments over ten times as many, and
+	// one read would only bring the first slice's.
+	reach := min(maxSegments, max(1, 1+int(span/segmentSpan)))
+	if span == 0 {
+		reach = 1
 	}
-	items, err := ParseComments(bytes.NewReader(body))
-	if err != nil {
-		return nil, err
+	var items []source.Danmaku
+	for index := 1; index <= reach; index++ {
+		values := url.Values{}
+		values.Set("type", "1")
+		values.Set("oid", strconv.FormatInt(cid, 10))
+		values.Set("pid", strconv.FormatInt(cid, 10))
+		values.Set("segment_index", strconv.Itoa(index))
+		body, err := b.body(ctx, segmentsEndpoint+"?"+values.Encode())
+		if err != nil {
+			if index > 1 {
+				// A segment past the end answers nothing useful; what was read
+				// so far is the whole of it.
+				break
+			}
+			return nil, err
+		}
+		some, err := ParseSegments(body)
+		if err != nil {
+			return nil, err
+		}
+		for _, one := range some {
+			if !draws(one.mode) || strings.TrimSpace(one.text) == "" {
+				continue
+			}
+			items = append(items, source.Danmaku{
+				At:    time.Duration(one.progress) * time.Millisecond,
+				Text:  one.text,
+				Color: one.color,
+			})
+		}
+		if len(some) == 0 {
+			// The episode has no more segments than the ones already read: a
+			// segment past the end holds no comment at all.
+			break
+		}
 	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i].At < items[j].At })
 	b.remember(cid, items)
 	return items, nil
 }
@@ -284,66 +490,14 @@ func decompress(response *http.Response) (io.Reader, error) {
 	return flate.NewReader(stream), nil
 }
 
-// ParseComments reads the comment document into the player's shape. It keeps
-// the modes that cross the picture or sit at its top or bottom, and drops the
-// ones the player cannot draw.
-func ParseComments(r io.Reader) ([]source.Danmaku, error) {
-	var document struct {
-		Items []struct {
-			P    string `xml:"p,attr"`
-			Text string `xml:",chardata"`
-		} `xml:"d"`
+// draws says whether the stage can draw a comment of this mode: the ones that
+// cross the picture and the ones pinned to its top or bottom.
+func draws(mode int32) bool {
+	switch mode {
+	case 1, 4, 5:
+		return true
 	}
-	decoder := xml.NewDecoder(r)
-	decoder.Strict = false
-	decoder.CharsetReader = func(_ string, input io.Reader) (io.Reader, error) { return input, nil }
-	// A document with no comment in it is not a failure: an episode may have
-	// none, and the endpoint answers an empty one the same way.
-	if err := decoder.Decode(&document); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("comments: %w", err)
-	}
-	out := make([]source.Danmaku, 0, len(document.Items))
-	for _, item := range document.Items {
-		text := strings.TrimSpace(item.Text)
-		if text == "" {
-			continue
-		}
-		at, mode, color, ok := parseP(item.P)
-		if !ok {
-			continue
-		}
-		switch mode {
-		case 1, 4, 5:
-		default:
-			continue
-		}
-		out = append(out, source.Danmaku{At: at, Text: text, Color: color})
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].At < out[j].At })
-	return out, nil
-}
-
-// parseP reads the comma separated attributes a comment carries: the moment it
-// was sent at, its mode, its size, its color, and then bookkeeping the player
-// has no use for.
-func parseP(p string) (time.Duration, int, uint32, bool) {
-	fields := strings.Split(p, ",")
-	if len(fields) < 4 {
-		return 0, 0, 0, false
-	}
-	seconds, err := strconv.ParseFloat(strings.TrimSpace(fields[0]), 64)
-	if err != nil || seconds < 0 {
-		return 0, 0, 0, false
-	}
-	mode, err := strconv.Atoi(strings.TrimSpace(fields[1]))
-	if err != nil {
-		return 0, 0, 0, false
-	}
-	color, err := strconv.ParseUint(strings.TrimSpace(fields[3]), 10, 32)
-	if err != nil {
-		return 0, 0, 0, false
-	}
-	return time.Duration(seconds * float64(time.Second)), mode, uint32(color), true
+	return false
 }
 
 // highlight matches the emphasis tag the search puts around the words that hit.
@@ -397,23 +551,147 @@ func normalizeTitle(title string) string {
 // shares enough of the title to be the same show; among those the most watched
 // one wins, because a show's popular upload is the one whose comments were
 // written by people watching the same cut.
-func bestCandidate(hits []candidate, query string, episode int) (candidate, bool) {
-	var best candidate
-	bestScore := -1
+// candidates orders the hits by how likely each one is to be the upload that
+// carries the show itself, leaving out the ones that do not name it at all.
+func candidates(hits []candidate, query string, episode int) []candidate {
+	type ranked struct {
+		hit   candidate
+		score int
+	}
+	var kept []ranked
 	for _, hit := range hits {
 		strength := titleMatch(normalizeTitle(hit.Title), query)
 		if strength == 0 {
 			continue
 		}
-		score := strength<<30 + hit.Play
-		if strings.Contains(normalizeTitle(hit.Title), strconv.Itoa(episode)) {
-			score += 1 << 20
+		// A title that is the show's name and nothing else is the upload
+		// that carries the show; one that wraps the name in a pitch is about
+		// it. The name alone is not enough, though: copies of a popular video
+		// are titled its name too, so the bonus waits for the parts the site
+		// lists to confirm the upload holds a series.
+		score := strength << 30
+		// A title that is the show's name and nothing else is the upload that
+		// carries the show, whatever it holds: the site's own catalogue names
+		// the series that way, and a copy of one episode names its episode.
+		if namesOnlyTheShow(hit.Title, query) {
+			score += exactNameBonus
 		}
-		if score > bestScore {
-			best, bestScore = hit, score
+		if namesTheSeries(hit.Title, query) {
+			// The site's catalogue names a series by the show and its range;
+			// that is the upload the layer should read, ahead of any other cut
+			// of the same show.
+			score += exactNameBonus << 2
+		}
+		// Volume, not the site's play count, is what tells the upload that
+		// carries the show from the one that talks about it: a hundred-part
+		// series is a long upload and ranks high here, while a widely watched
+		// review of one episode is short and does not.
+		// A number of parts says the upload holds a series, but nothing about
+		// which one: a radio play of the show is split into parts too. It is
+		// weighed enough to lift a series over a reaction to one episode, and
+		// the catalogue's own naming is what lifts the show's own upload.
+		score += min(hit.Duration/60, 9999) << 12
+		score += min(hit.Parts, 200) << 14
+		score += min(hit.Play/1000, 999) << 4
+		// Age, as a guess at a series: an upload that keeps growing more
+		// parts was posted before the episodes it now holds, so an older hit
+		// that mentions the show is likelier to be the series than this week's
+		// reaction to it.
+		score += ageBonus(hit.Uploaded)
+		if episode > 0 {
+			switch {
+			case namesTheSeries(hit.Title, query) && coversEpisode(hit.Title, episode):
+				// The show's name and the range holding this episode is the
+				// catalogue copy of the series, and it covers the episode by
+				// construction rather than by saying its number.
+				score += exactNameBonus << 1
+			case namesTheEpisode(hit.Title, episode):
+				score += episodeBonus << 2
+			case namesAnotherEpisode(hit.Title, episode):
+				score -= episodeBonus
+			}
+		}
+		kept = append(kept, ranked{hit: hit, score: score})
+	}
+	sort.SliceStable(kept, func(i, j int) bool { return kept[i].score > kept[j].score })
+	out := make([]candidate, len(kept))
+	for i, entry := range kept {
+		out[i] = entry.hit
+	}
+	return out
+}
+
+// bestCandidate is the most likely hit, or none when nothing named the show.
+func bestCandidate(hits []candidate, query string, episode int) (candidate, bool) {
+	ranked := candidates(hits, query, episode)
+	if len(ranked) == 0 {
+		return candidate{}, false
+	}
+	return ranked[0], true
+}
+
+// episodeBonus outweighs a long upload's volume, so a hit that names this very
+// episode wins over a compilation that merely runs long.
+const episodeBonus = 1 << 16
+
+// exactNameBonus outweighs every kind of pitch a hit can wrap a show's name in:
+// a title that is the name itself is the show's own upload.
+const exactNameBonus = 1 << 24
+
+// ageBonus turns a hit's age into a weight, saturating at roughly six years:
+// past that, one old upload is as likely as another to be the series.
+func ageBonus(uploaded int64) int {
+	if uploaded <= 0 {
+		return 0
+	}
+	years := time.Since(time.Unix(uploaded, 0)).Hours() / (24 * 365)
+	if years <= 0 {
+		return 0
+	}
+	if years > 6 {
+		years = 6
+	}
+	return int(years * float64(1<<10))
+}
+
+// namesOnlyTheShow reports whether a title is the show's name and nothing else,
+// once the marks a title wraps itself in are gone: the upload that carries a
+// show is titled its name, while everything about it adds a pitch.
+func namesOnlyTheShow(title, query string) bool {
+	return normalizeTitle(title) == query
+}
+
+// partMark pulls the episode numbers a title spells out, as in "第12集" or
+// "12集", so a title can be read for which episode it is about.
+var partMark = regexp.MustCompile(`第?\s*(\d+)\s*[集话話期]`)
+
+// namesTheEpisode reports whether a title says it is this episode. A hit that
+// names no episode at all does not count either way, since a series' name is
+// usually written without one.
+func namesTheEpisode(title string, episode int) bool {
+	for _, match := range partMark.FindAllStringSubmatch(title, -1) {
+		if value, err := strconv.Atoi(match[1]); err == nil && value == episode {
+			return true
 		}
 	}
-	return best, bestScore >= 0
+	return false
+}
+
+// namesAnotherEpisode reports whether a title says it is some other episode:
+// the 201st episode of a show is not the first, whatever else it names.
+func namesAnotherEpisode(title string, episode int) bool {
+	named := false
+	for _, match := range partMark.FindAllStringSubmatch(title, -1) {
+		value, err := strconv.Atoi(match[1])
+		if err != nil {
+			continue
+		}
+		named = true
+		if value == episode {
+			return false
+		}
+	}
+	return named
 }
 
 // titleMatch says how well a candidate's name answers the query, and zero when

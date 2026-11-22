@@ -53,6 +53,10 @@ JUNK = [
 # 集中定义语义 Token 的文件，颜色只允许出现在这里（当前还没有这样的文件）。
 TOKEN_FILES = {"theme.go", "tokens.go", "design.go", "design_tokens.go"}
 
+# 与上游站点约定形状的文件：查询词、标题正则与站点自己的写法都要按原文
+# 拼，这些中文字符串不是界面文案，而是发出去或拿来匹配上游的东西。
+UPSTREAM_FILES = {"bilibili.go"}
+
 HEX_COLOR = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)#\s]+)(#[^)]*)?\)")
 ADR_NAME = re.compile(r"^\d{4}-[a-z0-9]+(-[a-z0-9]+)*\.md$")
@@ -272,8 +276,9 @@ def check_go_sources(files: list[str]) -> list[str]:
         if path.endswith("_test.go"):
             continue
         source = open(os.path.join(ROOT, path), encoding="utf-8").read()
+        upstream = os.path.basename(path) in UPSTREAM_FILES
         for line, literal in string_literals(source):
-            if CJK.search(literal):
+            if CJK.search(literal) and not upstream:
                 problems.append(
                     f"{path}:{line}: 字符串里有中文文字，用户可见文案应走 locales 的 catalog"
                 )
