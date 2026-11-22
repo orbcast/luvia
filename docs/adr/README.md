@@ -27,5 +27,6 @@
 - [0013 播放页在一条线路不出画面时换下一条](0013-playback-line-fallback.md)
 - [0014 让源规则同时吃 JSON 接口与服务端渲染页面](0014-html-pages-as-rule-sources.md)
 - [0015 弹幕按标题在站外匹配，规则只提供剧集](0015-danmaku-from-outside-the-rule.md)
+- [0016 macOS 使用系统原生红黄绿按钮](0016-native-window-buttons-on-macos.md)
 
 新增决策时在本列表补一行，写完跑 `make rules` 确认索引、文件名和链接都在。

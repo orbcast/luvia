@@ -208,6 +208,29 @@ func TestAppShellMovesBetweenColumnAndDock(t *testing.T) {
 	}
 }
 
+// TestChromeTopClearsTheSystemTitleBar covers where the window's chrome starts:
+// on its own inset where no title bar holds the system's controls, and the same inset
+// the panels keep from the window's edges, under the room they take where one does, so a panel never touches them.
+func TestChromeTopClearsTheSystemTitleBar(t *testing.T) {
+	if got := design.ChromeTop(0); got != design.WindowControlTop {
+		t.Fatalf("chrome starts at %v without a title bar, not at %v", got, design.WindowControlTop)
+	}
+	if got, want := design.ChromeTop(28), float32(28+design.ShellInset); got != want {
+		t.Fatalf("chrome starts at %v under a 28 title bar, not %v", got, want)
+	}
+}
+
+// TestAppShellNativeWindowButtons covers where the platform draws the window's
+// buttons itself: macOS keeps its traffic lights, and every other desktop gets
+// the capsule the shell draws.
+func TestAppShellNativeWindowButtons(t *testing.T) {
+	for goos, native := range map[string]bool{"darwin": true, "windows": false, "linux": false} {
+		if got := appshell.NativeWindowButtons(goos); got != native {
+			t.Errorf("on %s the platform draws the window buttons: %v, want %v", goos, got, native)
+		}
+	}
+}
+
 // TestAppShellDrawsWindowButtons covers the window controls the shell draws in
 // place of the system's: the desktop's layout decides which it has and where,
 // and a desktop that asks for none gets none.
@@ -240,9 +263,9 @@ func TestAppShellDrawsWindowButtons(t *testing.T) {
 	s := appshell.New()
 	s.SetWindowButtons(appshell.WindowButtons{End: []string{"minimize", "maximize", "close"}})
 	names, bounds := buttons(s)
-	// The capsule floats below the desktop's title bar, the buttons in its
-	// padding.
-	ty := float32(28 + design.WindowControlPadding)
+	// The capsule floats below the desktop's title bar, one gap under the room
+	// the system's own controls take, the buttons in its padding.
+	ty := design.ChromeTop(28) + design.WindowControlPadding
 	if len(names) != 3 {
 		t.Fatalf("a desktop with three window buttons got %v", names)
 	}

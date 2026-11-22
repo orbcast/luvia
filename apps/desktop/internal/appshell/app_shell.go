@@ -80,15 +80,16 @@ type Shell struct {
 	// title page and the player, which cover the whole window. The title page
 	// keeps the window's buttons; the player hides them.
 	navHidden bool
-	// controlsHidden hides the window's buttons while the player covers the
-	// window: the picture is the interface there, and a minimize or close
-	// beside its own controls reads as one more player button.
+	// controlsHidden hides the window buttons the shell draws while the player
+	// covers the window: the picture is the interface there, and a minimize or
+	// close beside its own controls reads as one more player button. A platform
+	// that draws its own buttons keeps them there.
 	controlsHidden bool
 
-	// controls are the window's minimize, maximize and close buttons, which
-	// this view draws because the window hides the system's, and window is
-	// the window they act on. layout says where the desktop puts them, and an
-	// empty layout means it asks for none, as under a tiling compositor.
+	// controls are the window buttons the shell draws on a window that hides
+	// the system's, and window is the window they act on. layout says where the
+	// desktop puts them, and an empty layout means it asks for none, as under a
+	// tiling compositor or where the platform draws its own, as macOS does.
 	controls map[string]WindowControl
 	window   *mygo.Window
 	layout   WindowButtons
@@ -138,9 +139,10 @@ func (b WindowButtons) Has(button string) bool {
 func (s *Shell) Selected() Page                  { return s.selected }
 func (s *Shell) SetNavigationHidden(hidden bool) { s.navHidden = hidden }
 
-// SetWindowControlsHidden hides the window's minimize, maximize and close
-// buttons while the player owns the window, and brings them back after. The
-// window still drags by the strip the buttons leave.
+// SetWindowControlsHidden hides the window buttons the shell draws while the
+// player owns the window, and brings them back after. The window still drags by
+// the strip the buttons leave. Where the platform draws its own buttons, as
+// macOS does, there is nothing here to hide.
 func (s *Shell) SetWindowControlsHidden(hidden bool) { s.controlsHidden = hidden }
 func (s *Shell) SetOnNavigate(fn func(Page))         { s.onNavigate = fn }
 
@@ -242,13 +244,22 @@ func (s *Shell) View(c *ui.Context) {
 	})
 }
 
-// WindowControl is one button of the window controls Luvia draws: the system's
-// are hidden (mygo.WindowOptions.HideWindowButtons) and these take their place.
+// WindowControl is one button of the window controls Luvia draws on a window
+// that hides the system's (mygo.WindowOptions.HideWindowButtons): these take
+// their place. macOS draws its own, so nothing here is drawn there.
 type WindowControl struct {
 	key   string
 	label func(locales.Messages) string
 	act   func(*mygo.Window)
 }
+
+// NativeWindowButtons reports whether the platform draws the window's close,
+// minimize and maximize buttons itself, over the page: macOS keeps its traffic
+// lights at the window's top-left, and its own gesture and menu behavior with
+// them. Where it does, the window keeps the system's buttons and the shell
+// draws none; where it does not, as on Windows and Linux, the window hides them
+// and the shell draws the set the desktop would have put in its title bars.
+func NativeWindowButtons(goos string) bool { return goos == "darwin" }
 
 // windowControls are the buttons a title bar asks Luvia for by name, in the
 // order a title bar reads them: the minimize dash, the maximize square, and
@@ -314,9 +325,9 @@ func windowControlSquareFrames(r ui.Rect, maximized bool) []ui.Rect {
 }
 
 // windowControls draws the window's buttons in the capsule the AppShell floats
-// over the page: at the start of the title bar on macOS, at its end on Linux
-// and Windows. It draws none under a desktop that decorates windows itself
-// and asks for none.
+// over the page: at the start of the title bar on Linux, at its end there and
+// on Windows. It draws none under a desktop that decorates windows itself and
+// asks for none, and none where the platform draws its own, as macOS does.
 func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBar, width float32) {
 	// The desktop's layout names the buttons and their order; one end holds
 	// the whole cluster, and the bar's own edge decides which.

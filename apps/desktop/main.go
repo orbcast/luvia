@@ -48,12 +48,14 @@ func main() {
 		videoCache = profile.video
 		var introCtrl *playintro.Controller
 		window := appwindow.New(func() appwindow.Window {
-			// The window hides the system's buttons (HideWindowButtons) and the
-			// shell draws its own, so the title bar holds nothing but the app's
-			// controls; shell gets the window to act on once it exists.
+			// macOS keeps its own traffic lights over the page, so the window
+			// shows them and the shell draws none; other desktops let the
+			// window hide theirs and the shell draws the set their title bars
+			// would hold. Shell gets the window to act on as it is.
+			native := appshell.NativeWindowButtons(runtime.GOOS)
 			w := mygo.NewWindow(mygo.WindowOptions{
 				Title: "Luvia", Width: 1100, Height: 720, MinWidth: 400, MinHeight: 400,
-				StateKey: "main", TitleBarStyle: mygo.TitleBarHidden, HideWindowButtons: true,
+				StateKey: "main", TitleBarStyle: mygo.TitleBarHidden, HideWindowButtons: !native,
 				Content: ui.View(func(c *ui.Context) {
 					shell.View(c)
 					introCtrl.View(c)
@@ -62,9 +64,12 @@ func main() {
 			shell.SetWindow(w)
 			// The desktop decides which window buttons its title bars have and
 			// at which end; the shell draws those, and none where it asks for
-			// none, as under a tiling compositor.
-			order := mygo.Theme.WindowButtons()
-			shell.SetWindowButtons(appshell.WindowButtons{Start: order.Start, End: order.End})
+			// none, as under a tiling compositor. Where the platform draws them
+			// itself, the shell is left with no buttons to draw.
+			if !native {
+				order := mygo.Theme.WindowButtons()
+				shell.SetWindowButtons(appshell.WindowButtons{Start: order.Start, End: order.End})
+			}
 			return w
 		})
 		introCtrl = playintro.New(func() { window.Refresh() })
