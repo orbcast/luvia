@@ -46,6 +46,9 @@ type Deps struct {
 	WindowFullScreen func() bool
 	Intro            func()
 	OpenVideo        func(string) (*ui.VideoPlayer, error)
+	// PlayerSettingsPath is the file the player keeps its own preferences
+	// (the comment layer's setup) in, so they outlive a session.
+	PlayerSettingsPath string
 }
 
 // Router owns the title and player screens and switches between them and the
@@ -70,6 +73,7 @@ func New(deps Deps) *Router {
 		Library: deps.Library, Images: deps.Images, Cache: deps.Cache, Run: deps.Run,
 		OnBack: r.backFromPlayer, OpenVideo: deps.OpenVideo,
 		SetFullScreen: deps.SetFullScreen,
+		SettingsPath:  deps.PlayerSettingsPath,
 	})
 	return r
 }

@@ -421,3 +421,54 @@ func PlayerChip(selected bool) (bg, ink ui.Color) {
 
 // PlayerTrack is the unfilled part of the player's scrub track.
 func PlayerTrack() ui.Color { return ui.RGBA(255, 255, 255, 0.28) }
+
+// DanmakuLaneHeight is one lane of comments: the line itself plus the room a
+// second line of the same lane needs to be told apart from it.
+const DanmakuLaneHeight = 30
+
+// DanmakuBand is where the layer of comments may start and end over the
+// picture, as shares of its height: the band the viewer picks ("Screen area"),
+// clear of the stage's own top line and of the control bar at the bottom.
+const (
+	DanmakuBandTop    float32 = 0.12
+	DanmakuBandBottom float32 = 0.20
+)
+
+// danmakuBands are the screen-area presets, as the span of the picture the layer
+// may use: full, the upper half, the middle third and the lower half.
+var danmakuBands = [4][2]float32{
+	{0, 1},
+	{0, 0.5},
+	{0.28, 0.72},
+	{0.5, 1},
+}
+
+// DanmakuBand returns the top and bottom of the band preset area, before the
+// stage's own clearance at either end is taken off.
+func DanmakuBand(area int) (top, bottom float32) {
+	if area < 0 || area >= len(danmakuBands) {
+		area = 0
+	}
+	return danmakuBands[area][0], danmakuBands[area][1]
+}
+
+// DanmakuInk is a flying comment's text at the opacity the viewer picked, and
+// its soft shadow: white-on-shadow reads on a bright frame as well as a dark
+// one, and no theme can darken it, because the frame under it is the theme.
+func DanmakuInk(opacity float32) ui.Color {
+	if opacity < 0 {
+		opacity = 0
+	}
+	if opacity > 1 {
+		opacity = 1
+	}
+	return ui.RGBA(255, 255, 255, opacity)
+}
+
+// DanmakuShadow is the depth under a flying comment, fixed whatever its opacity:
+// the shadow is what keeps a faint comment legible, so it does not fade with it.
+func DanmakuShadow() ui.Color { return ui.RGBA(0, 0, 0, 0.75) }
+
+// DanmakuPinnedVeil is the wash behind a comment pinned to the top or the
+// bottom of its band, which may land over a bright face or a white wall.
+func DanmakuPinnedVeil() ui.Color { return ui.RGBA(0, 0, 0, 0.42) }

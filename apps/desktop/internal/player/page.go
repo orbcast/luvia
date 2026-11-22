@@ -7,6 +7,7 @@ package player
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -91,6 +92,10 @@ type Deps struct {
 	// fills the window either way; the player's full-screen button hands the
 	// screen back by asking the window for it, not by hiding its own chrome.
 	SetFullScreen func(bool)
+	// SettingsPath is where the comment layer's settings are kept: every change
+	// is written there, and the player opens with what was written. An empty
+	// path keeps them for the session only.
+	SettingsPath string
 }
 
 // Page is the player state. Everything here is touched on the main thread.
@@ -144,6 +149,19 @@ type Page struct {
 	rate         float64
 	showSubtitle bool
 	danmaku      bool
+	// danmakuSettings is the comment layer's own setup, which outlives the
+	// player, and danmakuOpen keeps its box unfolded while it is adjusted.
+	danmakuSettings Settings
+	// danmakuSet is true once the settings are a real choice, whether loaded
+	// from the file or made in the controls. A page built for a test, or a
+	// player whose file could not be read, starts with the defaults instead of
+	// a zero value that would draw no lanes at all.
+	danmakuSet  bool
+	danmakuOpen bool
+	// danmakuDirty is set by the controls while the viewer is changing a
+	// setting, and cleared when the page has written it out, so a dragged
+	// slider writes the file once it settles instead of at every step.
+	danmakuDirty bool
 	comments     []source.Danmaku
 	commentGen   uint64
 	// commentWhy says why the layer over the picture is empty, so the panel
@@ -174,7 +192,13 @@ func New(deps Deps) *Page {
 	if deps.OpenVideo == nil {
 		deps.OpenVideo = video.OpenURL
 	}
-	p := &Page{deps: deps, index: -1, muted: true, volume: defaultVolume, restore: defaultVolume, rate: 1, playing: true, danmaku: true}
+	// The comment layer opens off: a viewer who has not asked for comments
+	// gets the picture alone, and the danmaku button is one press away.
+	p := &Page{deps: deps, index: -1, muted: true, volume: defaultVolume, restore: defaultVolume, rate: 1, playing: true}
+	// The layer opens on the viewer's own settings when the file holds one,
+	// and on the defaults otherwise, so a player nobody has set up yet draws
+	// comments instead of nothing.
+	p.danmakuSettings, _ = LoadDanmakuSettings(deps.SettingsPath)
 	if deps.Images != nil {
 		deps.Images.SetChanged(func() { p.invalidate() })
 	}
@@ -189,7 +213,7 @@ func (p *Page) Open(detail source.Detail, episodes []source.Episode, index int) 
 	p.lineID, p.playback = "", source.Playback{}
 	p.passed, p.lastFailure = nil, nil
 	p.loading, p.err, p.notice, p.started = false, nil, noticeNone, false
-	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, true, false, true, true, false
+	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, true, false, false, true, false
 	p.expanded, p.tab, p.scrub, p.scrubbing = false, tabEpisodes, 0, false
 	p.Start()
 }
@@ -459,51 +483,126 @@ func (p *Page) ruleComments(ctx context.Context, commenter source.Commenter, can
 	return items, commentReady
 }
 
-// flying is one comment crossing the picture: its text, the lane it takes and
-// the share of the crossing it has already made.
+// flying is one comment crossing the picture: its text, the kind of crossing it
+// makes, the lane it takes and the share of the crossing it has made. A pinned
+// comment's share is how long it still has to stay up.
 type flying struct {
 	text  string
+	kind  int
 	lane  int
 	slide float32
 }
 
-// danmakuLanes is how many rows of comments fit over the picture.
-const danmakuLanes = 8
-
-// danmakuWindow is how long a comment stays visible as it crosses.
-const danmakuWindow = 8 * time.Second
-
-// danmakuLead is how far ahead of its moment a comment starts to show, so it
-// reaches the middle of the crossing as the playhead passes its time.
-const danmakuLead = danmakuWindow / 2
-
-// flyingComments picks the comments crossing the picture at the playhead. Each
-// one owns a lane by its index, so the rows stay stable while they move.
-func (p *Page) flyingComments(now time.Duration) []flying {
+// flyingComments picks the comments crossing the picture at the playhead: the
+// ones scrolling across, and the ones pinned to the top or the bottom of the
+// band. It returns the rows the layer may use as well, so the stage can tell a
+// lane that is free from one a long comment still holds.
+//
+// A lane is owned by a comment until that comment has left the lane, not until
+// a fixed number of comments has gone by: a long line takes longer to clear it
+// than a short one, and two lines in one lane overlap when the next one enters
+// on the same beat. A lane a comment has just left stays quiet for a moment so
+// the next one enters with a gap.
+func (p *Page) flyingComments(now time.Duration, width float32) ([]flying, int) {
 	if !p.danmaku || len(p.comments) == 0 {
-		return nil
+		return nil, 0
 	}
+	set := p.danmakuSettings
 	spread := !timedComments(p.comments)
+	window := p.danmakuWindow()
+	lead := window / 2
+	area := laneWidth(width)
+	free := make(map[int]time.Duration)
 	var out []flying
 	for i, comment := range p.comments {
+		kind := commentKind(i)
+		if !set.allows(kind) {
+			continue
+		}
 		at := comment.At
 		if spread {
 			at = p.spreadMoment(i, len(p.comments))
 		}
-		from := at - danmakuLead
-		if now < from || now-from > danmakuWindow {
+		from := at - lead
+		if now < from || now-from > window {
 			continue
 		}
-		out = append(out, flying{
-			text:  comment.Text,
-			lane:  i % danmakuLanes,
-			slide: float32(now-from) / float32(danmakuWindow),
-		})
-		if len(out) >= danmakuLanes {
-			break
+		slide := float32(now-from) / float32(window)
+		lane := 0
+		if kind == kindScroll {
+			// The share of the crossing a line of this length takes to enter,
+			// and the clearance it keeps behind it once it has.
+			occupy := clampF((textWidth(comment.Text, set.Size)+64)/float64(area), 0.12, 0.9)
+			lane = -1
+			for l := 0; l < set.Lanes; l++ {
+				if held, ok := free[l]; !ok || float64(slide) >= float64(held)+occupy {
+					lane = l
+					break
+				}
+			}
+			if lane < 0 {
+				// Every lane is taken: the layer drops the line rather than
+				// stacking two in one row, which is what makes a busy episode
+				// unreadable.
+				continue
+			}
+			free[lane] = time.Duration((float64(slide) + occupy) * float64(window))
 		}
+		out = append(out, flying{text: comment.Text, kind: kind, lane: lane, slide: slide})
 	}
-	return out
+	return out, set.Lanes
+}
+
+// commentKind says how the i-th comment of a list crosses: two in five are
+// pinned, split between the top and the bottom, and the rest scroll. Danmaku
+// arrives as one undifferentiated list here — the source rule's comments carry
+// no mode — so the pattern stands in for the mix a site's own server would
+// send, and it is stable for a given comment, so one does not change its kind
+// between frames.
+func commentKind(i int) int {
+	switch i % 5 {
+	case 2:
+		return kindTop
+	case 4:
+		return kindBottom
+	}
+	return kindScroll
+}
+
+// allows reports whether the settings let this kind of comment through.
+func (s Settings) allows(kind int) bool {
+	switch kind {
+	case kindTop:
+		return s.Top
+	case kindBottom:
+		return s.Bottom
+	}
+	return s.Scroll
+}
+
+// danmakuWindow is how long a comment at the chosen speed takes to cross.
+func (p *Page) danmakuWindow() time.Duration {
+	return time.Duration(clampF(p.danmakuSettings.Speed, danmakuFastest, danmakuSlowest) * float64(time.Second))
+}
+
+// laneWidth is the distance a comment travels across a stage width wide.
+func laneWidth(width float32) float64 {
+	if width < 240 {
+		width = 240
+	}
+	return float64(width) + 240
+}
+
+// textWidth estimates how wide a line of text is at size, which is what decides
+// how long a comment holds its lane. The layer is drawn with real text, but a
+// measurement here would need a painter the page does not own, and a lane is
+// only ever a little too long or a little too short by this estimate.
+func textWidth(text string, size float32) float64 {
+	runes := 0
+	for range text {
+		runes++
+	}
+	return float64(runes) * float64(size) * 0.95
 }
 
 // timedComments reports whether any comment carries a moment of its own. A
@@ -524,11 +623,11 @@ func timedComments(comments []source.Danmaku) bool {
 func (p *Page) spreadMoment(index, count int) time.Duration {
 	span := p.duration()
 	if span <= 0 {
-		span = time.Duration(count) * danmakuWindow
+		span = time.Duration(count) * p.danmakuWindow()
 	}
 	step := span / time.Duration(count)
-	if step < danmakuWindow {
-		step = danmakuWindow
+	if step < p.danmakuWindow() {
+		step = p.danmakuWindow()
 	}
 	return time.Duration(index)*step + step/2
 }
@@ -881,7 +980,65 @@ func (p *Page) Volume() float64 { return p.volume }
 // ToggleDanmaku shows or hides the comment layer over the picture.
 func (p *Page) ToggleDanmaku() {
 	p.danmaku = !p.danmaku
+	if !p.danmaku {
+		// A layer that is off keeps its settings away with it, so a viewer who
+		// turned danmaku off does not find a settings box still open the next
+		// time it comes on.
+		p.danmakuOpen = false
+	}
 	p.invalidate()
+}
+
+// DanmakuOn reports whether the layer is drawing comments over the picture.
+func (p *Page) DanmakuOn() bool { return p.danmaku }
+
+// DanmakuOpen reports whether the layer's settings are unfolded.
+func (p *Page) DanmakuOpen() bool { return p.danmakuOpen }
+
+// SetDanmakuOpen unfolds or folds the layer's settings, which stay open while
+// the viewer adjusts them so the picture answers each change at once.
+func (p *Page) SetDanmakuOpen(open bool) {
+	p.danmakuOpen = open
+	p.invalidate()
+}
+
+// DanmakuSettings returns a copy of the layer's settings for the view.
+func (p *Page) DanmakuSettings() Settings { return p.danmakuSettings }
+
+// SetDanmakuSettings takes the settings the viewer just changed, fits them to
+// the range the controls offer, draws the layer with them and keeps them for
+// the next episode. Writing is small and happens on a change, not per frame.
+func (p *Page) SetDanmakuSettings(s Settings) {
+	p.danmakuSettings = s.clamped()
+	p.danmakuDirty = true
+	p.invalidate()
+}
+
+// editDanmakuSettings changes the settings in place and marks them to be
+// written. The controls use it while the viewer is still dragging, so the
+// picture answers at once and the file is written once the drag has settled.
+func (p *Page) editDanmakuSettings(change func(*Settings)) {
+	change(&p.danmakuSettings)
+	p.danmakuSettings = p.danmakuSettings.clamped()
+	p.danmakuDirty = true
+	p.invalidate()
+}
+
+// flushDanmakuSettings writes the settings when they have changed since the
+// last write. It runs at the end of a frame, after the controls have had their
+// say, so one frame of dragging is one write at most and a settled drag is one
+// write in all.
+func (p *Page) flushDanmakuSettings() {
+	if !p.danmakuDirty {
+		return
+	}
+	p.danmakuDirty = false
+	if p.deps.SettingsPath == "" {
+		return
+	}
+	if err := SaveDanmakuSettings(p.deps.SettingsPath, p.danmakuSettings); err != nil {
+		log.Printf("danmaku_settings_save_failed: %v", err)
+	}
 }
 
 // SeekBy moves the playhead by delta, clamped inside the clip.

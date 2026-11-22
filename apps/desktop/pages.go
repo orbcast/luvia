@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -34,7 +35,10 @@ type pageSet struct {
 // pageDeps is what a set is built from: the profile holding the chosen source,
 // and the shell, window and intro the pages call back into.
 type pageDeps struct {
-	profile  profile
+	profile profile
+	// userData is where the player keeps its own preferences, beside the
+	// theme and the source list.
+	userData string
 	settings *settings.Page
 	shell    *appshell.Shell
 	window   *appwindow.Main
@@ -99,8 +103,11 @@ func newPageSet(deps pageDeps) *pageSet {
 			}
 			return false
 		},
-		Intro: func() { deps.intro.Start(nil) },
-		Base:  func(c *ui.Context) ui.Element { return set.navView(c, deps.shell.Selected()) },
+		// The player's own preferences sit beside the theme and the source
+		// list, in the user data directory.
+		PlayerSettingsPath: filepath.Join(deps.userData, "player.json"),
+		Intro:              func() { deps.intro.Start(nil) },
+		Base:               func(c *ui.Context) ui.Element { return set.navView(c, deps.shell.Selected()) },
 	})
 	return set
 }

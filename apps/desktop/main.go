@@ -105,7 +105,7 @@ func main() {
 		applySource = func(id string) {
 			profile = chooseSource(profile, id)
 			pages = newPageSet(pageDeps{
-				profile: profile, settings: settingsPage,
+				profile: profile, userData: userData, settings: settingsPage,
 				shell: shell, window: window, intro: introCtrl,
 			})
 			// Artwork arriving for the pages just built redraws the window;

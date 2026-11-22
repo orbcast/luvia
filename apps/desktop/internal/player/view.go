@@ -64,6 +64,9 @@ func (p *Page) View(c *ui.Context) ui.Element {
 			})
 		}
 	})
+	// The settings the frame's controls just changed are written once the
+	// frame is built, so a drag reaches the file once it settles.
+	p.flushDanmakuSettings()
 	return root
 }
 
@@ -138,26 +141,235 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 	p.stageControls(c, t, m)
 }
 
-// stageDanmaku lays the comments over the picture: each one crosses a lane from
-// the right edge to the left, at the pace of the playhead.
+// stageDanmaku lays the comments over the picture. A scrolled one crosses a lane
+// from the right edge to the left at the pace of the playhead; a pinned one sits
+// in the middle of its lane for a few seconds. The band, the text, the speed and
+// which kinds fly are the viewer's settings, and the controls for them sit just
+// under the pill at the top-right while they are unfolded.
 func (p *Page) stageDanmaku(c *ui.Context, width float32) {
-	flying := p.flyingComments(p.position())
-	if len(flying) == 0 {
-		return
+	_, height := c.Size()
+	flying, lanes := p.flyingComments(p.position(), width)
+	set := p.danmakuSettings
+	top, bottom := design.DanmakuBand(set.Area)
+	// The band is a share of the picture, with the stage's own top line and
+	// control bar kept clear of it at either end.
+	from := height*top + height*design.DanmakuBandTop*(1-top)
+	to := height*bottom - height*design.DanmakuBandBottom*(1-bottom)
+	if to < from+design.DanmakuLaneHeight {
+		from, to = height*design.DanmakuBandTop, height-design.DanmakuBandBottom*height
 	}
-	// The playhead moves on its own, so the layer keeps asking for frames
-	// while comments are in flight.
-	c.After(50 * time.Millisecond)
-	const laneHeight float32 = 30
-	top := float32(96)
+	rows := int((to - from) / design.DanmakuLaneHeight)
+	if rows < 1 {
+		rows = 1
+	}
+	if lanes < rows {
+		rows = lanes
+	}
+	if len(flying) > 0 {
+		// The playhead moves on its own, so the layer keeps asking for frames
+		// while comments are in flight.
+		c.After(50 * time.Millisecond)
+	}
 	for _, item := range flying {
-		left := width - (width+240)*item.slide
-		ui.Row(c).Absolute().Left(left).Top(top + float32(item.lane)*laneHeight).
-			Height(laneHeight).Children(func() {
-			ui.Text(c, item.text).FontSize(16).Bold().MaxLines(1).
-				TextColor(ui.RGBA(255, 255, 255, 0.95)).TextShadow(0, 1, 3, ui.RGBA(0, 0, 0, 0.75))
+		item := item
+		lane := item.lane % rows
+		if item.kind == kindScroll {
+			left := width - (width+240)*item.slide
+			ui.Row(c).Absolute().Left(left).Top(from + float32(lane)*design.DanmakuLaneHeight).
+				Height(design.DanmakuLaneHeight).AlignItems(ui.Center).Children(func() {
+				p.danmakuText(c, item.text)
+			})
+			continue
+		}
+		// A pinned comment holds the middle of its lane and stays for a fixed
+		// time, so its row is one line wide and centred rather than measured.
+		row := lane
+		if item.kind == kindBottom {
+			row = rows - 1 - lane
+		}
+		ui.Row(c).Absolute().Left(0).Right(0).Top(from + float32(row)*design.DanmakuLaneHeight).
+			Height(design.DanmakuLaneHeight).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Radius(999).Padding(3, 10).Background(design.DanmakuPinnedVeil()).Children(func() {
+				p.danmakuText(c, item.text)
+			})
 		})
 	}
+	if p.danmakuOpen && p.danmaku {
+		p.danmakuControls(c, width)
+	}
+}
+
+// danmakuText is one line of the layer: the viewer's size, weight and opacity,
+// over a soft shadow so a faint line still reads on a bright frame.
+func (p *Page) danmakuText(c *ui.Context, text string) {
+	set := p.danmakuSettings
+	line := ui.Text(c, text).FontSize(set.Size).MaxLines(1).
+		TextColor(design.DanmakuInk(set.Opacity)).
+		TextShadow(0, 1, 3, design.DanmakuShadow())
+	if set.Bold {
+		line.Bold()
+	}
+}
+
+// danmakuControls is the settings box under the pill: the screen area as four
+// presets, then opacity, size, speed and how many rows, then the kinds of
+// comment that fly. It floats over the picture at the top-right, level with the
+// pill's own right edge, so opening it never moves the button that opened it.
+func (p *Page) danmakuControls(c *ui.Context, width float32) {
+	m := locales.In(c.Locale())
+	boxWidth := float32(268)
+	if width < boxWidth+96 {
+		boxWidth = width - 48
+	}
+	ui.Column(c).Absolute().Right(24).Top(stageLineTop+design.DanmakuLaneHeight+30).
+		Width(boxWidth).Radius(18).Padding(16).Gap(14).Background(design.PlayerPanelGlassFill()).
+		Border(1, design.PlayerPanelGlassBorder()).Children(func() {
+		p.danmakuPresets(c, m)
+		p.danmakuSlider(c, "opacity", m.DanmakuOpacity(),
+			float64(p.danmakuSettings.Opacity)*100, 10, 100,
+			func(v float64) { p.editDanmakuSettings(func(s *Settings) { s.Opacity = float32(v / 100) }) })
+		p.danmakuSlider(c, "size", m.DanmakuSize(),
+			float64(p.danmakuSettings.Size), 12, 30,
+			func(v float64) { p.editDanmakuSettings(func(s *Settings) { s.Size = float32(v) }) })
+		p.danmakuSlider(c, "speed", m.DanmakuSpeed(),
+			speedAt(p.danmakuSettings.Speed), 0, 100,
+			func(v float64) { p.editDanmakuSettings(func(s *Settings) { s.Speed = speedFor(v) }) })
+		p.danmakuSlider(c, "lanes", m.DanmakuLanes(),
+			float64(p.danmakuSettings.Lanes), 1, 14,
+			func(v float64) { p.editDanmakuSettings(func(s *Settings) { s.Lanes = int(v + 0.5) }) })
+		ui.Row(c).FillWidth().Gap(6).Children(func() {
+			p.danmakuToggle(c, "scroll", m.DanmakuBlockScroll(), p.danmakuSettings.Scroll,
+				func(on bool) { p.editDanmakuSettings(func(s *Settings) { s.Scroll = on }) })
+			p.danmakuToggle(c, "top", m.DanmakuBlockTop(), p.danmakuSettings.Top,
+				func(on bool) { p.editDanmakuSettings(func(s *Settings) { s.Top = on }) })
+		})
+		ui.Row(c).FillWidth().Gap(6).Children(func() {
+			p.danmakuToggle(c, "bottom", m.DanmakuBlockBottom(), p.danmakuSettings.Bottom,
+				func(on bool) { p.editDanmakuSettings(func(s *Settings) { s.Bottom = on }) })
+			p.danmakuToggle(c, "bold", m.DanmakuBold(), p.danmakuSettings.Bold,
+				func(on bool) { p.editDanmakuSettings(func(s *Settings) { s.Bold = on }) })
+		})
+	})
+}
+
+// danmakuPresets is the screen area as four presets in a row, each a miniature
+// of the picture with the band the comments may use filled in, so the area is
+// seen rather than read. The name sits under the miniature, on one line: four
+// of them share the box's width, and a wrapped label would make one preset
+// taller than its neighbours and push the whole box out of shape.
+func (p *Page) danmakuPresets(c *ui.Context, m locales.Messages) {
+	labels := []string{m.DanmakuAreaFull(), m.DanmakuAreaTop(), m.DanmakuAreaMiddle(), m.DanmakuAreaBottom()}
+	ui.Column(c).FillWidth().Gap(8).Children(func() {
+		ui.Text(c, m.DanmakuArea()).FontSize(11.5).TextColor(mediaMuted)
+		ui.Row(c).FillWidth().Gap(6).Children(func() {
+			for i, label := range labels {
+				index := i
+				on := index == p.danmakuSettings.Area
+				button := ui.ButtonBase(c).Key("dm-area:" + strconv.Itoa(i)).Grow(1).Height(50).Radius(9).
+					Label(label).Tooltip(label).Background(ui.RGBA(255, 255, 255, 0.06))
+				if on {
+					button.Background(ui.RGBA(255, 255, 255, 0.18))
+				} else if button.Hovered() {
+					button.Background(ui.RGBA(255, 255, 255, 0.12))
+				}
+				button.Children(func() {
+					// The miniature is the picture's own shape, 30 x 17, with
+					// the band filled in and a hairline at either end of it: the
+					// preset reads at a glance, and the label under it stays one
+					// line wide.
+					const frameW, frameH float32 = 30, 17
+					top, bottom := design.DanmakuBand(index)
+					ink := ui.RGBA(255, 255, 255, 0.70)
+					if on {
+						ink = ui.RGBA(255, 255, 255, 1)
+					}
+					ui.Column(c).Fill().AlignItems(ui.Center).Justify(ui.Center).Gap(5).Children(func() {
+						// The miniature is the frame's own shape with the band laid
+						// in it: the padding above and below stands for the empty
+						// picture, and the band fills what is left between them.
+						// Padding, not absolute placement, so the four presets are
+						// plainly four different spans of the same frame.
+						ui.Box(c).Width(frameW).Height(frameH).Radius(3).
+							Padding(frameH*top, 0, frameH*(1-bottom), 0).
+							Background(ui.RGBA(0, 0, 0, 0.45)).Children(func() {
+							ui.Box(c).Fill().Background(ink)
+						})
+						ui.Text(c, label).FontSize(10).TextColor(mediaInk).NoWrap()
+					})
+				})
+				if button.Clicked() {
+					p.editDanmakuSettings(func(s *Settings) { s.Area = index })
+				}
+			}
+		})
+	})
+}
+
+// danmakuSlider is one setting from lo to hi with its current value beside its
+// name. The value the slider reports goes back into the layer at once, so a
+// drag is seen on the picture as it happens, and the settings are written once
+// the frame is built rather than at every step.
+func (p *Page) danmakuSlider(c *ui.Context, key, label string, value, lo, hi float64, apply func(float64)) {
+	shown := strconv.Itoa(int(value))
+	if key == "opacity" {
+		shown = strconv.Itoa(int(value)) + "%"
+	}
+	ui.Column(c).FillWidth().Gap(6).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+			ui.Text(c, label).FontSize(11.5).TextColor(mediaMuted).Grow(1)
+			ui.Text(c, shown).FontSize(11).Bold().TextColor(mediaInk)
+		})
+		// A plain slider, not a stepped one: the sites people know by heart
+		// sweep opacity and size smoothly rather than snapping to marks. Its
+		// state is its own, so the key goes on the context before it is built
+		// rather than on the element afterwards.
+		slider := ui.Slider(c.Key("dm-"+key), &value, lo, hi).Height(18)
+		slider.Label(label)
+		slider.Draw(func(painter *ui.Painter, r ui.Rect) {
+			const knob float32 = 12
+			frac := float32(0)
+			if hi > lo {
+				frac = float32((value - lo) / (hi - lo))
+			}
+			x := r.X + knob/2 + (r.W-knob)*frac
+			middle := r.Y + r.H/2
+			painter.Fill(ui.Rect{X: r.X + knob/2, Y: middle - 2, W: r.W - knob, H: 4}, design.PlayerTrack(), 2)
+			painter.Fill(ui.Rect{X: r.X + knob/2, Y: middle - 2, W: (r.W - knob) * frac, H: 4}, mediaInk, 2)
+			painter.Fill(ui.Rect{X: x - knob/2, Y: middle - knob/2, W: knob, H: knob}, mediaInk, knob/2)
+		})
+		if slider.Changed() {
+			apply(value)
+		}
+	})
+}
+
+// danmakuToggle is one kind of comment's switch, as a chip that stays lit while
+// that kind flies.
+func (p *Page) danmakuToggle(c *ui.Context, key, label string, on bool, set func(bool)) {
+	chip := ui.ButtonBase(c).Key("dm-kind:" + key).Grow(1).Height(28).Radius(8).Label(label).Tooltip(label).
+		Background(ui.RGBA(255, 255, 255, 0.06))
+	ink := mediaMuted
+	if on {
+		chip.Background(ui.RGBA(255, 255, 255, 0.20))
+		ink = mediaInk
+	} else if chip.Hovered() {
+		chip.Background(ui.RGBA(255, 255, 255, 0.12))
+		ink = mediaInk
+	}
+	chip.Children(func() { ui.Text(c, label).FontSize(11).TextColor(ink).MaxLines(1) })
+	if chip.Clicked() {
+		set(!on)
+	}
+}
+
+// speedAt and speedFor are the two ends of the speed slider: the slider runs
+// from slow to fast, while a comment's crossing time runs from long to short.
+func speedAt(seconds float64) float64 {
+	return (danmakuSlowest - seconds) / (danmakuSlowest - danmakuFastest) * 100
+}
+
+func speedFor(value float64) float64 {
+	return danmakuSlowest - clampF(value, 0, 100)/100*(danmakuSlowest-danmakuFastest)
 }
 
 // stageBuffering shows a quiet marker while the picture that came has stood
@@ -273,7 +485,11 @@ func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
 		Padding(pillPadding).Material(glass.Glass{}).Children(func() {
 		p.volumeTrack(c, m)
 		p.speaker(c, m)
-		p.pillButton(c, "danmaku", "chat-round-linear", m.DanmakuLabel(), p.danmaku, p.ToggleDanmaku)
+		// The danmaku button both switches the layer and, once it is on, opens
+		// its settings: pressing it with the layer showing unfolds the box
+		// instead of turning the comments off, which is what a press is for
+		// when the layer is already there and what the sites people know do.
+		p.danmakuButton(c, m)
 		if p.panelHidden {
 			p.panelReveal(c, m)
 			return
@@ -282,28 +498,74 @@ func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
 	})
 }
 
+// danmakuButton is the layer's control. A press turns the comments on and
+// unfolds their settings; with the layer on, the same press folds and unfolds
+// the settings, and a press with the settings already open turns the layer off.
+// Keeping all three on one button is what the sites people know by heart do, and
+// the tooltip says which press is which.
+func (p *Page) danmakuButton(c *ui.Context, m locales.Messages) {
+	tip := m.DanmakuLabel()
+	if p.danmaku && p.danmakuOpen {
+		tip = m.DanmakuPanelFold()
+	} else if p.danmaku {
+		tip = m.DanmakuSettings()
+	}
+	// The button keeps its own name whatever state it is in: the label a
+	// reader hears is the control ("Danmaku"), while the tooltip says what the
+	// next press will do, and folding the settings must not rename the button
+	// that folds them.
+	button := ui.ButtonBase(c).Key("p-danmaku").Size(stageButtonSize, stageButtonSize).Radius(999).
+		Label(m.DanmakuLabel()).Tooltip(tip).Background(ui.Transparent)
+	ink := mediaMuted
+	switch {
+	case p.danmaku:
+		// On is a filled pill, the same figure the speaker and the panel
+		// toggle take when they are on.
+		button.Background(mediaInk)
+		ink = ui.RGBA(20, 20, 22, 1)
+	case button.Hovered():
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		ink = mediaInk
+	}
+	button.Children(func() { ui.Icon(c, icons.Parse("chat-round-linear")).Size(18, 18).TextColor(ink) })
+	if button.Clicked() {
+		switch {
+		case !p.danmaku:
+			p.ToggleDanmaku()
+			p.SetDanmakuOpen(true)
+		case !p.danmakuOpen:
+			p.SetDanmakuOpen(true)
+		default:
+			p.ToggleDanmaku()
+		}
+	}
+}
+
 // volumeTrack is the level itself, a track with its filled part and knob, as
 // the system's player lays it beside the speaker. Pressing it sets the level
 // where the pointer lands and dragging along it keeps setting it.
 func (p *Page) volumeTrack(c *ui.Context, m locales.Messages) {
 	frac := float32(clampF(p.volume, 0, 1))
-	track := ui.ButtonBase(c).Key("p-volume").Width(volumeTrackWidth).Height(stageButtonSize).
+	track := ui.ButtonBase(c).Key("p-volume").Width(volumeTrackWidth + 2*volumeInset).Height(stageButtonSize).
 		Label(m.VolumeLabel()).Tooltip(m.VolumeLabel()).Background(ui.Transparent).Cursor(ui.CursorResizeEW)
+	// The track's own box is inset at both ends inside the button, so the knob
+	// at rest and at full stays clear of the capsule's rounded edge.
+	length := volumeTrackWidth - volumeKnob
 	track.Children(func() {
 		const barHeight, knob float32 = 4, 12
 		middle := (stageButtonSize - barHeight) / 2
-		ui.Box(c).Absolute().Left(0).Right(0).Top(middle).Height(barHeight).Radius(barHeight / 2).
-			Background(ui.RGBA(255, 255, 255, 0.28))
-		ui.Box(c).Absolute().Left(0).Top(middle).Height(barHeight).Radius(barHeight / 2).
-			Background(mediaInk).Width((volumeTrackWidth-knob)*frac + knob/2)
-		ui.Box(c).Absolute().Top((stageButtonSize-knob)/2).Left((volumeTrackWidth-knob)*frac).
+		ui.Box(c).Absolute().Left(volumeInset).Top(middle).Height(barHeight).Radius(barHeight / 2).
+			Width(volumeTrackWidth).Background(ui.RGBA(255, 255, 255, 0.28))
+		ui.Box(c).Absolute().Left(volumeInset).Top(middle).Height(barHeight).Radius(barHeight / 2).
+			Background(mediaInk).Width(length*frac + knob/2)
+		ui.Box(c).Absolute().Left(volumeInset+length*frac).Top((stageButtonSize-knob)/2).
 			Size(knob, knob).Radius(knob / 2).Background(mediaInk)
 	})
 	// Where the pointer is along the track is the level: a press sets it at
 	// once and every move of the drag follows it, so the level never lags
 	// behind the hand. A muted video comes back as soon as the level is raised.
 	if x, _, over := track.PointerPosition(); over && track.Pressed() {
-		p.SetVolume(clampF(float64(x)/float64(volumeTrackWidth-volumeKnob), 0, 1))
+		p.SetVolume(clampF(float64(x-volumeInset)/float64(length), 0, 1))
 	}
 }
 
@@ -335,10 +597,14 @@ func (p *Page) speaker(c *ui.Context, m locales.Messages) {
 
 // volumeTrackWidth is the length of the level track beside the speaker, and
 // volumeKnob the knob's diameter, which the travel stops short of so the knob
-// stays inside the track at either end.
+// stays inside the track at either end. volumeInset is the room the track keeps
+// at either end: the pill's padding alone would leave the knob touching the
+// capsule's edge, so the level starts a few units in and ends before the
+// speaker's own button begins.
 const (
 	volumeTrackWidth float32 = 110
 	volumeKnob       float32 = 12
+	volumeInset      float32 = 8
 )
 
 // panelReveal is the single control the picture keeps while the side panel is

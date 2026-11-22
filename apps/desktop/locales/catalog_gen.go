@@ -1548,6 +1548,166 @@ func (msgs Messages) DanmakuArea() string {
 	return Catalog.Format(msgs.locale, "danmakuArea", nil)
 }
 
+// DanmakuAreaFull says "Whole picture"
+// in the language the app shows.
+func DanmakuAreaFull() string { return In(i18n.Locale()).DanmakuAreaFull() }
+
+// DanmakuAreaFull says "Whole picture"
+// in the language of msgs.
+func (msgs Messages) DanmakuAreaFull() string {
+	return Catalog.Format(msgs.locale, "danmakuAreaFull", nil)
+}
+
+// DanmakuAreaTop says "Top"
+// in the language the app shows.
+func DanmakuAreaTop() string { return In(i18n.Locale()).DanmakuAreaTop() }
+
+// DanmakuAreaTop says "Top"
+// in the language of msgs.
+func (msgs Messages) DanmakuAreaTop() string {
+	return Catalog.Format(msgs.locale, "danmakuAreaTop", nil)
+}
+
+// DanmakuAreaMiddle says "Middle"
+// in the language the app shows.
+func DanmakuAreaMiddle() string { return In(i18n.Locale()).DanmakuAreaMiddle() }
+
+// DanmakuAreaMiddle says "Middle"
+// in the language of msgs.
+func (msgs Messages) DanmakuAreaMiddle() string {
+	return Catalog.Format(msgs.locale, "danmakuAreaMiddle", nil)
+}
+
+// DanmakuAreaBottom says "Bottom"
+// in the language the app shows.
+func DanmakuAreaBottom() string { return In(i18n.Locale()).DanmakuAreaBottom() }
+
+// DanmakuAreaBottom says "Bottom"
+// in the language of msgs.
+func (msgs Messages) DanmakuAreaBottom() string {
+	return Catalog.Format(msgs.locale, "danmakuAreaBottom", nil)
+}
+
+// DanmakuAreaHint says "The band comments fly through"
+// in the language the app shows.
+func DanmakuAreaHint() string { return In(i18n.Locale()).DanmakuAreaHint() }
+
+// DanmakuAreaHint says "The band comments fly through"
+// in the language of msgs.
+func (msgs Messages) DanmakuAreaHint() string {
+	return Catalog.Format(msgs.locale, "danmakuAreaHint", nil)
+}
+
+// DanmakuBold says "Bold"
+// in the language the app shows.
+func DanmakuBold() string { return In(i18n.Locale()).DanmakuBold() }
+
+// DanmakuBold says "Bold"
+// in the language of msgs.
+func (msgs Messages) DanmakuBold() string {
+	return Catalog.Format(msgs.locale, "danmakuBold", nil)
+}
+
+// DanmakuFont says "Typeface"
+// in the language the app shows.
+func DanmakuFont() string { return In(i18n.Locale()).DanmakuFont() }
+
+// DanmakuFont says "Typeface"
+// in the language of msgs.
+func (msgs Messages) DanmakuFont() string {
+	return Catalog.Format(msgs.locale, "danmakuFont", nil)
+}
+
+// DanmakuSpeed says "Speed"
+// in the language the app shows.
+func DanmakuSpeed() string { return In(i18n.Locale()).DanmakuSpeed() }
+
+// DanmakuSpeed says "Speed"
+// in the language of msgs.
+func (msgs Messages) DanmakuSpeed() string {
+	return Catalog.Format(msgs.locale, "danmakuSpeed", nil)
+}
+
+// DanmakuSpeedSlow says "Slow"
+// in the language the app shows.
+func DanmakuSpeedSlow() string { return In(i18n.Locale()).DanmakuSpeedSlow() }
+
+// DanmakuSpeedSlow says "Slow"
+// in the language of msgs.
+func (msgs Messages) DanmakuSpeedSlow() string {
+	return Catalog.Format(msgs.locale, "danmakuSpeedSlow", nil)
+}
+
+// DanmakuSpeedFast says "Fast"
+// in the language the app shows.
+func DanmakuSpeedFast() string { return In(i18n.Locale()).DanmakuSpeedFast() }
+
+// DanmakuSpeedFast says "Fast"
+// in the language of msgs.
+func (msgs Messages) DanmakuSpeedFast() string {
+	return Catalog.Format(msgs.locale, "danmakuSpeedFast", nil)
+}
+
+// DanmakuBlockScroll says "Hide scrolling"
+// in the language the app shows.
+func DanmakuBlockScroll() string { return In(i18n.Locale()).DanmakuBlockScroll() }
+
+// DanmakuBlockScroll says "Hide scrolling"
+// in the language of msgs.
+func (msgs Messages) DanmakuBlockScroll() string {
+	return Catalog.Format(msgs.locale, "danmakuBlockScroll", nil)
+}
+
+// DanmakuBlockTop says "Hide pinned above"
+// in the language the app shows.
+func DanmakuBlockTop() string { return In(i18n.Locale()).DanmakuBlockTop() }
+
+// DanmakuBlockTop says "Hide pinned above"
+// in the language of msgs.
+func (msgs Messages) DanmakuBlockTop() string {
+	return Catalog.Format(msgs.locale, "danmakuBlockTop", nil)
+}
+
+// DanmakuBlockBottom says "Hide pinned below"
+// in the language the app shows.
+func DanmakuBlockBottom() string { return In(i18n.Locale()).DanmakuBlockBottom() }
+
+// DanmakuBlockBottom says "Hide pinned below"
+// in the language of msgs.
+func (msgs Messages) DanmakuBlockBottom() string {
+	return Catalog.Format(msgs.locale, "danmakuBlockBottom", nil)
+}
+
+// DanmakuDensity says "Most on screen"
+// in the language the app shows.
+func DanmakuDensity() string { return In(i18n.Locale()).DanmakuDensity() }
+
+// DanmakuDensity says "Most on screen"
+// in the language of msgs.
+func (msgs Messages) DanmakuDensity() string {
+	return Catalog.Format(msgs.locale, "danmakuDensity", nil)
+}
+
+// DanmakuPinnedTop says "Pinned above"
+// in the language the app shows.
+func DanmakuPinnedTop() string { return In(i18n.Locale()).DanmakuPinnedTop() }
+
+// DanmakuPinnedTop says "Pinned above"
+// in the language of msgs.
+func (msgs Messages) DanmakuPinnedTop() string {
+	return Catalog.Format(msgs.locale, "danmakuPinnedTop", nil)
+}
+
+// DanmakuPinnedBottom says "Pinned below"
+// in the language the app shows.
+func DanmakuPinnedBottom() string { return In(i18n.Locale()).DanmakuPinnedBottom() }
+
+// DanmakuPinnedBottom says "Pinned below"
+// in the language of msgs.
+func (msgs Messages) DanmakuPinnedBottom() string {
+	return Catalog.Format(msgs.locale, "danmakuPinnedBottom", nil)
+}
+
 // PictureInPicture says "Picture in picture"
 // in the language the app shows.
 func PictureInPicture() string { return In(i18n.Locale()).PictureInPicture() }
@@ -1586,6 +1746,16 @@ func DanmakuPanelUnfold() string { return In(i18n.Locale()).DanmakuPanelUnfold()
 // in the language of msgs.
 func (msgs Messages) DanmakuPanelUnfold() string {
 	return Catalog.Format(msgs.locale, "danmakuPanelUnfold", nil)
+}
+
+// DanmakuPanelFold says "Hide danmaku settings"
+// in the language the app shows.
+func DanmakuPanelFold() string { return In(i18n.Locale()).DanmakuPanelFold() }
+
+// DanmakuPanelFold says "Hide danmaku settings"
+// in the language of msgs.
+func (msgs Messages) DanmakuPanelFold() string {
+	return Catalog.Format(msgs.locale, "danmakuPanelFold", nil)
 }
 
 // Rewind10 says "Rewind 10 seconds"

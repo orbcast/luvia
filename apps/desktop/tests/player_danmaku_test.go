@@ -59,8 +59,12 @@ func TestPlayerShowsCommentsAsDanmaku(t *testing.T) {
 	src := &commentingSource{
 		detail:   base.detail,
 		episodes: base.episodes,
+		// The second comment is pinned to the top of the band, so a source's
+		// plain comments and its pinned ones are both exercised: the first
+		// scrolls, the second sits centered in its lane.
 		comments: []source.Danmaku{
 			{At: 0, Text: "Opening line"},
+			{At: 0, Text: "Pinned line"},
 			{At: time.Hour, Text: "Far away line"},
 		},
 	}
@@ -85,6 +89,12 @@ func TestPlayerShowsCommentsAsDanmaku(t *testing.T) {
 	tt.SetLocale("en")
 	tt.Frame()
 
+	// The layer opens off, so the viewer asks for it first; a source's own
+	// comments crossing the picture is what the switch is for.
+	if page.DanmakuOn() {
+		t.Fatal("the comment layer must open off")
+	}
+	showDanmaku(t, page, tt)
 	if !pumpUntil(t, run, tt, "Opening line") {
 		t.Fatalf("the comment at the start of the episode is not on the picture: %v", tt.Texts())
 	}
@@ -134,6 +144,7 @@ func TestPlayerSpreadsUntimedComments(t *testing.T) {
 	tt.SetLocale("en")
 	tt.Frame()
 
+	showDanmaku(t, page, tt)
 	if !pumpUntil(t, run, tt, "First review") {
 		t.Fatalf("the first untimed review is not on the picture: %v", tt.Texts())
 	}

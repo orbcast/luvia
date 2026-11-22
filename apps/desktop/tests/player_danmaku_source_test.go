@@ -74,6 +74,17 @@ func newDanmakuPage(t *testing.T, src source.Source, lookup danmaku.Source) (*pl
 	return page, run, tt
 }
 
+// showDanmaku turns the comment layer on, which the player leaves off when it
+// opens: a test about what the layer draws asks for it the way a viewer does.
+func showDanmaku(t *testing.T, page *player.Page, tt *ui.Tester) {
+	t.Helper()
+	if page.DanmakuOn() {
+		return
+	}
+	page.ToggleDanmaku()
+	tt.Frame()
+}
+
 // pumpUntil drains the page's queued callbacks and redraws until the frame
 // carries want, or the deadline passes. The lookup answers on its own
 // goroutine, so how many callbacks it takes to land is not fixed: draining a
@@ -110,7 +121,8 @@ func TestPlayerDrawsTheLookupsComments(t *testing.T) {
 			{At: time.Hour, Text: "Much later"},
 		},
 	}
-	_, run, tt := newDanmakuPage(t, src, lookup)
+	page1, run, tt := newDanmakuPage(t, src, lookup)
+	showDanmaku(t, page1, tt)
 
 	if !pumpUntil(t, run, tt, "Found elsewhere") {
 		t.Fatalf("the lookup's comment is not on the picture: %v", tt.Texts())
@@ -139,16 +151,17 @@ func TestPlayerPrefersTheLookupOverTheRulesReviews(t *testing.T) {
 		reason: danmaku.ReasonReady,
 		items:  []source.Danmaku{{At: 0, Text: "A comment with a moment"}},
 	}
-	page, run, tt := newDanmakuPage(t, src, lookup)
+	page2, run, tt := newDanmakuPage(t, src, lookup)
 
+	showDanmaku(t, page2, tt)
 	if !pumpUntil(t, run, tt, "A comment with a moment") {
 		t.Fatalf("the lookup's comment is not on the picture: %v", tt.Texts())
 	}
 	if tt.HasText("A review with no moment") {
 		t.Fatal("the rule's review showed instead of the lookup's comment")
 	}
-	page.SelectTab(1)
-	page.RevealPanel()
+	page2.SelectTab(1)
+	page2.RevealPanel()
 	tt.Frame()
 	if tt.HasText("A review with no moment") {
 		t.Fatal("the rule's review is in the panel after the lookup answered")
@@ -165,8 +178,9 @@ func TestPlayerFallsBackToTheRulesComments(t *testing.T) {
 		comments: []source.Danmaku{{At: 0, Text: "Only the rule has this"}},
 	}
 	lookup := &lookupSource{reason: danmaku.ReasonNoMatch}
-	_, run, tt := newDanmakuPage(t, src, lookup)
+	page3, run, tt := newDanmakuPage(t, src, lookup)
 
+	showDanmaku(t, page3, tt)
 	if !pumpUntil(t, run, tt, "Only the rule has this") {
 		t.Fatalf("the rule's comment is not on the picture: %v", tt.Texts())
 	}
@@ -287,6 +301,7 @@ func TestPlayerPrefersTheSourcesOwnDanmakuOverTheLookup(t *testing.T) {
 	}
 	page, run, tt := newDanmakuPage(t, src, lookup)
 
+	showDanmaku(t, page, tt)
 	if !pumpUntil(t, run, tt, "The source's own comment") {
 		t.Fatalf("the source's own comment is not on the picture: %v", tt.Texts())
 	}
@@ -321,8 +336,9 @@ func TestPlayerFallsBackWhenTheSourceHasNoDanmaku(t *testing.T) {
 		reason: danmaku.ReasonReady,
 		items:  []source.Danmaku{{At: 0, Text: "Found elsewhere"}},
 	}
-	_, run, tt := newDanmakuPage(t, src, lookup)
+	page4, run, tt := newDanmakuPage(t, src, lookup)
 
+	showDanmaku(t, page4, tt)
 	if !pumpUntil(t, run, tt, "Found elsewhere") {
 		t.Fatalf("the lookup never got its turn: %v", tt.Texts())
 	}

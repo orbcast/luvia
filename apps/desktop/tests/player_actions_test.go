@@ -115,7 +115,10 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 	if !ok {
 		t.Fatalf("the level track is missing among %v", tt.Texts())
 	}
-	const knob float32 = 12
+	// The track keeps an inset at either end inside its button, so the knob
+	// never touches the capsule's edge; the level spans between the insets.
+	const knob, inset float32 = 12, 8
+	span := track.W - 2*inset - knob
 	// The Tester starts with the pointer outside the window, and a press there
 	// is no press, so the pointer comes onto the track first.
 	tt.Move(track.X+track.W/2, track.Y+track.H/2)
@@ -132,7 +135,7 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 	}
 	// levelAt is the level the track reports for a place on it.
 	levelAt := func(x float32) float64 {
-		return float64((x - track.X) / (track.W - knob))
+		return float64((x - track.X - inset) / span)
 	}
 	// held reports the level the track sits at, within a pixel or so of the
 	// place the pointer left it.
@@ -142,27 +145,27 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 	}
 
 	// Pressing the far end out of silence brings the sound back at that level.
-	drag(track.X + track.W - knob)
+	drag(track.X + inset + span)
 	if !page.Audible() {
 		t.Fatalf("raising the muted level kept the video silent: %v", tt.Texts())
 	}
-	if !held(track.X + track.W - knob) {
-		t.Fatalf("the far end of the track set the level to %v, not %v", page.Volume(), levelAt(track.X+track.W-knob))
+	if !held(track.X + inset + span) {
+		t.Fatalf("the far end of the track set the level to %v, not %v", page.Volume(), levelAt(track.X+inset+span))
 	}
 
 	// A drag back along the track follows the pointer without silencing the
 	// video on the way.
-	drag(track.X + track.W/2)
+	drag(track.X + inset + span/2)
 	if !page.Audible() {
 		t.Fatalf("a drag to a quieter level silenced the video: %v", tt.Texts())
 	}
-	if !held(track.X + track.W/2) {
-		t.Fatalf("dragging along the track left the level at %v, not %v", page.Volume(), levelAt(track.X+track.W/2))
+	if !held(track.X + inset + span/2) {
+		t.Fatalf("dragging along the track left the level at %v, not %v", page.Volume(), levelAt(track.X+inset+span/2))
 	}
 
-	// A level dragged to the near end ends silent, as the system's own level
-	// track does at its bottom.
-	drag(track.X)
+	// A level dragged to the near end, at the inset the track starts from,
+	// ends silent, as the system's own level track does at its bottom.
+	drag(track.X + inset)
 	if page.Audible() {
 		t.Fatal("a level dragged to the near end should sound nothing")
 	}
