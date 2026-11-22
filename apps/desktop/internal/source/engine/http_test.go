@@ -240,6 +240,10 @@ func TestSignedRequestExpandsSecretFromEnvironment(t *testing.T) {
 	if captured == nil {
 		t.Fatal("no request captured")
 	}
+	// The default message joins the four parts with newlines and the rule
+	// below overrides it with a single space, so the digest covers that form.
+	// `path` is the catalogue's own route, query included, not the absolute
+	// address the request travels to.
 	message := captured.Method + " " + captured.URL.RequestURI()
 	mac := hmac.New(sha256.New, []byte("hunter2"))
 	mac.Write([]byte(message))

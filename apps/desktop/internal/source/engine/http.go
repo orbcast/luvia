@@ -42,14 +42,45 @@ func (s *sourceImpl) fail(site callSite, kind source.ErrorKind, detail string, c
 
 // fetch performs one request described by the rule and returns decoded JSON.
 func (s *sourceImpl) fetch(ctx context.Context, site callSite, req rule.Request, sc scope) (any, error) {
+	body, err := s.fetchBody(ctx, site, req, sc)
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, nil
+	}
+	return decodeResponse(site, body, req.Response, s.fail)
+}
+
+// fetchBody performs one request described by the rule and hands back the body
+// as it arrived. A caller that reads a document the engine does not decode
+// itself — one that may or may not be compressed, such as a window of an
+// upstream's comments — goes through here instead of fetch.
+func (s *sourceImpl) fetchBody(ctx context.Context, site callSite, req rule.Request, sc scope) ([]byte, error) {
 	path, ok := s.render(req.Path, sc)
 	if !ok || path == "" {
 		return nil, s.fail(site, source.ErrInvalidRule,
 			fmt.Sprintf("path %q did not resolve", req.Path), nil)
 	}
-	if !strings.HasPrefix(path, "/") {
+	// `path` is the address the upstream knows as its own, and it is what a
+	// signature covers even when the request itself goes elsewhere: a
+	// catalogue signs its own route, not the file server's absolute URL.
+	base := strings.TrimRight(s.rule.BaseURL, "/")
+	target := ""
+	ownPath := false
+	switch {
+	case strings.HasPrefix(path, "/"):
+		ownPath = true
+		target = base + path
+	case isAbsoluteURL(path):
+		// A step may name an address well outside the catalogue's own host,
+		// such as the file server an upstream hands out for its comments. The
+		// baseURL is the catalogue's address and does not own those files.
+		ownPath = strings.HasPrefix(path, base+"/")
+		target = path
+	default:
 		return nil, s.fail(site, source.ErrInvalidRule,
-			fmt.Sprintf("path %q must start with /", path), nil)
+			fmt.Sprintf("path %q is neither rooted at the baseURL nor absolute", path), nil)
 	}
 	values := url.Values{}
 	for _, pair := range req.Query {
@@ -77,12 +108,16 @@ func (s *sourceImpl) fetch(ctx context.Context, site callSite, req rule.Request,
 		}
 		values.Add(pair.Key, text)
 	}
-	target := strings.TrimRight(s.rule.BaseURL, "/") + path
 	pathWithQuery := path
 	if encoded := values.Encode(); encoded != "" {
 		pathWithQuery += "?" + encoded
 		target += "?" + encoded
 	}
+
+	// Signing covers the catalogue's own paths. A file server outside it must
+	// not receive a signature computed over one of its own paths, so only a
+	// path still rooted at the baseURL is signed unless the rule says so.
+	wantSign := s.rule.Sign != nil && (req.Sign == nil || *req.Sign) && ownPath
 
 	method := req.Method
 	if method == "" {
@@ -106,7 +141,6 @@ func (s *sourceImpl) fetch(ctx context.Context, site callSite, req rule.Request,
 			headers[header.Name] = rendered
 		}
 	}
-	wantSign := s.rule.Sign != nil && (req.Sign == nil || *req.Sign)
 	if wantSign {
 		signed, err := s.signHeaders(site, method, pathWithQuery)
 		if err != nil {
@@ -117,14 +151,7 @@ func (s *sourceImpl) fetch(ctx context.Context, site callSite, req rule.Request,
 		}
 	}
 
-	body, err := s.send(ctx, site, method, target, payload, headers)
-	if err != nil {
-		return nil, err
-	}
-	if len(bytes.TrimSpace(body)) == 0 {
-		return nil, nil
-	}
-	return decodeResponse(site, body, req.Response, s.fail)
+	return s.send(ctx, site, method, target, payload, headers)
 }
 
 // decodeResponse reads the answer in the shape the request declared. A page
