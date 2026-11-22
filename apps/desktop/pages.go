@@ -9,6 +9,7 @@ import (
 	"luvia/apps/desktop/internal/appshell"
 	"luvia/apps/desktop/internal/appwindow"
 	"luvia/apps/desktop/internal/catalog"
+	"luvia/apps/desktop/internal/danmaku"
 	"luvia/apps/desktop/internal/home"
 	"luvia/apps/desktop/internal/playintro"
 	"luvia/apps/desktop/internal/screens"
@@ -71,7 +72,11 @@ func newPageSet(deps pageDeps) *pageSet {
 		OnDetail: openTitle,
 	})
 	set.router = screens.New(screens.Deps{
-		Source:    deps.profile.source,
+		Source: deps.profile.source,
+		// The comments a rule carries are usually reviews, which have no
+		// moment to be laid over the picture at. The lookup is what gives the
+		// layer something to draw.
+		Danmaku:   danmaku.NewBilibili(nil),
 		Library:   deps.profile.library,
 		Images:    deps.profile.images,
 		Cache:     deps.profile.video,

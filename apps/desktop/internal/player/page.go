@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/video"
 
+	"luvia/apps/desktop/internal/danmaku"
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
 	"luvia/apps/desktop/internal/source"
@@ -45,6 +46,26 @@ const (
 	noticeNoFrame
 )
 
+// commentWhy says why the layer over the picture carries what it carries.
+type commentWhy int
+
+const (
+	// commentLoading is the state before the first answer arrives.
+	commentLoading commentWhy = iota
+	// commentReady means the layer has comments to draw.
+	commentReady
+	// commentNoMatch means nothing outside looked like this title.
+	commentNoMatch
+	// commentNoEpisode means the title was found but not this episode.
+	commentNoEpisode
+	// commentEmpty means the episode carries no comments of its own.
+	commentEmpty
+	// commentFailed means the lookup could not be completed.
+	commentFailed
+	// commentUnsupported means neither the rule nor a lookup offers comments.
+	commentUnsupported
+)
+
 // Tab under the now-playing header.
 const (
 	tabEpisodes = iota
@@ -54,7 +75,12 @@ const (
 // Deps are the collaborators the player reads and calls. OpenVideo is injectable
 // so tests can run without a system media framework; production uses video.OpenURL.
 type Deps struct {
-	Source    source.Source
+	Source source.Source
+	// Danmaku finds comments for a title on a site that pins them to a moment.
+	// A source rule's own comments are usually reviews with no moment at all,
+	// which cannot cross the picture; this is what feeds that layer when it is
+	// set. A nil lookup leaves the layer to the rule's comments alone.
+	Danmaku   danmaku.Source
 	Library   *library.Store
 	Images    *media.Loader
 	Cache     *videocache.Cache
@@ -120,16 +146,18 @@ type Page struct {
 	danmaku      bool
 	comments     []source.Danmaku
 	commentGen   uint64
-	commentsNote bool
-	panelHidden  bool
-	cinema       bool
-	expanded     bool
-	tab          int
-	scrub        float64 // 0..1 while the viewer drags the track
-	scrubbing    bool
-	scrubHandle  ui.Handle
-	scrubW       float32
-	redraw       func()
+	// commentWhy says why the layer over the picture is empty, so the panel
+	// can name the reason instead of showing an empty list.
+	commentWhy  commentWhy
+	panelHidden bool
+	cinema      bool
+	expanded    bool
+	tab         int
+	scrub       float64 // 0..1 while the viewer drags the track
+	scrubbing   bool
+	scrubHandle ui.Handle
+	scrubW      float32
+	redraw      func()
 }
 
 var rates = []float64{1, 1.25, 1.5, 2, 0.75, 0.5}
@@ -321,36 +349,92 @@ func (p *Page) adjacent(current source.Episode, offset int) (source.Episode, boo
 	return source.Episode{}, false
 }
 
-// loadComments asks the source for the comments an episode carries. A source
-// without the capability leaves the layer empty and the switch off, rather than
-// pretending to show one. It runs on its own context: the caller resolves the
-// playback and drops its deadline as soon as it has an address, which would
-// cancel a request that has not been sent yet.
+// loadComments fills the layer over the picture. Two things can feed it: the
+// source rule's own comments, and a lookup on a site that pins its comments to
+// a moment. The lookup is preferred, because a comment with a moment is what
+// the stage can lay over the picture; a rule's comments are usually reviews,
+// which have no moment and can only be spread across the episode. Either way
+// the panel is told why the layer is what it is, so an empty layer never looks
+// like a broken one.
+//
+// It runs on its own context: the caller resolves the playback and drops its
+// deadline as soon as it has an address, which would cancel a request that has
+// not been sent yet.
 func (p *Page) loadComments(episode source.Episode, gen uint64) {
-	commenter, ok := p.deps.Source.(source.Commenter)
-	if !ok {
-		p.comments, p.commentsNote = nil, true
-		return
-	}
 	p.commentGen++
 	epoch := p.commentGen
+	p.comments, p.commentWhy = nil, commentLoading
 	run := p.deps.Run
+	title := p.detail.Title
+	lookup := p.deps.Danmaku
+	commenter, canComment := p.deps.Source.(source.Commenter)
+	if lookup == nil && !canComment {
+		p.commentWhy = commentUnsupported
+		return
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		got, err := commenter.Comments(ctx, episode, 0)
+		items, why := p.commentsFor(ctx, lookup, commenter, canComment, title, episode)
 		run(func() {
 			if epoch != p.commentGen || gen != p.gen {
 				return
 			}
-			if err != nil {
-				p.comments, p.commentsNote = nil, true
-			} else {
-				p.comments, p.commentsNote = got, false
-			}
+			p.comments, p.commentWhy = items, why
 			p.invalidate()
 		})
 	}()
+}
+
+// commentsFor asks the lookup first and the rule second, and reports what came
+// back. A lookup that matched the title but carries nothing for this episode is
+// a different answer from one that matched nothing at all, and the panel says
+// which. The lookup is an addition, not the source of truth: when it has
+// nothing, the rule's own comments still get their turn.
+func (p *Page) commentsFor(ctx context.Context, lookup danmaku.Source, commenter source.Commenter, canComment bool, title string, episode source.Episode) ([]source.Danmaku, commentWhy) {
+	if lookup == nil {
+		return p.ruleComments(ctx, commenter, canComment, episode)
+	}
+	// The lookup's own finding is what the panel reports when the rule has
+	// nothing either: it is the layer's intended source, so its answer is the
+	// one that explains the empty list.
+	why := commentNoMatch
+	got, err := lookup.Lookup(ctx, title, episode.Number)
+	switch {
+	case err != nil:
+		why = commentFailed
+	case got.Reason == danmaku.ReasonReady && len(got.Items) > 0:
+		return got.Items, commentReady
+	case got.Reason == danmaku.ReasonNoEpisode:
+		why = commentNoEpisode
+	case got.Reason == danmaku.ReasonEmpty:
+		why = commentEmpty
+	}
+	if items, ruled := p.ruleComments(ctx, commenter, canComment, episode); ruled == commentReady {
+		return items, commentReady
+	}
+	return nil, why
+}
+
+// ruleComments asks the source rule for the comments it carries. A rule
+// without a comments block answers with an unsupported error, which is a
+// different finding from an episode that simply has none.
+func (p *Page) ruleComments(ctx context.Context, commenter source.Commenter, canComment bool, episode source.Episode) ([]source.Danmaku, commentWhy) {
+	if !canComment {
+		return nil, commentUnsupported
+	}
+	items, err := commenter.Comments(ctx, episode, 0)
+	if err != nil {
+		var problem *source.Error
+		if errors.As(err, &problem) && problem.Kind == source.ErrUnsupported {
+			return nil, commentUnsupported
+		}
+		return nil, commentEmpty
+	}
+	if len(items) == 0 {
+		return nil, commentEmpty
+	}
+	return items, commentReady
 }
 
 // flying is one comment crossing the picture: its text, the lane it takes and
@@ -668,7 +752,7 @@ func (p *Page) SelectEpisode(i int) {
 	}
 	p.index = i
 	p.playback = source.Playback{}
-	p.comments, p.commentsNote = nil, false
+	p.comments, p.commentWhy = nil, commentLoading
 	p.notice, p.err = noticeNone, nil
 	// The previous episode's engine is taken down with its own picture, so the
 	// wait that follows starts from an empty stage instead of the last frame.

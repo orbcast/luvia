@@ -1438,6 +1438,66 @@ func (msgs Messages) DanmakuLabel() string {
 	return Catalog.Format(msgs.locale, "danmakuLabel", nil)
 }
 
+// DanmakuLoading says "Looking for danmaku…"
+// in the language the app shows.
+func DanmakuLoading() string { return In(i18n.Locale()).DanmakuLoading() }
+
+// DanmakuLoading says "Looking for danmaku…"
+// in the language of msgs.
+func (msgs Messages) DanmakuLoading() string {
+	return Catalog.Format(msgs.locale, "danmakuLoading", nil)
+}
+
+// DanmakuNoMatch says "No danmaku source matched this show"
+// in the language the app shows.
+func DanmakuNoMatch() string { return In(i18n.Locale()).DanmakuNoMatch() }
+
+// DanmakuNoMatch says "No danmaku source matched this show"
+// in the language of msgs.
+func (msgs Messages) DanmakuNoMatch() string {
+	return Catalog.Format(msgs.locale, "danmakuNoMatch", nil)
+}
+
+// DanmakuNoEpisode says "The show was found, but not this episode"
+// in the language the app shows.
+func DanmakuNoEpisode() string { return In(i18n.Locale()).DanmakuNoEpisode() }
+
+// DanmakuNoEpisode says "The show was found, but not this episode"
+// in the language of msgs.
+func (msgs Messages) DanmakuNoEpisode() string {
+	return Catalog.Format(msgs.locale, "danmakuNoEpisode", nil)
+}
+
+// DanmakuEmpty says "This episode has no danmaku yet"
+// in the language the app shows.
+func DanmakuEmpty() string { return In(i18n.Locale()).DanmakuEmpty() }
+
+// DanmakuEmpty says "This episode has no danmaku yet"
+// in the language of msgs.
+func (msgs Messages) DanmakuEmpty() string {
+	return Catalog.Format(msgs.locale, "danmakuEmpty", nil)
+}
+
+// DanmakuFailed says "The danmaku source did not answer"
+// in the language the app shows.
+func DanmakuFailed() string { return In(i18n.Locale()).DanmakuFailed() }
+
+// DanmakuFailed says "The danmaku source did not answer"
+// in the language of msgs.
+func (msgs Messages) DanmakuFailed() string {
+	return Catalog.Format(msgs.locale, "danmakuFailed", nil)
+}
+
+// DanmakuUnsupported says "This source carries no danmaku"
+// in the language the app shows.
+func DanmakuUnsupported() string { return In(i18n.Locale()).DanmakuUnsupported() }
+
+// DanmakuUnsupported says "This source carries no danmaku"
+// in the language of msgs.
+func (msgs Messages) DanmakuUnsupported() string {
+	return Catalog.Format(msgs.locale, "danmakuUnsupported", nil)
+}
+
 // DanmakuSettings says "Danmaku settings"
 // in the language the app shows.
 func DanmakuSettings() string { return In(i18n.Locale()).DanmakuSettings() }

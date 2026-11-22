@@ -20,7 +20,7 @@
 - 搜索必须带桌面 UA，且 `count` 最大 10、`offset` 无效；分类页的 `sort_type`、`gender`、`tab`、`keyword` 参数在 301 后都被丢弃，不能用来筛选。
 - 首页与分类页的卡片 `vid_list` 为空，选集必须进详情页，多一次请求。
 - 播放地址没有扩展名，靠响应头的 `video/mp4` 判定；上游若改走 HLS 或加密，`urlKind` 与 `preferUrlKind` 要一起改。
-- 网页端没有时间轴弹幕。播放器上的弹幕开关铺的是剧评（上面 `comments` 块取到的条目），播放器把没有时间点的评论均匀铺在整集时长上，同时在侧栏评论页签里列出。官方弹幕接口在 `api5-normal-sinfonlineb.fqnovel.com`，未签名一律返回 `{"Code":110001}`，要拿得复刻整套 xGorgon/ladon/argus 签名与设备指纹，因此不接。
+- 网页端没有时间轴弹幕。播放器上的弹幕层优先按剧名与集数去站外弹幕源找（见 [ADR 0015](../../../docs/adr/0015-danmaku-from-outside-the-rule.md)），找不到才回落到本源的 `comments` 块；回落时铺的是剧评（上面取到的条目），播放器把没有时间点的评论均匀铺在整集时长上，同时在侧栏评论页签里列出。官方弹幕接口在 `api5-normal-sinfonlineb.fqnovel.com`，未签名一律返回 `{"Code":110001}`，要拿得复刻整套 xGorgon/ladon/argus 签名与设备指纹，因此不接。
 - 剧评按页只给 15 条（`total_count` 是总数），`page`、`offset`、`limit` 参数都被忽略，所以评论数量有上限。
 - 上游若调整 `_ROUTER_DATA` 的键名或字段，`fixtures/` 与 `rule.json` 要一同更新，`make rules-verify` 会在离线用例里先暴露。
 

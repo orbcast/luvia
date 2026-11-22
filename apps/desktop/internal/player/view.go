@@ -363,13 +363,17 @@ func (p *Page) panelReveal(c *ui.Context, m locales.Messages) {
 func (p *Page) pillButton(c *ui.Context, key, icon, tip string, active bool, fn func()) {
 	button := ui.ButtonBase(c).Key("p-"+key).Size(stageButtonSize, stageButtonSize).Radius(999).Label(tip).Tooltip(tip).
 		Background(ui.Transparent)
+	// An active switch fills its pill: a translucent wash over a bright
+	// picture is indistinguishable from a button that does nothing, which is
+	// how a viewer reads an enabled danmaku layer as a dead one.
 	ink := mediaMuted
 	switch {
 	case active:
-		button.Background(ui.RGBA(255, 255, 255, 0.16))
-		ink = mediaInk
+		button.Background(mediaInk)
+		ink = ui.RGBA(20, 20, 22, 1)
 	case button.Hovered():
 		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		ink = mediaInk
 	}
 	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(18, 18).TextColor(ink) })
 	if button.Clicked() {
@@ -639,7 +643,7 @@ func (p *Page) sourceSelector(c *ui.Context, t *ui.Theme, m locales.Messages, wi
 // over the picture, so this tab is the readable copy of that layer.
 func (p *Page) panelComments(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	if len(p.comments) == 0 {
-		ui.Text(c, m.EmptyTab()).FontSize(13).TextColor(t.TextMuted)
+		ui.Text(c, p.commentWhyText(m)).FontSize(13).TextColor(t.TextMuted)
 		return
 	}
 	ui.Column(c).FillWidth().Gap(10).Children(func() {
@@ -652,6 +656,29 @@ func (p *Page) panelComments(c *ui.Context, t *ui.Theme, m locales.Messages) {
 			})
 		}
 	})
+}
+
+// commentWhyText says, in the viewer's language, why the layer over the
+// picture carries what it carries. An empty list with no reason reads like a
+// broken player, which is exactly what a viewer cannot tell apart from a source
+// that simply has no comments.
+func (p *Page) commentWhyText(m locales.Messages) string {
+	switch p.commentWhy {
+	case commentNoMatch:
+		return m.DanmakuNoMatch()
+	case commentNoEpisode:
+		return m.DanmakuNoEpisode()
+	case commentEmpty:
+		return m.DanmakuEmpty()
+	case commentFailed:
+		return m.DanmakuFailed()
+	case commentUnsupported:
+		return m.DanmakuUnsupported()
+	case commentReady:
+		return m.EmptyTab()
+	default:
+		return m.DanmakuLoading()
+	}
 }
 
 func (p *Page) panelEpisodes(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {

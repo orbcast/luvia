@@ -6,6 +6,7 @@ package screens
 import (
 	"github.com/egoist/mygo/ui"
 
+	"luvia/apps/desktop/internal/danmaku"
 	"luvia/apps/desktop/internal/detail"
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
@@ -24,7 +25,11 @@ const (
 // Deps are the router's collaborators. Base draws the selected navigation page;
 // OpenVideo lets tests replace the system media framework.
 type Deps struct {
-	Source    source.Source
+	Source source.Source
+	// Danmaku finds comments on a site that pins them to a moment, which is
+	// what lets the layer over the picture carry more than the rule's own
+	// reviews. A nil lookup leaves the layer to the rule.
+	Danmaku   danmaku.Source
 	Library   *library.Store
 	Images    *media.Loader
 	Cache     *videocache.Cache
@@ -61,7 +66,8 @@ func New(deps Deps) *Router {
 		OnPlay: r.openPlayer, OnBack: r.backFromDetail,
 	})
 	r.player = player.New(player.Deps{
-		Source: deps.Source, Library: deps.Library, Images: deps.Images, Cache: deps.Cache, Run: deps.Run,
+		Source: deps.Source, Danmaku: deps.Danmaku,
+		Library: deps.Library, Images: deps.Images, Cache: deps.Cache, Run: deps.Run,
 		OnBack: r.backFromPlayer, OpenVideo: deps.OpenVideo,
 		SetFullScreen: deps.SetFullScreen,
 	})
