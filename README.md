@@ -44,6 +44,7 @@ docs/                  Agent 与人类共同参考的正式专题文档
   README.md            文档归属、索引、查阅与维护约定
   adr/                 架构决策记录：为什么这样定、代价与重新评估条件
 .agents/skills/         智能体技能（MyGo 维护与原生模块、通用 Iconify 脚本）
+.env.example            本机环境变量模板（复制为 .env 后填源密钥，.env 不入库）
 AGENTS.md               跨应用治理、解耦、设计同步、临时目录与风险分级测试
 DESIGN.md               深浅主题语义 Token、配色与跨应用设计同步规范
 CONTEXT.md              项目背景、已定决策与历史验证限制
@@ -85,6 +86,8 @@ make skills   # 更新 .agents/skills
 ```
 
 等价的直接命令在 `apps/desktop` 下执行：`go tool mygo dev`、`CGO_ENABLED=0 go test ./...`、`go tool mygo build`、`go tool mygo vet .`。
+
+首次开发先 `cp .env.example .env`，按模板填写源规则需要的密钥（当前只有 `KANJU_SECRET`）；`make dev` 会自动加载 `.env`，已 export 的同名变量优先。模板本身不含任何值，仓库规则会拦下填了值的 `.env.example`，真实密钥只留在本地 `.env`。
 
 ## 桌面框架
 

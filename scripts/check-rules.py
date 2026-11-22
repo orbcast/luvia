@@ -99,6 +99,9 @@ SECRETS = [
     (r"AKIA[0-9A-Z]{16}", "AWS 访问密钥"),
 ]
 SECRET_FILES = (r"(^|/)\.env(\..+)?$", r"\.(pem|p12|keystore)$")
+# 示例模板（.env.example）只列变量名与说明，允许入库；它的每一行赋值都必须
+# 留空，一旦填了值就当成真正的 .env 拦截。
+SECRET_EXAMPLES = (".env.example",)
 
 LOCAL_PATH = re.compile(r"(/Users/|/var/folders/|[A-Za-z]:\\Users\\|/home/[a-z0-9_-]+/)")
 MAX_FILE_BYTES = 1024 * 1024
@@ -398,17 +401,40 @@ def check_secrets(files: list[str]) -> list[str]:
     problems = []
     for path in files:
         for pattern in SECRET_FILES:
-            if re.search(pattern, path):
+            if re.search(pattern, path) and os.path.basename(path) not in SECRET_EXAMPLES:
                 problems.append(f"{path}: 密钥文件不进版本库")
+        if os.path.basename(path) in SECRET_EXAMPLES:
+            problems.extend(check_example_env(path))
         if path.endswith((".png", ".webp", ".icns", ".car", ".zip", ".dmg")):
             continue
         try:
-            text = open(os.path.join(ROOT, path), encoding="utf-8").read()
+            with open(os.path.join(ROOT, path), encoding="utf-8") as handle:
+                text = handle.read()
         except (OSError, UnicodeDecodeError):
             continue
         for pattern, why in SECRETS:
             if re.search(pattern, text):
                 problems.append(f"{path}: 疑似{why}，凭证不进版本库")
+    return problems
+
+
+def check_example_env(path: str) -> list[str]:
+    """示例模板只能列变量名：写上了值，它就成了一份真的密钥文件。"""
+    problems = []
+    try:
+        with open(os.path.join(ROOT, path), encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except (OSError, UnicodeDecodeError):
+        return problems
+    for line_no, line in enumerate(lines, 1):
+        text = line.strip()
+        if not text or text.startswith("#") or "=" not in text:
+            continue
+        name, value = text.split("=", 1)
+        if value.strip():
+            problems.append(
+                f"{path}:{line_no}: 示例模板里的 {name.strip()} 必须留空，真实值写进本地的 .env"
+            )
     return problems
 
 

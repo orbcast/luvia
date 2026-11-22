@@ -39,5 +39,34 @@ class TextHygieneTests(unittest.TestCase):
         self.assertTrue(any("多余空白" in item for item in result))
 
 
+class ExampleEnvTests(unittest.TestCase):
+    """示例模板可以入库，但只能列变量名，不能带真实值。"""
+
+    def check(self, content):
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / ".env.example"
+            file.write_text(content, encoding="utf-8")
+            with patch.object(rules, "ROOT", directory):
+                return rules.check_secrets([".env.example"])
+
+    def test_example_with_empty_values_is_allowed(self):
+        self.assertEqual(self.check("# 说明\nKANJU_SECRET=\n"), [])
+
+    def test_real_env_files_stay_blocked(self):
+        for path in (".env", ".env.local", "apps/desktop/.env.example.local"):
+            with self.subTest(path=path):
+                with tempfile.TemporaryDirectory() as directory:
+                    file = Path(directory) / path
+                    file.parent.mkdir(parents=True, exist_ok=True)
+                    file.write_text("KANJU_SECRET=\n", encoding="utf-8")
+                    with patch.object(rules, "ROOT", directory):
+                        self.assertTrue(rules.check_secrets([path]),
+                                        f"{path} 应当被当成密钥文件拦下")
+
+    def test_example_with_a_value_is_rejected(self):
+        self.assertTrue(any("必须留空" in item
+                            for item in self.check("KANJU_SECRET=abc123\n")))
+
+
 if __name__ == "__main__":
     unittest.main()

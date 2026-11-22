@@ -35,9 +35,11 @@ coverage-*.out
 # 本地 Agent 状态；正式 .agents/skills/ 和各级 AGENTS.md 必须保留
 /.pi/
 
-# 本机配置与密钥变量：任何 .env* 一律不入库，含本地密钥与示例模板
+# 本机配置与密钥变量：本地 .env 一律不入库；只放行不含真实值的示例模板，
+# 供他人照着填自己的 .env。
 .env
 .env.*
+!.env.example
 *.local.env
 
 # 编辑器个人状态与临时文件
