@@ -26,6 +26,11 @@ const (
 	pillPadding     float32 = 4
 )
 
+// The backdrop's blur is a fixed width, not one that follows the stage: the
+// same cover reads the same at any window size, and a size that grew with the
+// stage would cost more to paint the wider the window got.
+const stageBackdropBlur float32 = 28
+
 var (
 	mediaInk   = ui.RGBA(255, 255, 255, 0.94)
 	mediaMuted = ui.RGBA(255, 255, 255, 0.62)
@@ -71,7 +76,8 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 	if p.loading && p.player == nil && p.notice == noticeNone {
 		p.stageOpening(c, m)
 	} else if p.player != nil {
-		p.stageFallback(c, t, m)
+		p.stageBackdrop(c, t)
+		p.stageFallback(c, m)
 		// The stage keeps the whole frame. Cover scales a picture by the larger
 		// of the two ratios, which for a portrait series (short dramas ship
 		// 360x640) crops it to a centre band of a wide stage: the picture reads
@@ -117,7 +123,8 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 		// stream's own clock, rather than on the page's thread. An open that
 		// holds the stage longer than an opening may take is reported, so a
 		// stream that never comes back is not a stage that waits for good.
-		p.stageFallback(c, t, m)
+		p.stageBackdrop(c, t)
+		p.stageFallback(c, m)
 		if p.notice == noticeNone {
 			if p.loading {
 				p.stageOpening(c, m)
@@ -195,22 +202,34 @@ func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, 
 	})
 }
 
-func (p *Page) stageFallback(c *ui.Context, t *ui.Theme, m locales.Messages) {
+// stageBackdrop fills the stage under the picture: the stage's own near-black,
+// then the cover blurred over all of it. A frame keeps its whole shape on the
+// stage, so one wider or taller than the stage leaves a band on two sides; a
+// blurred copy of the cover under it fills that band, and the stage reads as
+// one picture rather than a frame laid on black.
+func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme) {
+	ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
+		Gradient(design.PlayerStage(t), t.Surface, 150)
 	url := p.detail.BackdropURL
 	if url == "" {
 		url = p.detail.PosterURL
 	}
-	painted := false
-	if p.deps.Images != nil && url != "" {
-		if bitmap := p.deps.Images.Bitmap(url); bitmap != nil {
-			ui.Image(c, bitmap).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Cover).Opacity(0.55)
-			painted = true
-		}
+	if p.deps.Images == nil || url == "" {
+		return
 	}
-	if !painted {
-		ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
-			Gradient(design.PlayerStage(t), t.Surface, 150)
+	bitmap := p.deps.Images.Bitmap(url)
+	if bitmap == nil {
+		return
 	}
+	// A blur is painted off screen every frame it shows, and this one never
+	// changes, so Cache bakes it into a kept layer drawn once.
+	ui.Image(c, bitmap).Absolute().Left(0).Right(0).Top(0).Bottom(0).
+		Fit(ui.Cover).Blur(stageBackdropBlur).Opacity(0.45).Cache()
+}
+
+// stageFallback covers a stage the stream did not fill: it says why, and it
+// offers the way out that does not depend on the panel being open.
+func (p *Page) stageFallback(c *ui.Context, m locales.Messages) {
 	if message := p.noticeText(m); message != "" {
 		ui.Column(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 			Justify(ui.Center).AlignItems(ui.Center).Gap(8).Children(func() {
