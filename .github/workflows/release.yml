@@ -30,6 +30,10 @@ jobs:
           cache-dependency-path: apps/desktop/go.sum
       - name: Check app
         run: make check
+        env:
+          # 规则里的 ${env:KANJU_SECRET} 在构建期就被求值，缺了它打出来的包
+          # 一启动点 Kanju 源就报 unauthorized。门禁这一步先把它按真实取值跑一遍。
+          KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
       - name: Check generated code
         run: make check-gen
 
@@ -68,6 +72,10 @@ jobs:
       - name: Build
         shell: bash
         working-directory: apps/desktop
+        env:
+          # 密钥在打包时求值并写进产物；漏了这行，发出去的包里 Kanju 源
+          # 一加载就停在 "sign.secret is not set in the environment"。
+          KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
         run: go tool mygo build -platform ${{ matrix.platform }}
 
       # 产物目录名形如 build/darwin-arm64、build/windows-amd64，随平台变化，
