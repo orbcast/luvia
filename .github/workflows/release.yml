@@ -43,10 +43,12 @@ jobs:
           # 每个平台用各自的原生 runner 构建：MyGo 的打包步骤会调用平台工具链
           # （macOS 走 actool / codesign，Windows 走 .syso 与安装器），
           # 交叉编译得不到可运行的产物，图标和安装器也会缺。
-          - os: macos-14
+          # 标签里的 arm64 才是 Apple silicon：macos-15 是 Intel 机器，
+          # 写 macos-15 却在 arm64 上构建会拿到 Intel 产物。macos-13 已退役。
+          - os: macos-15-arm64
             platform: darwin/arm64
             artifact: luvia-macos-arm64
-          - os: macos-13
+          - os: macos-15
             platform: darwin/amd64
             artifact: luvia-macos-amd64
           - os: windows-latest
