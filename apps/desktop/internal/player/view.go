@@ -31,6 +31,12 @@ const (
 // stage would cost more to paint the wider the window got.
 const stageBackdropBlur float32 = 28
 
+// The blurred cover is laid under the stage and shows through the band round a
+// picture that does not match the stage's shape: it dims the stage's black
+// there, so the band reads as the same picture at rest rather than as two flat
+// bars, without ever competing with the picture itself.
+const stageBackdropOpacity float32 = 0.45
+
 var (
 	mediaInk   = ui.RGBA(255, 255, 255, 0.94)
 	mediaMuted = ui.RGBA(255, 255, 255, 0.62)
@@ -49,17 +55,17 @@ func (p *Page) View(c *ui.Context) ui.Element {
 		switch {
 		case design.Docked(width):
 			ui.Column(c).Fill().Children(func() {
-				ui.Box(c).FillWidth().Height(height * 0.52).Children(func() { p.stage(c, t, m, width) })
+				ui.Box(c).FillWidth().Height(height * 0.52).Children(func() { p.stage(c, t, m, width, height*0.52) })
 				scroll := ui.Scroll(c).Grow(1)
 				scroll.Children(func() { p.panelBody(c, t, m, width) })
 			})
 		case p.cinema:
-			p.stage(c, t, m, width)
+			p.stage(c, t, m, width, height)
 		case p.panelHidden:
-			p.stage(c, t, m, width)
+			p.stage(c, t, m, width, height)
 		default:
 			ui.Row(c).Fill().Children(func() {
-				ui.Box(c).Grow(1).FillHeight().Children(func() { p.stage(c, t, m, width-panelWidth) })
+				ui.Box(c).Grow(1).FillHeight().Children(func() { p.stage(c, t, m, width-panelWidth, height) })
 				p.panel(c, t, m, height)
 			})
 		}
@@ -75,18 +81,19 @@ func (p *Page) View(c *ui.Context) ui.Element {
 // that frame on its own clock, and taking the element away until Ready would
 // hide the only frame the player ever shows. Everything that covers the stage
 // goes under the video, or nothing of it would show.
-func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
+func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width, height float32) {
 	if p.loading && p.player == nil && p.notice == noticeNone {
 		p.stageOpening(c, m)
 	} else if p.player != nil {
-		p.stageBackdrop(c, t)
+		p.stageBackdrop(c, t, ui.Rect{W: width, H: height}, p.pictureBox(width, height))
 		p.stageFallback(c, m)
-		// The stage keeps the whole frame. Cover scales a picture by the larger
-		// of the two ratios, which for a portrait series (short dramas ship
-		// 360x640) crops it to a centre band of a wide stage: the picture reads
-		// as zoomed in and cut off. Contain scales by the smaller ratio, so the
-		// frame fits whole and the backdrop behind it fills the sides; a frame
-		// that already matches the stage's ratio fills it either way.
+		// The stage keeps the whole frame. Cover scales a picture by the larger of
+		// the two ratios, which for a portrait series (short dramas ship 360x640)
+		// crops it to a centre band of a wide stage: the picture reads as zoomed
+		// in and cut off. Contain scales by the smaller ratio, so the frame fits
+		// whole with a band on two sides; the stage's black and the backdrop's
+		// cover fill those bands. A frame that already matches the stage's ratio
+		// fills it either way.
 		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Contain)
 		// An engine that has not delivered its first frame is still opening the
 		// stream, which on a slow line is the longest wait of all; one that has
@@ -129,7 +136,7 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 		// stream's own clock, rather than on the page's thread. An open that
 		// holds the stage longer than an opening may take is reported, so a
 		// stream that never comes back is not a stage that waits for good.
-		p.stageBackdrop(c, t)
+		p.stageBackdrop(c, t, ui.Rect{W: width, H: height}, ui.Rect{})
 		p.stageFallback(c, m)
 		if p.notice == noticeNone {
 			if p.loading {
@@ -446,11 +453,18 @@ func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, 
 }
 
 // stageBackdrop fills the stage under the picture: the stage's own near-black,
-// then the cover blurred over all of it. A frame keeps its whole shape on the
-// stage, so one wider or taller than the stage leaves a band on two sides; a
-// blurred copy of the cover under it fills that band, and the stage reads as
-// one picture rather than a frame laid on black.
-func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme) {
+// then the cover blurred behind it. A frame keeps its whole shape on the stage,
+// so one wider or taller than the stage leaves a band on two sides; the blurred
+// cover fills that band, and the stage reads as one picture rather than a frame
+// laid on black.
+//
+// The blurred cover keeps out of the picture's own box. Painted over the whole
+// stage, it sat behind the video wherever the two ratios differ, so the band
+// Contain leaves round a picture showed a blown-up copy of the cover instead of
+// the band a viewer expects: the picture read as cut off at any window shape
+// that did not match it. It fills the stage where no picture has come yet, and
+// the bands round the picture once one has.
+func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme, stage, picture ui.Rect) {
 	ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Gradient(design.PlayerStage(t), t.Surface, 150)
 	url := p.detail.BackdropURL
@@ -465,9 +479,87 @@ func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	// A blur is painted off screen every frame it shows, and this one never
-	// changes, so Cache bakes it into a kept layer drawn once.
+	// changes, so Cache bakes it into a kept layer drawn once. A stage with no
+	// measured picture yet keeps the cover over all of it, so the opening still
+	// reads as one picture; otherwise each band the stage leaves round the
+	// picture takes a cover of its own, scaled to fill that band.
+	if bands := stageBands(picture, stage); len(bands) > 0 {
+		for _, band := range bands {
+			ui.Image(c, bitmap).Absolute().Left(band.X).Top(band.Y).Width(band.W).Height(band.H).
+				Fit(ui.Cover).Blur(stageBackdropBlur).Opacity(stageBackdropOpacity).Cache()
+		}
+		return
+	}
 	ui.Image(c, bitmap).Absolute().Left(0).Right(0).Top(0).Bottom(0).
-		Fit(ui.Cover).Blur(stageBackdropBlur).Opacity(0.45).Cache()
+		Fit(ui.Cover).Blur(stageBackdropBlur).Opacity(stageBackdropOpacity).Cache()
+}
+
+// pictureBox is the box a picture of the given ratio fills inside a stage of
+// the given size once scaled to fit whole, centred, as Contain scales it. A
+// stage with no picture yet, or with one whose ratio is not known, returns an
+// empty box.
+func (p *Page) pictureBox(width, height float32) ui.Rect {
+	if p.player == nil || width <= 0 || height <= 0 {
+		return ui.Rect{}
+	}
+	w, h := pictureRatio(p.player)
+	if w <= 0 || h <= 0 {
+		return ui.Rect{}
+	}
+	picture := w / h
+	fitW, fitH := width, height
+	if width/height > picture {
+		fitW = height * picture
+	} else {
+		fitH = width / picture
+	}
+	return ui.Rect{X: (width - fitW) / 2, Y: (height - fitH) / 2, W: fitW, H: fitH}
+}
+
+// pictureRatio is the size a video's frames have, or the size the stream says
+// they will have while the first frame is still on its way: an engine reports
+// 0x0 until then, and the box the picture fills is what the backdrop needs from
+// the very first frame.
+func pictureRatio(player *ui.VideoPlayer) (w, h float32) {
+	if player == nil {
+		return 0, 0
+	}
+	if w, h := player.Size(); w > 0 && h > 0 {
+		return float32(w), float32(h)
+	}
+	return 0, 0
+}
+
+// stageBand is one of the four bands round a picture on the stage, the picture
+// itself being the box between them: dark when the picture's ratio and the
+// stage's differ, none of them when the two match.
+type stageBand struct {
+	ui.Rect
+}
+
+// stageBands returns the bands round the picture within the stage, in the
+// order they are laid: the top and bottom bands span the stage, the left and
+// right bands fill the rows between them.
+func stageBands(picture, stage ui.Rect) []stageBand {
+	if picture.W <= 0 || picture.H <= 0 || stage.W <= 0 || stage.H <= 0 {
+		return nil
+	}
+	var bands []stageBand
+	top, bottom := picture.Y, stage.H-(picture.Y+picture.H)
+	left, right := picture.X, stage.W-(picture.X+picture.W)
+	if top > 0 {
+		bands = append(bands, stageBand{ui.Rect{Y: 0, W: stage.W, H: top}})
+	}
+	if bottom > 0 {
+		bands = append(bands, stageBand{ui.Rect{Y: picture.Y + picture.H, W: stage.W, H: bottom}})
+	}
+	if left > 0 {
+		bands = append(bands, stageBand{ui.Rect{Y: picture.Y, W: left, H: picture.H}})
+	}
+	if right > 0 {
+		bands = append(bands, stageBand{ui.Rect{X: picture.X + picture.W, Y: picture.Y, W: right, H: picture.H}})
+	}
+	return bands
 }
 
 // stageFallback covers a stage the stream did not fill: it says why, and it

@@ -1201,6 +1201,13 @@ func (p *Page) TogglePanel() {
 	p.invalidate()
 }
 
+// PictureBox is the box a picture of the given ratio fills inside a stage of
+// the given size once scaled to fit whole, centred: empty until a picture of a
+// known ratio has come.
+func (p *Page) PictureBox(width, height float32) ui.Rect {
+	return p.pictureBox(width, height)
+}
+
 // PanelHidden reports whether the side panel is away and the picture owns the
 // window.
 func (p *Page) PanelHidden() bool { return p.panelHidden }

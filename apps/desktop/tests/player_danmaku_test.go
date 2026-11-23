@@ -215,3 +215,56 @@ func TestPlayerPanelCloseHidesThePanel(t *testing.T) {
 		t.Fatal("the reveal control did not bring the panel back")
 	}
 }
+
+// TestPlayerPictureBoxKeepsThePictureWhole covers the box a picture fills on a
+// stage whose shape it does not share: the picture keeps its own ratio, centred,
+// so the bands the stage leaves on two sides are the viewer's letterbox rather
+// than a crop.
+func TestPlayerPictureBoxKeepsThePictureWhole(t *testing.T) {
+	base, _ := sampleTitle()
+	src := &commentingSource{detail: base.detail, episodes: base.episodes}
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := make(chan func(), 8)
+	// The player is built before the page opens the stream: its first frame is
+	// what gives the picture its ratio, and a player built on demand reports
+	// 0x0 until that frame has come.
+	clip := newGIFPlayer(t)
+	playing := player.New(player.Deps{
+		Source: src, Library: store, Run: func(fn func()) { run <- fn },
+		OpenVideo: func(string) (*ui.VideoPlayer, error) { return clip, nil },
+	})
+	playing.Open(src.detail, src.episodes, 0)
+	apply(t, run)
+	apply(t, run)
+
+	playing.RevealPanel()
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(ui.DarkTheme())
+		c.SetTheme(&theme)
+		playing.View(c)
+	}, 1600, 900)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	// The test picture is 2x2 pixels: in a 1600x900 stage it fills 900x900,
+	// centred, so 350 stands on either side for the viewer to see.
+	box := playing.PictureBox(1600, 900)
+	if box.W != 900 || box.H != 900 || box.Y != 0 || box.X != 350 {
+		t.Fatalf("a square picture in a 1600x900 stage: %v", box)
+	}
+	// A stage narrower than the picture leaves the bands above and below.
+	if box = playing.PictureBox(400, 900); box.W != 400 || box.H != 400 || box.X != 0 || box.Y != 250 {
+		t.Fatalf("a square picture in a 400x900 stage: %v", box)
+	}
+	// A stage whose shape matches the picture leaves no band at all.
+	if box = playing.PictureBox(800, 800); box.W != 800 || box.H != 800 || box.X != 0 || box.Y != 0 {
+		t.Fatalf("a square picture in an 800x800 stage: %v", box)
+	}
+	// A stage with no room, as one built before its first frame, has no box.
+	if box = playing.PictureBox(0, 0); box != (ui.Rect{}) {
+		t.Fatalf("a stage with no room reported a box: %v", box)
+	}
+}
