@@ -942,8 +942,8 @@ func (p *Page) panelBody(c *ui.Context, t *ui.Theme, m locales.Messages, width f
 		ui.Text(c, m.CurrentPlaying(p.detail.Title)).FontSize(11.5).TextColor(t.TextMuted)
 
 		switch p.tab {
-		case tabComments:
-			p.panelComments(c, t, m)
+		case tabDanmaku:
+			p.panelDanmaku(c, t, m)
 		default:
 			ui.Text(c, m.EpisodesTitle()).FontSize(12).TextColor(t.TextMuted)
 			p.panelEpisodes(c, t, m, width)
@@ -998,7 +998,7 @@ func joinMeta(parts []string) string {
 }
 
 func (p *Page) panelTabs(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	labels := []string{m.EpisodesTab(), m.TabComments()}
+	labels := []string{m.EpisodesTab(), m.DanmakuTab()}
 	ui.Row(c).FillWidth().Children(func() {
 		ui.Row(c).Radius(999).Padding(3).Gap(2).Background(t.Surface).Children(func() {
 			for i, label := range labels {
@@ -1049,9 +1049,9 @@ func (p *Page) sourceSelector(c *ui.Context, t *ui.Theme, m locales.Messages, wi
 	})
 }
 
-// panelComments lists the comments the episode carries. The same entries fly
-// over the picture, so this tab is the readable copy of that layer.
-func (p *Page) panelComments(c *ui.Context, t *ui.Theme, m locales.Messages) {
+// panelDanmaku lists the danmaku the episode carries. The same entries fly over
+// the picture, so this tab is the readable copy of that layer.
+func (p *Page) panelDanmaku(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	if len(p.comments) == 0 {
 		ui.Text(c, p.commentWhyText(m)).FontSize(13).TextColor(t.TextMuted)
 		return

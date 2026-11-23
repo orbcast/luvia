@@ -26,7 +26,6 @@ var errNoSource = errors.New("no source rule is configured")
 const (
 	tabOverview = iota
 	tabCast
-	tabComments
 	tabCrew
 	tabCount
 )

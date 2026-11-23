@@ -1018,14 +1018,14 @@ func (msgs Messages) TabCast() string {
 	return Catalog.Format(msgs.locale, "tabCast", nil)
 }
 
-// TabComments says "Comments"
+// DanmakuTab says "Danmaku"
 // in the language the app shows.
-func TabComments() string { return In(i18n.Locale()).TabComments() }
+func DanmakuTab() string { return In(i18n.Locale()).DanmakuTab() }
 
-// TabComments says "Comments"
+// DanmakuTab says "Danmaku"
 // in the language of msgs.
-func (msgs Messages) TabComments() string {
-	return Catalog.Format(msgs.locale, "tabComments", nil)
+func (msgs Messages) DanmakuTab() string {
+	return Catalog.Format(msgs.locale, "danmakuTab", nil)
 }
 
 // TabCrew says "Crew"

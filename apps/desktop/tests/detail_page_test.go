@@ -155,7 +155,7 @@ func TestDetailRendersPlaysAndSwitchesTabs(t *testing.T) {
 	apply(t, run)
 
 	tt := newDetailTester(t, page)
-	for _, text := range []string{"Cyberpunk Edgerunners 2", "Sci-Fi", "2026", "Play", "Episodes", "Overview", "Cast", "Comments", "Crew"} {
+	for _, text := range []string{"Cyberpunk Edgerunners 2", "Sci-Fi", "2026", "Play", "Episodes", "Overview", "Cast", "Crew"} {
 		if !tt.HasText(text) {
 			t.Fatalf("missing %q in %v", text, tt.Texts())
 		}

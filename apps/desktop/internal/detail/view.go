@@ -268,7 +268,7 @@ func (p *Page) captionPair(c *ui.Context, t *ui.Theme, label, value string) {
 
 func (p *Page) tabRail(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	s := design.DetailSurfaces(t)
-	labels := []string{m.TabOverview(), m.TabCast(), m.TabComments(), m.TabCrew()}
+	labels := []string{m.TabOverview(), m.TabCast(), m.TabCrew()}
 	ui.Row(c).FillWidth().Children(func() {
 		rail := ui.Row(c).Radius(999).Padding(4).Gap(2).Background(s.TabBg)
 		rail.Children(func() {
@@ -400,11 +400,6 @@ func (p *Page) tabContent(c *ui.Context, t *ui.Theme, m locales.Messages) {
 		p.people(c, t, m, m.TabCast(), p.detail.Actors)
 	case tabCrew:
 		p.people(c, t, m, m.TabCrew(), p.detail.Directors)
-	default:
-		ui.Column(c).FillWidth().Gap(6).Children(func() {
-			ui.Text(c, m.TabComments()).FontSize(14).Bold().TextColor(t.Text)
-			ui.Text(c, m.EmptyTab()).FontSize(13).TextColor(t.TextMuted)
-		})
 	}
 }
 

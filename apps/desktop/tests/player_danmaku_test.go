@@ -155,9 +155,15 @@ func TestPlayerSpreadsUntimedComments(t *testing.T) {
 	page.SelectTab(1)
 	page.RevealPanel()
 	tt.Frame()
+	// The tab lists the danmaku the episode carries, and it says so: a tab
+	// called Comments over a danmaku feed reads as a review section the source
+	// does not have.
+	if !tt.HasText(english.DanmakuTab()) || tt.HasText("Comments") {
+		t.Fatalf("the tab is not named for what it lists: %v", tt.Texts())
+	}
 	for _, want := range []string{"First review", "Second review", "Third review", "ann", "cy"} {
 		if !pumpUntil(t, run, tt, want) {
-			t.Fatalf("the comments tab is missing %q: %v", want, tt.Texts())
+			t.Fatalf("the danmaku tab is missing %q: %v", want, tt.Texts())
 		}
 	}
 }

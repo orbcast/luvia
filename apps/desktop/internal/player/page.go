@@ -71,7 +71,11 @@ const (
 // Tab under the now-playing header.
 const (
 	tabEpisodes = iota
-	tabComments
+	// tabDanmaku is the readable copy of the layer that flies over the
+	// picture: the same entries, listed, for a viewer who would rather read
+	// them. The tab says danmaku because that is what the list holds, a
+	// danmaku feed, not the source's review section.
+	tabDanmaku
 )
 
 // Deps are the collaborators the player reads and calls. OpenVideo is injectable
@@ -1254,7 +1258,7 @@ func (p *Page) setCinema(on bool) {
 func (p *Page) ToggleExpanded() { p.expanded = !p.expanded; p.invalidate() }
 
 func (p *Page) SelectTab(i int) {
-	if i != tabEpisodes && i != tabComments {
+	if i != tabEpisodes && i != tabDanmaku {
 		return
 	}
 	p.tab = i
