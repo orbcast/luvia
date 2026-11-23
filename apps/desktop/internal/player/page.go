@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui/video"
 
 	"luvia/apps/desktop/internal/danmaku"
+	"luvia/apps/desktop/internal/design"
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
 	"luvia/apps/desktop/internal/source"
@@ -495,6 +496,44 @@ type flying struct {
 	slide float32
 }
 
+// laneShare is how many rows of the band each kind of comment may use. A
+// scrolling line is one row tall and needs a row of its own, while a pinned one
+// hangs in the middle of the band under a pill, so the two never share rows:
+// scrolling lines start at the top of the band and count down, pinned-below
+// ones count up from the bottom, and pinned-above ones hold the middle.
+func laneShare(set Settings, rows int) (scroll, top, bottom int) {
+	if rows < 1 {
+		rows = 1
+	}
+	// The middle row, when there is one to hold: a band of one row has no middle
+	// left over for a pinned line.
+	centre := 0
+	if set.Top && rows >= 3 {
+		centre = 1
+	}
+	rest := rows - centre
+	if !set.Scroll {
+		rest = 0
+		bottom = 0
+	}
+	if set.Bottom {
+		// Pinned-below lines take the rows under the scrolling block, up to two
+		// of them: a pillar of pinned lines under a busy picture reads as a wall.
+		bottom = min(2, max(1, rest/4))
+	}
+	if set.Scroll {
+		scroll = rest - bottom
+		if scroll < 1 {
+			scroll = 1
+			bottom = max(0, rest-1)
+		}
+	}
+	if !set.Bottom {
+		bottom = 0
+	}
+	return scroll, centre, bottom
+}
+
 // flyingComments picks the comments crossing the picture at the playhead: the
 // ones scrolling across, and the ones pinned to the top or the bottom of the
 // band. It returns the rows the layer may use as well, so the stage can tell a
@@ -505,16 +544,33 @@ type flying struct {
 // than a short one, and two lines in one lane overlap when the next one enters
 // on the same beat. A lane a comment has just left stays quiet for a moment so
 // the next one enters with a gap.
-func (p *Page) flyingComments(now time.Duration, width float32) ([]flying, int) {
+func (p *Page) flyingComments(now time.Duration, width, height float32) []flying {
 	if !p.danmaku || len(p.comments) == 0 {
-		return nil, 0
+		return nil
 	}
 	set := p.danmakuSettings
 	spread := !timedComments(p.comments)
 	window := p.danmakuWindow()
 	lead := window / 2
 	area := laneWidth(width)
+	// The band decides how many rows there are, so the layer counts rows the same
+	// way the stage does.
+	rows := p.danmakuRows(height)
+	if rows < 1 {
+		return nil
+	}
+	scrollLanes, centre, bottomLanes := laneShare(set, rows)
+	// free says when each scrolling lane is free again, and held says which line
+	// holds it until then. A line takes its lane when it enters and keeps it for
+	// the whole crossing: deciding again on every frame would let a line that
+	// comes later in the list take the lane a longer one is still crossing, which
+	// is what stacks three lines on one row.
 	free := make(map[int]time.Duration)
+	held := make(map[int]int)
+	// shown says until when each pinned lane is taken, so a pinned line holds its
+	// row for as long as it stays up rather than leaving room for the next one to
+	// land on it.
+	shown := make(map[int]time.Duration)
 	var out []flying
 	for i, comment := range p.comments {
 		kind := commentKind(i)
@@ -530,29 +586,68 @@ func (p *Page) flyingComments(now time.Duration, width float32) ([]flying, int) 
 			continue
 		}
 		slide := float32(now-from) / float32(window)
+		// A lane is free once the line before it has moved far enough in that the
+		// new one enters behind its tail rather than on top of it. The moment to
+		// judge is the new line's own entry, not this frame: lines that start on
+		// the same beat would otherwise all see the frame they arrive in and claim
+		// the one lane that is free.
+		occupy := clampF((textWidth(comment.Text, set.Size)+64)/float64(area), 0.12, 0.9)
 		lane := 0
 		if kind == kindScroll {
-			// The share of the crossing a line of this length takes to enter,
-			// and the clearance it keeps behind it once it has.
-			occupy := clampF((textWidth(comment.Text, set.Size)+64)/float64(area), 0.12, 0.9)
-			lane = -1
-			for l := 0; l < set.Lanes; l++ {
-				if held, ok := free[l]; !ok || float64(slide) >= float64(held)+occupy {
-					lane = l
-					break
+			seat, mine := held[i]
+			if !mine {
+				seat = -1
+				for l := 0; l < scrollLanes; l++ {
+					if until, ok := free[l]; !ok || from >= until {
+						seat = l
+						break
+					}
 				}
+				if seat < 0 {
+					// Every lane is taken: the layer drops the line rather than
+					// stacking two in one row, which is what makes a busy episode
+					// unreadable.
+					continue
+				}
+				held[i] = seat
+				free[seat] = from + time.Duration(occupy*float64(window))
 			}
-			if lane < 0 {
-				// Every lane is taken: the layer drops the line rather than
-				// stacking two in one row, which is what makes a busy episode
-				// unreadable.
+			lane = seat
+		} else if kind == kindTop {
+			// The middle row holds one pinned line at a time.
+			if centre == 0 {
 				continue
 			}
-			free[lane] = time.Duration((float64(slide) + occupy) * float64(window))
+			lane = pinLane(shown, kindTop, centre, from, now, window)
+		} else {
+			lane = pinLane(shown, kindBottom, bottomLanes, from, now, window)
+		}
+		if lane < 0 {
+			continue
 		}
 		out = append(out, flying{text: comment.Text, kind: kind, lane: lane, slide: slide})
 	}
-	return out, set.Lanes
+	// The lane number is a place inside the kind's own block, and the stage turns
+	// it into a row: scrolling lines fill the band from the top down, pinned-above
+	// lines centre in it and pinned-below ones count up from its bottom.
+	return out
+}
+
+// pinLane seats a pinned comment in one of its kind's rows, or reports -1 when
+// all of them are still showing another. shown keeps the row numbers of the two
+// pinned kinds apart by adding their lane count, so one map covers both.
+func pinLane(shown map[int]time.Duration, kind, lanes int, from, now time.Duration, window time.Duration) int {
+	base := 0
+	if kind == kindBottom {
+		base = 64
+	}
+	for l := 0; l < lanes; l++ {
+		if until, ok := shown[base+l]; !ok || now >= until {
+			shown[base+l] = from + window
+			return l
+		}
+	}
+	return -1
 }
 
 // commentKind says how the i-th comment of a list crosses: two in five are
@@ -585,6 +680,20 @@ func (s Settings) allows(kind int) bool {
 // danmakuWindow is how long a comment at the chosen speed takes to cross.
 func (p *Page) danmakuWindow() time.Duration {
 	return time.Duration(clampF(p.danmakuSettings.Speed, danmakuFastest, danmakuSlowest) * float64(time.Second))
+}
+
+// danmakuRows is how many rows of the layer fit in a stage of this height, which
+// the stage works out with rowsIn: the layer seats its lines against the same
+// count so a seat is always a row that is really there.
+func (p *Page) danmakuRows(height float32) int {
+	set := p.danmakuSettings
+	top, bottom := design.DanmakuBand(set.Area)
+	from := height*top + height*design.DanmakuBandTop*(1-top)
+	to := height*bottom - height*design.DanmakuBandBottom*(1-bottom)
+	if to < from+design.DanmakuLaneHeight {
+		from, to = height*design.DanmakuBandTop, height-design.DanmakuBandBottom*height
+	}
+	return rowsIn(from, to)
 }
 
 // laneWidth is the distance a comment travels across a stage width wide.

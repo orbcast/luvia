@@ -148,7 +148,7 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 // under the pill at the top-right while they are unfolded.
 func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 	_, height := c.Size()
-	flying, lanes := p.flyingComments(p.position(), width)
+	flying := p.flyingComments(p.position(), width, height)
 	set := p.danmakuSettings
 	top, bottom := design.DanmakuBand(set.Area)
 	// The band is a share of the picture, with the stage's own top line and
@@ -158,13 +158,7 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 	if to < from+design.DanmakuLaneHeight {
 		from, to = height*design.DanmakuBandTop, height-design.DanmakuBandBottom*height
 	}
-	rows := int((to - from) / design.DanmakuLaneHeight)
-	if rows < 1 {
-		rows = 1
-	}
-	if lanes < rows {
-		rows = lanes
-	}
+	space := rowsIn(from, to)
 	if len(flying) > 0 {
 		// The playhead moves on its own, so the layer keeps asking for frames
 		// while comments are in flight.
@@ -172,21 +166,36 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 	}
 	for _, item := range flying {
 		item := item
-		lane := item.lane % rows
-		if item.kind == kindScroll {
+		row := 0
+		switch item.kind {
+		case kindScroll:
+			// A scrolled line keeps its own row from the top of the band down. A
+			// seat past the rows that fit has nowhere to go: squeezing it into
+			// the last row would put two lines on one another.
+			if item.lane >= space {
+				continue
+			}
+			row = item.lane
 			left := width - (width+240)*item.slide
-			ui.Row(c).Absolute().Left(left).Top(from + float32(lane)*design.DanmakuLaneHeight).
+			ui.Row(c).Absolute().Left(left).Top(from + float32(row)*design.DanmakuLaneHeight).
 				Height(design.DanmakuLaneHeight).AlignItems(ui.Center).Children(func() {
 				p.danmakuText(c, item.text)
 			})
 			continue
+		case kindTop:
+			// Pinned-above lines hold the middle row of the band, and a band too
+			// short to centre one in leaves them out rather than dropping them on
+			// another line.
+			row = (space - 1) / 2
+		default:
+			// Pinned-below lines count up from the bottom of the band.
+			row = space - 1 - item.lane
+		}
+		if row < 0 || row >= space {
+			continue
 		}
 		// A pinned comment holds the middle of its lane and stays for a fixed
 		// time, so its row is one line wide and centred rather than measured.
-		row := lane
-		if item.kind == kindBottom {
-			row = rows - 1 - lane
-		}
 		ui.Row(c).Absolute().Left(0).Right(0).Top(from + float32(row)*design.DanmakuLaneHeight).
 			Height(design.DanmakuLaneHeight).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Radius(999).Padding(3, 10).Background(design.DanmakuPinnedVeil()).Children(func() {
@@ -1032,6 +1041,16 @@ func rateLabel(rate float64) string {
 		return strconv.Itoa(int(rate)) + "x"
 	}
 	return strconv.FormatFloat(rate, 'g', -1, 64) + "x"
+}
+
+// rowsIn is how many rows of the layer fit between from and to, the top and
+// bottom of the band the viewer picked.
+func rowsIn(from, to float32) int {
+	fits := int((to - from) / design.DanmakuLaneHeight)
+	if fits < 1 {
+		fits = 1
+	}
+	return fits
 }
 
 // clock writes a media time as m:ss, or h:mm:ss past an hour.
