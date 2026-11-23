@@ -20,9 +20,11 @@ type stage struct {
 	page *player.Page
 	run  chan func()
 	tt   *ui.Tester
-	// drawInOpen is set by a test whose open never returns: the stage is drawn
-	// from inside that open, once the work of opening is queued, because the
-	// page is never drawn after it again.
+	// drawInOpen is set by a test whose open never returns: the work the page
+	// queued while opening is run from inside that open, because the page is
+	// never drawn after it again. The drawing is left to the test's own thread:
+	// the open runs on the one the page started for it, and the image behind a
+	// Tester belongs to the thread that draws it.
 	drawInOpen bool
 }
 
@@ -56,7 +58,9 @@ func newStage(t *testing.T, src *titleSource, open func() (*ui.VideoPlayer, erro
 		OnBack: func() {},
 		OpenVideo: func(string) (*ui.VideoPlayer, error) {
 			if s.drawInOpen {
-				s.draw(t, s.queue(t))
+				for _, fn := range s.queue(t) {
+					fn()
+				}
 			}
 			return open()
 		},
@@ -99,6 +103,9 @@ func openStalledStage(t *testing.T) *stage {
 	// started.
 	s.drawInOpen = true
 	s.open(t, src)
+	// The open is still held, so the work it queued is drawn here, on the
+	// thread that owns the Tester.
+	s.draw(t, nil)
 	return s
 }
 
