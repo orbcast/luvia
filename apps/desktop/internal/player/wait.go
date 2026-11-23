@@ -14,6 +14,14 @@ import (
 // that counts, slow enough that a wait costs nothing.
 const waitTick = 200 * time.Millisecond
 
+// A moving picture is redrawn on the screen's own clock. The layer over it is
+// laid out from the playhead on every frame, so the interval is what decides how
+// smoothly a comment crosses: at five frames a second a line jumps in fifths of
+// its crossing, which a viewer reads as a comment stepping across the picture
+// rather than flying. 60 frames a second is the smoothness a viewer expects, and
+// the work per frame is laying out a few rows of text.
+const playTick = 16 * time.Millisecond
+
 // stageOpening covers the picture while the episode's line is resolved and its
 // engine opened. A resolution that takes long says so, with the time it has
 // taken: a mark on its own left a slow line looking like a broken one.

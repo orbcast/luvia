@@ -116,7 +116,10 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 			p.buffered = time.Time{}
 			p.watchEngine()
 			if p.player != nil && p.player.Playing() {
-				c.After(waitTick)
+				// A moving picture is asked for again on the screen's clock: the
+				// comments are laid out from the playhead every frame, so the
+				// interval is what a viewer sees as their pace.
+				c.After(playTick)
 			}
 		}
 	} else {
@@ -170,8 +173,8 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 	}
 	if len(flying) > 0 {
 		// The playhead moves on its own, so the layer keeps asking for frames
-		// while comments are in flight.
-		c.After(50 * time.Millisecond)
+		// while comments are in flight, at the pace the picture itself is drawn.
+		c.After(playTick)
 	}
 	for _, item := range flying {
 		item := item
