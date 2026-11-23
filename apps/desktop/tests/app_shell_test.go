@@ -379,3 +379,77 @@ func TestAppShellKeepsThePlayersTopButtonsClickable(t *testing.T) {
 		t.Fatalf("the strip took the press meant for the player's button: %d clicks", pressed)
 	}
 }
+
+// TestAppShellWindowButtonsTakeTheirPresses covers the window buttons on a
+// page that hides the navigation, as the title page does: the band that drags
+// the window by its title bar meets the capsule there, and laid over the whole
+// band it took the close button's presses, so that button did nothing.
+func TestAppShellWindowButtonsTakeTheirPresses(t *testing.T) {
+	for _, layout := range []appshell.WindowButtons{
+		{Start: []string{"close", "minimize", "maximize"}},
+		{End: []string{"minimize", "maximize", "close"}},
+	} {
+		for _, bar := range []ui.TitleBar{
+			// No room of its own: the capsule lands against the window's top.
+			{},
+			{Height: 28, Bottom: 28, Left: 78},
+		} {
+			s := appshell.New()
+			s.SetWindowButtons(layout)
+			s.SetContent(func(c *ui.Context) ui.Element { return ui.Box(c).Fill() })
+
+			tt := ui.NewTester(s.View, 1100, 720)
+			tt.SetTitleBar(bar)
+			tt.SetLocale("en")
+			tt.Frame()
+			s.SetNavigationHidden(true)
+			tt.Frame()
+
+			for _, name := range []string{"Close window", "Minimize window", "Maximize window"} {
+				if err := tt.Click(name); err != nil {
+					t.Fatalf("%v %v: %s is unreachable: %v", layout, bar, name, err)
+				}
+			}
+			// The band still drags the window by the room beside them.
+			capsule, ok := s.WindowControlCapsule(bar, 1100)
+			if !ok {
+				continue
+			}
+			tt.ClickAt(1100/2, capsule.Y+capsule.H/2)
+		}
+	}
+}
+
+// TestAppShellCutRect covers the room a hole leaves of a band: the strips
+// above and below it and the room beside it on its row.
+func TestAppShellCutRect(t *testing.T) {
+	band := ui.Rect{X: 0, Y: 0, W: 100, H: 30}
+	for _, c := range []struct {
+		name string
+		hole ui.Rect
+		want []ui.Rect
+	}{
+		{"clear of the band", ui.Rect{X: 200, Y: 0, W: 40, H: 30}, []ui.Rect{band}},
+		{"inside it", ui.Rect{X: 20, Y: 10, W: 40, H: 5}, []ui.Rect{
+			{X: 0, Y: 0, W: 100, H: 10},
+			{X: 0, Y: 15, W: 100, H: 15},
+			{X: 0, Y: 10, W: 20, H: 5},
+			{X: 60, Y: 10, W: 40, H: 5},
+		}},
+		{"across its top", ui.Rect{X: 20, Y: -10, W: 40, H: 20}, []ui.Rect{
+			{X: 0, Y: 10, W: 100, H: 20},
+			{X: 0, Y: 0, W: 20, H: 10},
+			{X: 60, Y: 0, W: 40, H: 10},
+		}},
+	} {
+		got := appshell.CutRect(band, c.hole)
+		if len(got) != len(c.want) {
+			t.Fatalf("%s: got %v, want %v", c.name, got, c.want)
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Fatalf("%s: got %v, want %v", c.name, got, c.want)
+			}
+		}
+	}
+}

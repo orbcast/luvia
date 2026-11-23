@@ -209,8 +209,13 @@ func (s *Shell) View(c *ui.Context) {
 		if s.navHidden {
 			strip = playerTopEdge
 		}
-		ui.Row(c).Absolute().Top(0).Left(bar.Left).Right(bar.Right).
-			Height(strip).DragWindow().ZIndex(20)
+		// The strip gives way to the window buttons: it only covers the title
+		// line where nothing else does, so it still drags the window by the
+		// room around the capsule, and a press on a window button at the top
+		// left of a page that hides the navigation, as the title page does,
+		// still reaches that button. The page's own top-left control takes its
+		// own presses: nothing is laid over it.
+		s.dragStrip(c, s.TitleStrip(width, strip), s.controlsHidden, bar)
 		if !s.controlsHidden {
 			s.windowControls(c, m, bar, width)
 		}
@@ -324,20 +329,79 @@ func windowControlSquareFrames(r ui.Rect, maximized bool) []ui.Rect {
 	return []ui.Rect{{X: left + step/2, Y: top + step/2, W: size, H: size}}
 }
 
-// windowControls draws the window's buttons in the capsule the AppShell floats
-// over the page: at the start of the title bar on Linux, at its end there and
-// on Windows. It draws none under a desktop that decorates windows itself and
-// asks for none, and none where the platform draws its own, as macOS does.
-func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBar, width float32) {
-	// The desktop's layout names the buttons and their order; one end holds
-	// the whole cluster, and the bar's own edge decides which.
-	atStart := len(s.layout.Start) > 0
-	names := s.layout.Start
-	if !atStart {
-		names = s.layout.End
+// TitleStrip is the band the window drags by across the top of the window: the
+// title bar's height, or the player's own top edge.
+func (s *Shell) TitleStrip(width, strip float32) ui.Rect {
+	return ui.Rect{X: 0, Y: 0, W: width, H: strip}
+}
+
+// dragStrip lays the window's drag handle over the title band, minus the
+// capsule of window buttons that shares the band with it: the strip above the
+// capsule, the band below it, and the room beside it on either end still drag
+// the window, so a press on a window button reaches that button while the
+// title line around it keeps moving the window.
+func (s *Shell) dragStrip(c *ui.Context, band ui.Rect, controlsHidden bool, bar ui.TitleBar) {
+	var hole ui.Rect
+	skip := false
+	if !controlsHidden {
+		hole, skip = s.WindowControlCapsule(bar, band.W)
 	}
+	segments := []ui.Rect{band}
+	if skip {
+		segments = CutRect(band, hole)
+	}
+	for _, seg := range segments {
+		if seg.W <= 0 || seg.H <= 0 {
+			continue
+		}
+		ui.Row(c).Absolute().Left(seg.X).Top(seg.Y).Width(seg.W).Height(seg.H).
+			DragWindow().ZIndex(20)
+	}
+}
+
+// CutRect returns what is left of seg once hole is taken out of it, as the
+// bands above and below the hole plus the part of its row beside it.
+func CutRect(seg, hole ui.Rect) []ui.Rect {
+	// A hole clear of the segment leaves it whole.
+	if hole.X >= seg.X+seg.W || seg.X >= hole.X+hole.W || hole.Y >= seg.Y+seg.H || seg.Y >= hole.Y+hole.H {
+		return []ui.Rect{seg}
+	}
+	var out []ui.Rect
+	if above := hole.Y - seg.Y; above > 0 {
+		out = append(out, ui.Rect{X: seg.X, Y: seg.Y, W: seg.W, H: above})
+	}
+	if below := seg.Y + seg.H - (hole.Y + hole.H); below > 0 {
+		out = append(out, ui.Rect{X: seg.X, Y: hole.Y + hole.H, W: seg.W, H: below})
+	}
+	top, bottom := max(seg.Y, hole.Y), min(seg.Y+seg.H, hole.Y+hole.H)
+	if bottom > top {
+		if left := hole.X - seg.X; left > 0 {
+			out = append(out, ui.Rect{X: seg.X, Y: top, W: left, H: bottom - top})
+		}
+		if right := seg.X + seg.W - (hole.X + hole.W); right > 0 {
+			out = append(out, ui.Rect{X: hole.X + hole.W, Y: top, W: right, H: bottom - top})
+		}
+	}
+	return out
+}
+
+// windowControlNames is the buttons the desktop's layout asks for: the end of
+// the title bar holding the cluster decides which end is filled.
+func (s *Shell) windowControlNames() (names []string, atStart bool) {
+	atStart = len(s.layout.Start) > 0
+	if atStart {
+		return s.layout.Start, true
+	}
+	return s.layout.End, false
+}
+
+// WindowControlCapsule is where the capsule of window buttons sits on a window
+// of the given size: one inset from the window's edge, on ChromeTop below the
+// title bar's room.
+func (s *Shell) WindowControlCapsule(bar ui.TitleBar, width float32) (ui.Rect, bool) {
+	names, atStart := s.windowControlNames()
 	if len(names) == 0 {
-		return
+		return ui.Rect{}, false
 	}
 	n := float32(len(names))
 	capsuleWidth := n*design.WindowControlWidth + (n-1)*design.WindowControlGap + 2*design.WindowControlPadding
@@ -346,6 +410,20 @@ func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBa
 	if atStart {
 		left = design.WindowControlInset
 	}
+	return ui.Rect{X: left, Y: top, W: capsuleWidth, H: design.WindowControlHeight + 2*design.WindowControlPadding}, true
+}
+
+// windowControls draws the window's buttons in the capsule the AppShell floats
+// over the page: at the start of the title bar on Linux, at its end there and
+// on Windows. It draws none under a desktop that decorates windows itself and
+// asks for none, and none where the platform draws its own, as macOS does.
+func (s *Shell) windowControls(c *ui.Context, m locales.Messages, bar ui.TitleBar, width float32) {
+	capsule, ok := s.WindowControlCapsule(bar, width)
+	if !ok {
+		return
+	}
+	names, _ := s.windowControlNames()
+	left, top := capsule.X, capsule.Y
 	cluster := ui.Row(c).Key("window-controls").Absolute().Left(left).Top(top).Radius(design.WindowControlRadius).
 		Padding(design.WindowControlPadding).Gap(design.WindowControlGap).AlignItems(ui.Center).ZIndex(21).
 		Material(glass.Surface{
