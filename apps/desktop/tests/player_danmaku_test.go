@@ -244,7 +244,12 @@ func TestPlayerPictureBoxKeepsThePictureWhole(t *testing.T) {
 	})
 	playing.Open(src.detail, src.episodes, 0)
 	apply(t, run)
-	apply(t, run)
+	// The stream opens off the main thread, so the player lands on a callback of
+	// its own: one that has not been applied yet leaves the stage without a
+	// picture to measure, and the box it would report is empty.
+	for i := 0; i < 2 && playing.PictureBox(1600, 900) == (ui.Rect{}); i++ {
+		apply(t, run)
+	}
 
 	playing.RevealPanel()
 	tt := ui.NewTester(func(c *ui.Context) {
