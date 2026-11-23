@@ -309,6 +309,16 @@
         "remarks": "remarks",
         "actors": "actors",
         "directors": "directors",
+        "crew": {
+          "fn": "each",
+          "args": [
+            "directors",
+            {
+              "fn": "record",
+              "args": ["item"]
+            }
+          ]
+        },
         "episodeCount": {
           "fn": "int",
           "args": [

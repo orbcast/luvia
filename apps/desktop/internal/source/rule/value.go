@@ -20,6 +20,10 @@ type Value struct {
 	sel  Selector
 	fn   string
 	args []Value
+	// keys names the key each argument fills, for the functions that build a
+	// record out of several fields: {"fn": "record", "args": [{"name": "x"}]}
+	// makes the entry {"name": ...}. An argument without a key carries none.
+	keys []string
 	tpl  Template
 	lit  any
 }
@@ -48,6 +52,21 @@ func (v Value) Func() (string, []Value, bool) {
 		return "", nil, false
 	}
 	return v.fn, v.args, true
+}
+
+// ArgumentKeys returns the key each argument of a call fills, for the
+// functions that build a record from several fields. It is empty when the call
+// names no keys.
+func (v Value) ArgumentKeys() []string {
+	return v.keys
+}
+
+// Each binds one entry of a list to the value of `item`, so a mapping written
+// for a single entry can walk the whole list: a roster maps each of its
+// people with the same function call instead of one field path per attribute.
+// The entry a mapping reads is the current item, as it is inside a walk.
+func (v Value) Each(selector Selector) Value {
+	return Value{kind: valueFunc, fn: "each", args: []Value{v, {kind: valueSelector, sel: selector}}}
 }
 
 // Template returns the interpolation pattern when the value is a template.
@@ -111,6 +130,9 @@ func (v Value) MarshalJSON() ([]byte, error) {
 	case valueLiteral:
 		return json.Marshal(map[string]any{"literal": v.lit})
 	case valueFunc:
+		if len(v.keys) > 0 {
+			return json.Marshal(map[string]any{"fn": v.fn, "args": v.args, "keys": v.keys})
+		}
 		return json.Marshal(map[string]any{"fn": v.fn, "args": v.args})
 	default:
 		return []byte("null"), nil
@@ -138,9 +160,9 @@ func newObjectValue(item map[string]any) (Value, error) {
 		switch key {
 		case "fn", "template", "literal":
 			forms++
-		case "args":
+		case "args", "keys":
 			if _, ok := item["fn"]; !ok {
-				return Value{}, fmt.Errorf(`"args" needs "fn"`)
+				return Value{}, fmt.Errorf(`%q needs "fn"`, key)
 			}
 		default:
 			return Value{}, fmt.Errorf("mapping object has unknown key %q", key)
@@ -158,7 +180,11 @@ func newObjectValue(item map[string]any) (Value, error) {
 		if err != nil {
 			return Value{}, fmt.Errorf("fn %q: %w", text, err)
 		}
-		return Value{kind: valueFunc, fn: text, args: args}, nil
+		keys, err := newKeys(item["keys"], len(args))
+		if err != nil {
+			return Value{}, fmt.Errorf("fn %q: %w", text, err)
+		}
+		return Value{kind: valueFunc, fn: text, args: args, keys: keys}, nil
 	}
 	if tpl, ok := item["template"]; ok {
 		text, isString := tpl.(string)
@@ -175,6 +201,35 @@ func newObjectValue(item map[string]any) (Value, error) {
 		return Value{kind: valueLiteral, lit: lit}, nil
 	}
 	return Value{}, fmt.Errorf(`mapping object needs "fn", "template" or "literal"`)
+}
+
+// newKeys reads the per-argument key names a record-building call declares.
+func newKeys(raw any, count int) ([]string, error) {
+	if raw == nil {
+		// A call that names no keys still fills the member's name from its
+		// arguments positionally, which is what a roster of bare names needs.
+		keys := make([]string, count)
+		for index := range keys {
+			keys[index] = "name"
+		}
+		return keys, nil
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf(`"keys" must be an array`)
+	}
+	if count > 0 && len(list) != count {
+		return nil, fmt.Errorf(`"keys" must name every argument: %d keys for %d args`, len(list), count)
+	}
+	keys := make([]string, 0, len(list))
+	for _, entry := range list {
+		key, ok := entry.(string)
+		if !ok || key == "" {
+			return nil, fmt.Errorf(`"keys" must hold non-empty strings`)
+		}
+		keys = append(keys, key)
+	}
+	return keys, nil
 }
 
 func newArgs(raw any) ([]Value, error) {

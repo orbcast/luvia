@@ -118,20 +118,38 @@ type Update struct {
 	Note string
 }
 
+// CastMember is one person the detail page credits, with the role the
+// upstream gave them: a character an actor plays, a job a crew member did. The
+// role is empty when the source only names people, and Roster says which list
+// of the record the member came from so a page can tell an actor from a
+// director it happens to list in both places.
+type CastMember struct {
+	Name  string
+	Role  string
+	Image string
+}
+
 // Detail is the full record for one media item.
 type Detail struct {
 	Ref
-	Title        string
-	Kind         Kind
-	Year         int
-	Area         string
-	Tags         []string
-	Overview     string
-	PosterURL    string
-	BackdropURL  string
-	Remarks      string
-	Actors       []string
-	Directors    []string
+	Title       string
+	Kind        Kind
+	Year        int
+	Area        string
+	Tags        []string
+	Overview    string
+	PosterURL   string
+	BackdropURL string
+	Remarks     string
+	Actors      []string
+	Directors   []string
+	// Cast is the roster the source published with the roles it named:
+	// "钱小卉 / 饰 苏小满" reads as one card, which a bare list of names
+	// cannot. It is empty on a source that only lists actors and directors,
+	// and the two lists above stay the answer there.
+	Cast []CastMember
+	// Crew is the roster behind the camera, with the job each member did.
+	Crew         []CastMember
 	EpisodeCount int
 }
 

@@ -298,6 +298,11 @@ func TestKanjuDetailMapsFields(t *testing.T) {
 	if len(detail.Tags) != 2 || len(detail.Actors) != 2 || len(detail.Directors) != 1 {
 		t.Fatalf("detail lists = %+v", detail)
 	}
+	// A source that names no roles still fills the crew roster, one member per
+	// director, so the title page has one renderer for every source.
+	if len(detail.Crew) != 1 || detail.Crew[0].Name != "导演丙" || detail.Crew[0].Role != "" {
+		t.Fatalf("crew = %+v", detail.Crew)
+	}
 	if detail.Overview != "一段用于验证规则映射的简介。" {
 		t.Fatalf("overview = %q", detail.Overview)
 	}

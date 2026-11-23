@@ -247,6 +247,8 @@ func (s *sourceImpl) Detail(ctx context.Context, ref source.Ref) (source.Detail,
 		Remarks:      s.evalString(field(fields, "remarks"), sc),
 		Actors:       s.evalList(field(fields, "actors"), sc),
 		Directors:    s.evalList(field(fields, "directors"), sc),
+		Cast:         s.evalPeople(field(fields, "cast"), sc),
+		Crew:         s.evalPeople(field(fields, "crew"), sc),
 		EpisodeCount: 0,
 	}
 	if value, ok := s.eval(field(fields, "year"), sc); ok {
@@ -565,6 +567,47 @@ func cardOf(id string, fields map[string]rule.Value, sc scope, s *sourceImpl) so
 		}
 	}
 	return card
+}
+
+// evalPeople reads a roster field: each entry of the list keeps the name and
+// the role the upstream named, so the page can say "饰 苏小满" beside an actor
+// instead of repeating a bare name. Entry keys are the ones the rule maps:
+// name, role and image. An entry that names no one is dropped, and an empty
+// role stays empty rather than becoming an empty caption.
+func (s *sourceImpl) evalPeople(value rule.Value, sc scope) []source.CastMember {
+	resolved, ok := s.eval(value, sc)
+	if !ok {
+		return nil
+	}
+	entries, ok := resolved.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]source.CastMember, 0, len(entries))
+	for _, entry := range entries {
+		fields, ok := entry.(map[string]any)
+		if !ok {
+			// A roster of plain names still reads: the list carries who, not
+			// what they did.
+			if name := toString(entry); name != "" {
+				out = append(out, source.CastMember{Name: name})
+			}
+			continue
+		}
+		member := source.CastMember{
+			Name:  toString(fields["name"]),
+			Role:  toString(fields["role"]),
+			Image: toString(fields["image"]),
+		}
+		if member.Name == "" {
+			continue
+		}
+		out = append(out, member)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (s *sourceImpl) evalList(value rule.Value, sc scope) []string {

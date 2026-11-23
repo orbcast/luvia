@@ -272,6 +272,12 @@ func (s Selector) Root() string {
 
 // ReadsItem reports whether the selector starts at the item being mapped rather
 // than at a step variable, which is the case for a number-only selector.
+// IsBareItem reports whether the selector is the single name "item", which a
+// mapping writes to read the entry a walk is on.
+func (s Selector) IsBareItem() bool {
+	return len(s.segments) == 1 && s.segments[0].kind == segField && s.segments[0].name == "item"
+}
+
 func (s Selector) ReadsItem() bool {
 	return len(s.segments) > 0 && s.segments[0].kind == segIndex
 }

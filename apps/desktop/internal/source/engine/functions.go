@@ -40,8 +40,21 @@ func (s *sourceImpl) resolveSelector(sel rule.Selector, sc scope) (any, bool) {
 	if sel.ReadsItem() {
 		return sel.Resolve(sc.item)
 	}
+	// "item" names the entry a walk is on: a flat list of names maps each of
+	// them through the same call the rule writes once.
+	if sel.IsBareItem() && sc.item != nil {
+		return sc.item, true
+	}
 	if _, ok := sc.item.(map[string]any); ok {
 		if value, found := sel.Resolve(sc.item); found {
+			return value, true
+		}
+	}
+	if sc.item != nil {
+		// An entry a mapping walks may be a plain string rather than an
+		// object: a roster of bare names reads each of them as the item, and a
+		// selector that names no variable is what reaches it.
+		if value, found := sel.Resolve(sc.item); found && sel.Root() == "" {
 			return value, true
 		}
 	}
@@ -87,12 +100,44 @@ func (s *sourceImpl) eval(value rule.Value, sc scope) (any, bool) {
 		for index, arg := range args {
 			values[index], found[index] = s.eval(arg, sc)
 		}
-		return callFunction(name, values, found)
+		if name == "each" {
+			return s.each(values, found, args, sc)
+		}
+		return callFunction(name, values, found, value.ArgumentKeys())
 	}
 	if literal, ok := value.Literal(); ok {
 		return literal, true
 	}
 	return nil, false
+}
+
+// each walks the list its first argument holds and evaluates the mapping its
+// second argument names once per entry, with the entry as the current item.
+// A roster therefore maps every person with one call, the way a nested walk in
+// a rule declaration used to spell out one field path per attribute.
+func (s *sourceImpl) each(values []any, found []bool, args []rule.Value, sc scope) (any, bool) {
+	if len(args) != 2 || !found[0] {
+		return nil, false
+	}
+	entries, ok := values[0].([]any)
+	if !ok {
+		return nil, false
+	}
+	inner := scope{item: sc.item, vars: sc.vars, overrides: sc.overrides}
+	out := make([]any, 0, len(entries))
+	for index, entry := range entries {
+		inner.item = entry
+		value, ok := s.eval(args[1], inner)
+		if !ok || value == nil {
+			continue
+		}
+		out = append(out, value)
+		_ = index
+	}
+	if len(out) == 0 {
+		return nil, false
+	}
+	return out, true
 }
 
 // evalString evaluates a mapping that feeds a text field such as a title.
@@ -101,7 +146,7 @@ func (s *sourceImpl) evalString(value rule.Value, sc scope) string {
 	return toString(result)
 }
 
-func callFunction(name string, args []any, found []bool) (any, bool) {
+func callFunction(name string, args []any, found []bool, keys []string) (any, bool) {
 	switch name {
 	case "coalesce":
 		for index, arg := range args {
@@ -186,6 +231,38 @@ func callFunction(name string, args []any, found []bool) (any, bool) {
 			return nil, false
 		}
 		return toStrings(args[0]), true
+	case "record":
+		// A roster entry is built from several fields of one upstream item at
+		// once: the name, the role it plays, the picture beside them. Each
+		// argument names the key it fills, so the rule decides where every
+		// part of a member comes from while the engine keeps the shape the
+		// roster renderer reads. An argument without a key fills the member's
+		// name, and one that is itself an object with no key named for it is
+		// merged in as it stands.
+		entry := make(map[string]any, len(args))
+		for index, arg := range args {
+			if !found[index] {
+				continue
+			}
+			key := ""
+			if index < len(keys) {
+				key = keys[index]
+			}
+			if fields, ok := arg.(map[string]any); ok {
+				for name, value := range fields {
+					entry[name] = value
+				}
+				continue
+			}
+			if key == "" {
+				key = "name"
+			}
+			entry[key] = arg
+		}
+		if len(entry) == 0 {
+			return nil, false
+		}
+		return entry, true
 	case "first":
 		list := asList(args, found)
 		if len(list) == 0 {

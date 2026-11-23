@@ -397,9 +397,9 @@ func (p *Page) tabContent(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	case tabOverview:
 		p.synopsis(c, t, m)
 	case tabCast:
-		p.people(c, t, m, m.TabCast(), p.detail.Actors)
+		p.roster(c, t, m, m.TabCast(), p.cast())
 	case tabCrew:
-		p.people(c, t, m, m.TabCrew(), p.detail.Directors)
+		p.roster(c, t, m, m.TabCrew(), p.crew())
 	}
 }
 
@@ -427,7 +427,39 @@ func (p *Page) synopsis(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	})
 }
 
-func (p *Page) people(c *ui.Context, t *ui.Theme, m locales.Messages, title string, people []string) {
+// cast is the roster of actors the title page shows: the source's own roster
+// when it published one, and the plain list of actors on a source that names no
+// roles. Both paths come out as members, so one renderer covers both.
+func (p *Page) cast() []source.CastMember {
+	if len(p.detail.Cast) > 0 {
+		return p.detail.Cast
+	}
+	return membersOf(p.detail.Actors)
+}
+
+// crew is the same for the people behind the camera: the source's roster with
+// the job each of them did, or its plain list of directors.
+func (p *Page) crew() []source.CastMember {
+	if len(p.detail.Crew) > 0 {
+		return p.detail.Crew
+	}
+	return membersOf(p.detail.Directors)
+}
+
+func membersOf(names []string) []source.CastMember {
+	out := make([]source.CastMember, 0, len(names))
+	for _, name := range names {
+		if name != "" {
+			out = append(out, source.CastMember{Name: name})
+		}
+	}
+	return out
+}
+
+// roster shows the people a tab credits, one card each: the name, and the role
+// the source named under it. A source that names no roles still reads, as one
+// line of names per card, so the page never invents a role to fill the space.
+func (p *Page) roster(c *ui.Context, t *ui.Theme, m locales.Messages, title string, people []source.CastMember) {
 	ui.Column(c).FillWidth().Gap(10).Children(func() {
 		ui.Text(c, title).FontSize(14).Bold().TextColor(t.Text)
 		if len(people) == 0 {
@@ -437,8 +469,12 @@ func (p *Page) people(c *ui.Context, t *ui.Theme, m locales.Messages, title stri
 		s := design.DetailSurfaces(t)
 		ui.Row(c).FillWidth().Wrap().Gap(8).Children(func() {
 			for _, person := range people {
-				ui.Row(c).Radius(999).Padding(6, 14).Background(s.TagBg).Border(1, s.TagBorder).Children(func() {
-					ui.Text(c, person).FontSize(12.5).TextColor(t.Text)
+				ui.Row(c).Radius(999).Padding(6, 14).Background(s.TagBg).Border(1, s.TagBorder).
+					Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, person.Name).FontSize(12.5).TextColor(t.Text)
+					if person.Role != "" {
+						ui.Text(c, person.Role).FontSize(12).TextColor(t.TextMuted)
+					}
 				})
 			}
 		})

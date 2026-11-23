@@ -56,6 +56,13 @@ func sampleTitle() (*titleSource, source.Ref) {
 		Ref: ref, Title: "Cyberpunk Edgerunners 2", Kind: source.Anime, Year: 2026,
 		Area: "Japan", Tags: []string{"Sci-Fi", "Action"}, Overview: "A return to Night City.",
 		Remarks: "10 episodes", Actors: []string{"Actor A", "Actor B"}, Directors: []string{"Director X"},
+		Cast: []source.CastMember{
+			{Name: "Actor A", Role: "饰 甲"},
+			{Name: "Actor B", Role: "饰 乙"},
+		},
+		Crew: []source.CastMember{
+			{Name: "Director X", Role: "导演"},
+		},
 		EpisodeCount: 10,
 	}
 	return &titleSource{
@@ -183,6 +190,19 @@ func TestDetailRendersPlaysAndSwitchesTabs(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("Actor A") {
 		t.Fatalf("cast tab did not list actors: %v", tt.Texts())
+	}
+	// The role each actor plays sits beside the name, so the tab says who
+	// plays whom instead of listing bare names.
+	if !tt.HasText("饰 甲") || !tt.HasText("饰 乙") {
+		t.Fatalf("cast tab did not show the roles: %v", tt.Texts())
+	}
+	// The crew tab carries the job each member did.
+	if err := tt.Click("Crew"); err != nil {
+		t.Fatalf("crew tab: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("Director X") || !tt.HasText("导演") {
+		t.Fatalf("crew tab did not show the jobs: %v", tt.Texts())
 	}
 
 	if err := tt.Click("Back"); err != nil {

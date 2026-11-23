@@ -63,7 +63,7 @@ func TestCallFunctionTable(t *testing.T) {
 		if args == nil {
 			args, found = all()
 		}
-		got, ok := callFunction(testCase.name, args, found)
+		got, ok := callFunction(testCase.name, args, found, nil)
 		if ok != testCase.ok {
 			t.Fatalf("%s%v: ok = %v, want %v", testCase.name, testCase.args, ok, testCase.ok)
 		}

@@ -217,6 +217,17 @@ func TestHongguoDetailReadsTheSeriesRecord(t *testing.T) {
 	if len(detail.Actors) != 2 || detail.Actors[0] != "梁雯晶" {
 		t.Fatalf("actors = %v", detail.Actors)
 	}
+	// The roster keeps the role each actor plays and the picture beside it, so
+	// the title page can say who plays whom instead of listing bare names.
+	if len(detail.Cast) != 2 {
+		t.Fatalf("cast = %v", detail.Cast)
+	}
+	if got := detail.Cast[0]; got.Name != "梁雯晶" || got.Role != "饰 钱小卉" || got.Image != "https://p3-novel.byteimg.com/fixture/actor-1.jpg" {
+		t.Fatalf("first cast member = %+v", got)
+	}
+	if got := detail.Cast[1]; got.Name != "王沐轩" || got.Role != "饰 陆行舟" {
+		t.Fatalf("second cast member = %+v", got)
+	}
 	if !strings.Contains(detail.Remarks, "全3集") {
 		t.Fatalf("remarks = %q", detail.Remarks)
 	}

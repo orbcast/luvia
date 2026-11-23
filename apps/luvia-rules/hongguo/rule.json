@@ -103,7 +103,18 @@
         "posterUrl": "series_cover",
         "remarks": { "template": "短剧 · {episode_right_text}" },
         "episodeCount": "episode_cnt",
-        "actors": "celebrities[*].nickname"
+        "actors": "celebrities[*].nickname",
+        "cast": {
+          "fn": "each",
+          "args": [
+            "celebrities",
+            {
+              "fn": "record",
+              "args": ["nickname", "sub_title", "avatar"],
+              "keys": ["name", "role", "image"]
+            }
+          ]
+        }
       }
     }
   },

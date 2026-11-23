@@ -30,6 +30,11 @@ var KnownFunctions = map[string]functionSpec{
 	"last":       {minArgs: 1, maxArgs: 1},
 	"empty":      {minArgs: 1, maxArgs: 1},
 	"not":        {minArgs: 1, maxArgs: 1},
+	// each walks a list and evaluates a mapping once per entry, and record
+	// builds one entry out of several fields: together they let a rule map a
+	// roster with the roles the upstream named.
+	"each":   {minArgs: 2, maxArgs: 2},
+	"record": {minArgs: 1, maxArgs: 0},
 }
 
 // FunctionKnown reports whether name is part of the function table.
@@ -53,7 +58,7 @@ const (
 var cardFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "overview",
 	"posterUrl", "backdropUrl")
 var detailFields = fieldSet("id", "title", "kind", "year", "area", "tags", "overview", "posterUrl",
-	"backdropUrl", "remarks", "actors", "directors", "episodeCount")
+	"backdropUrl", "remarks", "actors", "directors", "cast", "crew", "episodeCount")
 var episodeFields = fieldSet("id", "number", "title", "payload")
 var sectionFields = fieldSet("id", "title", "subtitle")
 var updateFields = fieldSet("id", "title", "kind", "year", "area", "tags", "remarks", "overview",
