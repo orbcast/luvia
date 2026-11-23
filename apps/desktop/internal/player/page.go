@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -185,6 +186,7 @@ type Page struct {
 	scrubbing   bool
 	scrubHandle ui.Handle
 	scrubW      float32
+	redrawMu    sync.Mutex
 	redraw      func()
 	// now reads the monotonic clock the layer is timed by; a test puts its own
 	// here so it can walk time frame by frame instead of sleeping.
@@ -1303,10 +1305,24 @@ func (p *Page) fraction() float64 {
 	return clampF(float64(p.position())/float64(d), 0, 1)
 }
 
+// invalidate asks for another frame. The redraw function is drawn on the
+// thread that builds the view and called from the streams that answer the
+// page, so both ends of it take the lock: a player opening a line would
+// otherwise be the one thing a race detector sees first.
 func (p *Page) invalidate() {
-	if p.redraw != nil {
-		p.redraw()
+	p.redrawMu.Lock()
+	redraw := p.redraw
+	p.redrawMu.Unlock()
+	if redraw != nil {
+		redraw()
 	}
+}
+
+// setRedraw points invalidate at the context building the current frame.
+func (p *Page) setRedraw(redraw func()) {
+	p.redrawMu.Lock()
+	p.redraw = redraw
+	p.redrawMu.Unlock()
 }
 
 func clampF(v, low, high float64) float64 {

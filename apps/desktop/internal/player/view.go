@@ -45,7 +45,7 @@ var (
 // View builds the playback screen: the video stage with its overlay controls and
 // the now-playing side panel.
 func (p *Page) View(c *ui.Context) ui.Element {
-	p.redraw = c.Invalidate
+	p.setRedraw(c.Invalidate)
 	t := c.Theme()
 	m := locales.In(c.Locale())
 	width, height := c.Size()
