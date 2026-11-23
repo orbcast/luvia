@@ -6,8 +6,15 @@ import (
 )
 
 // clock is the time transfers are timed by. Tests move it to read a rate
-// without waiting on a network.
-func (c *Cache) clock() time.Time { return c.now() }
+// without waiting on a network. The function itself is swapped by tests while
+// transfers are running, so it is read under the lock like the rest of the
+// cache's state.
+func (c *Cache) clock() time.Time {
+	c.mu.Lock()
+	now := c.now
+	c.mu.Unlock()
+	return now()
+}
 
 // progressQuiet is how long after its last byte a transfer stops being
 // reported. The player reads a stored object from disk, so its bytes are on

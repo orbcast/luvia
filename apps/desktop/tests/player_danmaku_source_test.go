@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,8 +16,12 @@ import (
 	"luvia/apps/desktop/internal/source"
 )
 
-// lookupSource answers a title with whatever reason the test asked for.
+// lookupSource answers a title with whatever reason the test asked for. The
+// page looks a title up off the thread that drew it, so what the lookup was
+// asked is guarded: a test reading it while a lookup is still running would
+// otherwise race with the append.
 type lookupSource struct {
+	mu     sync.Mutex
 	items  []source.Danmaku
 	reason danmaku.Reason
 	err    error
@@ -24,11 +29,21 @@ type lookupSource struct {
 }
 
 func (l *lookupSource) Lookup(_ context.Context, title string, episode int) (danmaku.Result, error) {
+	l.mu.Lock()
 	l.asked = append(l.asked, title)
+	l.mu.Unlock()
 	if l.err != nil {
 		return danmaku.Result{Reason: danmaku.ReasonFailed}, l.err
 	}
 	return danmaku.Result{Items: l.items, Reason: l.reason}, nil
+}
+
+// lookedUp reports what the page asked the lookup so far, and how many of
+// those asks it recorded.
+func (l *lookupSource) lookedUp() ([]string, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.asked...), len(l.asked)
 }
 
 // catalogue reports the show a source hands to the page, so a wrapper that
@@ -127,11 +142,12 @@ func TestPlayerDrawsTheLookupsComments(t *testing.T) {
 	if !pumpUntil(t, run, tt, "Found elsewhere") {
 		t.Fatalf("the lookup's comment is not on the picture: %v", tt.Texts())
 	}
-	if len(lookup.asked) != 1 {
-		t.Fatalf("looked up %d times, want once", len(lookup.asked))
+	asked, _ := lookup.lookedUp()
+	if len(asked) != 1 {
+		t.Fatalf("looked up %d times, want once", len(asked))
 	}
-	if lookup.asked[0] != base.detail.Title {
-		t.Fatalf("looked up %q, want the title", lookup.asked[0])
+	if asked[0] != base.detail.Title {
+		t.Fatalf("looked up %q, want the title", asked[0])
 	}
 	if tt.HasText("Much later") {
 		t.Fatal("a comment an hour in must not show at the start")
@@ -257,15 +273,15 @@ func TestPlayerAsksForTheEpisodesNumber(t *testing.T) {
 	page, run, _ := newDanmakuPage(t, src, lookup)
 	page.SelectEpisode(4)
 	deadline := time.Now().Add(5 * time.Second)
-	for len(lookup.asked) < 2 && time.Now().Before(deadline) {
+	for asked, _ := lookup.lookedUp(); len(asked) < 2 && time.Now().Before(deadline); asked, _ = lookup.lookedUp() {
 		select {
 		case fn := <-run:
 			fn()
 		case <-time.After(2 * time.Millisecond):
 		}
 	}
-	if len(lookup.asked) < 2 {
-		t.Fatalf("looked up %d times, want the second episode too", len(lookup.asked))
+	if asked, _ := lookup.lookedUp(); len(asked) < 2 {
+		t.Fatalf("looked up %d times, want the second episode too", len(asked))
 	}
 }
 
@@ -273,13 +289,24 @@ func TestPlayerAsksForTheEpisodesNumber(t *testing.T) {
 // what a rule with manifest and segments blocks looks like.
 type publishingSource struct {
 	*commentingSource
+	mu    sync.Mutex
 	items []source.Danmaku
 	asked []source.Episode
 }
 
 func (s *publishingSource) Manifest(_ context.Context, episode source.Episode, _ int) ([]source.Danmaku, error) {
+	s.mu.Lock()
 	s.asked = append(s.asked, episode)
+	s.mu.Unlock()
 	return s.items, nil
+}
+
+// askedAbout reports the episodes the page asked the source about so far, and
+// how many there were: the page asks off its own thread.
+func (s *publishingSource) askedAbout() ([]source.Episode, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]source.Episode(nil), s.asked...), len(s.asked)
 }
 
 // TestPlayerPrefersTheSourcesOwnDanmakuOverTheLookup covers the top of the
@@ -308,13 +335,14 @@ func TestPlayerPrefersTheSourcesOwnDanmakuOverTheLookup(t *testing.T) {
 	if tt.HasText("Found elsewhere") {
 		t.Fatal("the lookup answered even though the source had its own track")
 	}
-	if len(lookup.asked) != 0 {
-		t.Fatalf("looked up %d times, want none", len(lookup.asked))
+	if asked, _ := lookup.lookedUp(); len(asked) != 0 {
+		t.Fatalf("looked up %d times, want none", len(asked))
 	}
-	if len(src.asked) != 1 {
-		t.Fatalf("asked the source %d times, want once", len(src.asked))
+	episodes, times := src.askedAbout()
+	if times != 1 {
+		t.Fatalf("asked the source %d times, want once", times)
 	}
-	if src.asked[0].ID == "" {
+	if episodes[0].ID == "" {
 		t.Fatal("the source must be asked about the episode, not the show")
 	}
 	page.SelectTab(1)
@@ -342,7 +370,8 @@ func TestPlayerFallsBackWhenTheSourceHasNoDanmaku(t *testing.T) {
 	if !pumpUntil(t, run, tt, "Found elsewhere") {
 		t.Fatalf("the lookup never got its turn: %v", tt.Texts())
 	}
-	if len(src.asked) != 1 || len(lookup.asked) != 1 {
-		t.Fatalf("source asked %d, lookup asked %d; want one each", len(src.asked), len(lookup.asked))
+	lookedUp, _ := lookup.lookedUp()
+	if _, sourceTimes := src.askedAbout(); sourceTimes != 1 || len(lookedUp) != 1 {
+		t.Fatalf("source asked %d, lookup asked %d; want one each", sourceTimes, len(lookedUp))
 	}
 }
