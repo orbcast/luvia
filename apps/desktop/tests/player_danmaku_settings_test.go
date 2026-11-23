@@ -46,9 +46,10 @@ func danmakuSettingsPage(t *testing.T, path string) (*player.Page, chan func(), 
 	return page, run, tt
 }
 
-// TestDanmakuButtonUnfoldsTheSettings covers the button over the picture: a
-// press with the layer on unfolds the settings, so the band, the opacity, the
-// size, the speed, the rows and the kinds of comment are all there to change.
+// TestDanmakuButtonUnfoldsTheSettings covers the button over the picture: after
+// the layer is switched on, its own button unfolds the settings, so the band,
+// the opacity, the size, the speed, the rows and the kinds of comment are all
+// there to change.
 func TestDanmakuButtonUnfoldsTheSettings(t *testing.T) {
 	page, _, tt := danmakuSettingsPage(t, "")
 	if page.DanmakuOpen() {
@@ -58,12 +59,25 @@ func TestDanmakuButtonUnfoldsTheSettings(t *testing.T) {
 		t.Fatal("the settings are on screen before they were asked for")
 	}
 
+	// The switch turns the comments on and leaves the settings folded: a viewer
+	// who wants danmaku is not asking for a box over the picture.
 	if err := tt.Click("Danmaku"); err != nil {
 		t.Fatalf("danmaku button: %v", err)
 	}
 	tt.Frame()
+	if !page.DanmakuOn() {
+		t.Fatal("the danmaku button did not turn the layer on")
+	}
+	if page.DanmakuOpen() {
+		t.Fatal("turning the layer on unfolded the settings by itself")
+	}
+
+	if err := tt.Click("Danmaku settings"); err != nil {
+		t.Fatalf("danmaku settings button: %v", err)
+	}
+	tt.Frame()
 	if !page.DanmakuOpen() {
-		t.Fatal("pressing the danmaku button did not unfold the settings")
+		t.Fatal("pressing the settings button did not unfold the settings")
 	}
 	for _, want := range []string{
 		"Screen area", "Whole picture", "Top", "Middle", "Bottom",
@@ -75,17 +89,44 @@ func TestDanmakuButtonUnfoldsTheSettings(t *testing.T) {
 		}
 	}
 
-	// A second press with the settings open turns the layer off, and a layer
-	// that is off keeps its settings with it.
+	// The settings are the viewer's own business: turning the layer off leaves
+	// them exactly where they were, so the same box is there again when the
+	// layer comes back.
 	if err := tt.Click("Danmaku"); err != nil {
 		t.Fatalf("danmaku button: %v", err)
 	}
 	tt.Frame()
+	if page.DanmakuOn() {
+		t.Fatal("the danmaku button did not turn the layer off")
+	}
+	if !page.DanmakuOpen() {
+		t.Fatal("turning the layer off folded the settings the viewer left open")
+	}
+	if !tt.HasText("Opacity") {
+		t.Fatal("turning the layer off took the settings off screen")
+	}
+
+	// A press on the settings button folds them again while the layer is on,
+	// and the next press on the switch does not bring them back.
+	if err := tt.Click("Danmaku settings"); err != nil {
+		t.Fatalf("danmaku settings button: %v", err)
+	}
+	tt.Frame()
 	if page.DanmakuOpen() {
-		t.Fatal("turning the layer off left the settings open")
+		t.Fatal("the settings button did not fold the settings")
+	}
+	if err := tt.Click("Danmaku"); err != nil {
+		t.Fatalf("danmaku button: %v", err)
+	}
+	tt.Frame()
+	if !page.DanmakuOn() {
+		t.Fatal("the danmaku button did not turn the layer back on")
+	}
+	if page.DanmakuOpen() {
+		t.Fatal("turning the layer on unfolded the settings by itself")
 	}
 	if tt.HasText("Opacity") {
-		t.Fatal("turning the layer off left the settings on screen")
+		t.Fatal("turning the layer on put the folded settings back on screen")
 	}
 }
 
@@ -103,8 +144,8 @@ func TestDanmakuAreaMovesTheBand(t *testing.T) {
 		t.Fatalf("the comment has no place on the picture: %v", tt.Texts())
 	}
 
-	if err := tt.Click("Danmaku"); err != nil {
-		t.Fatalf("danmaku button: %v", err)
+	if err := tt.Click("Danmaku settings"); err != nil {
+		t.Fatalf("danmaku settings button: %v", err)
 	}
 	tt.Frame()
 	if err := tt.Click("Bottom"); err != nil {
@@ -141,8 +182,8 @@ func TestDanmakuSettingsOutliveThePlayer(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "player.json")
 	page, _, tt := danmakuSettingsPage(t, path)
 
-	if err := tt.Click("Danmaku"); err != nil {
-		t.Fatalf("danmaku button: %v", err)
+	if err := tt.Click("Danmaku settings"); err != nil {
+		t.Fatalf("danmaku settings button: %v", err)
 	}
 	tt.Frame()
 	if err := tt.Click("Bottom"); err != nil {

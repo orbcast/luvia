@@ -116,15 +116,21 @@ func TestPlayerRendersSwitchesEpisodeAndCloses(t *testing.T) {
 		}
 	}
 	danmaku, okDanmaku := boxes["Danmaku"]
+	settings, okSettings := boxes["Danmaku settings"]
 	reveal, okReveal := boxes["Show panel"]
-	if !okDanmaku || !okReveal {
+	if !okDanmaku || !okSettings || !okReveal {
 		t.Fatalf("the pill lost a button among %v", boxes)
 	}
-	if gap := reveal.X - (danmaku.X + danmaku.W); gap > 8 {
+	// The reveal control sits beside the layer's own two buttons, so the gap to
+	// check is the one after the last of them rather than after the switch.
+	if gap := reveal.X - (settings.X + settings.W); gap > 8 {
 		t.Fatalf("the reveal control floats %v away from the pill instead of sitting in it", gap)
 	}
 	if reveal.Y != danmaku.Y || reveal.H != danmaku.H {
 		t.Fatalf("the reveal control sits at %v, not in the pill's row at %v", reveal, danmaku)
+	}
+	if settings.X < danmaku.X+danmaku.W {
+		t.Fatalf("the settings control sits at %v, before the switch at %v", settings, danmaku)
 	}
 
 	// The close button rides on the expanded panel: it comes back with it and

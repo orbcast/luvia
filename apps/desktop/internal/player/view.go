@@ -159,6 +159,15 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 		from, to = height*design.DanmakuBandTop, height-design.DanmakuBandBottom*height
 	}
 	space := rowsIn(from, to)
+	// The settings box floats over the picture, so a line passing behind it is
+	// faded down: the box reads as a panel over the picture instead of a window
+	// the comments show through. Nothing is faded while the box is folded.
+	boxEdge := float32(0)
+	boxLeft := float32(0)
+	if p.danmakuOpen {
+		boxLeft = width - danmakuBoxMargin - danmakuBoxWidth(width)
+		boxEdge = boxLeft - danmakuBoxGap
+	}
 	if len(flying) > 0 {
 		// The playhead moves on its own, so the layer keeps asking for frames
 		// while comments are in flight.
@@ -177,9 +186,10 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 			}
 			row = item.lane
 			left := width - (width+240)*item.slide
+			fade := clearOfBox(left, lanesWidth(item.text, set.Size), boxLeft, boxEdge, danmakuBoxFade)
 			ui.Row(c).Absolute().Left(left).Top(from + float32(row)*design.DanmakuLaneHeight).
 				Height(design.DanmakuLaneHeight).AlignItems(ui.Center).Children(func() {
-				p.danmakuText(c, item.text)
+				p.danmakuText(c, item.text, fade)
 			})
 			continue
 		case kindTop:
@@ -194,26 +204,29 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 		if row < 0 || row >= space {
 			continue
 		}
+		fade := float32(1)
 		// A pinned comment holds the middle of its lane and stays for a fixed
 		// time, so its row is one line wide and centred rather than measured.
 		ui.Row(c).Absolute().Left(0).Right(0).Top(from + float32(row)*design.DanmakuLaneHeight).
 			Height(design.DanmakuLaneHeight).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Radius(999).Padding(3, 10).Background(design.DanmakuPinnedVeil()).Children(func() {
-				p.danmakuText(c, item.text)
+				p.danmakuText(c, item.text, fade)
 			})
 		})
 	}
-	if p.danmakuOpen && p.danmaku {
+	// The settings stay open while the layer is off: they are the viewer's box,
+	// and turning danmaku off to see the picture is not a reason to take it away.
+	if p.danmakuOpen {
 		p.danmakuControls(c, width)
 	}
 }
 
 // danmakuText is one line of the layer: the viewer's size, weight and opacity,
 // over a soft shadow so a faint line still reads on a bright frame.
-func (p *Page) danmakuText(c *ui.Context, text string) {
+func (p *Page) danmakuText(c *ui.Context, text string, fade float32) {
 	set := p.danmakuSettings
 	line := ui.Text(c, text).FontSize(set.Size).MaxLines(1).
-		TextColor(design.DanmakuInk(set.Opacity)).
+		TextColor(design.DanmakuInk(set.Opacity*fade)).
 		TextShadow(0, 1, 3, design.DanmakuShadow())
 	if set.Bold {
 		line.Bold()
@@ -226,12 +239,8 @@ func (p *Page) danmakuText(c *ui.Context, text string) {
 // pill's own right edge, so opening it never moves the button that opened it.
 func (p *Page) danmakuControls(c *ui.Context, width float32) {
 	m := locales.In(c.Locale())
-	boxWidth := float32(268)
-	if width < boxWidth+96 {
-		boxWidth = width - 48
-	}
-	ui.Column(c).Absolute().Right(24).Top(stageLineTop+design.DanmakuLaneHeight+30).
-		Width(boxWidth).Radius(18).Padding(16).Gap(14).Background(design.PlayerPanelGlassFill()).
+	ui.Column(c).Absolute().Right(danmakuBoxMargin).Top(stageLineTop+design.DanmakuLaneHeight+30).
+		Width(danmakuBoxWidth(width)).Radius(18).Padding(16).Gap(14).Background(design.PlayerPanelGlassFill()).
 		Border(1, design.PlayerPanelGlassBorder()).Children(func() {
 		p.danmakuPresets(c, m)
 		p.danmakuSlider(c, "opacity", m.DanmakuOpacity(),
@@ -494,11 +503,13 @@ func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
 		Padding(pillPadding).Material(glass.Glass{}).Children(func() {
 		p.volumeTrack(c, m)
 		p.speaker(c, m)
-		// The danmaku button both switches the layer and, once it is on, opens
-		// its settings: pressing it with the layer showing unfolds the box
-		// instead of turning the comments off, which is what a press is for
-		// when the layer is already there and what the sites people know do.
+		// One press turns the comments on and off, and a second, separate press
+		// folds and unfolds the settings: a viewer who wants a clean picture
+		// turns the layer off without losing the box they were adjusting, and
+		// one who wants it back does not get a box dropped over the picture
+		// again.
 		p.danmakuButton(c, m)
+		p.danmakuSettingsButton(c, m)
 		if p.panelHidden {
 			p.panelReveal(c, m)
 			return
@@ -507,24 +518,15 @@ func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
 	})
 }
 
-// danmakuButton is the layer's control. A press turns the comments on and
-// unfolds their settings; with the layer on, the same press folds and unfolds
-// the settings, and a press with the settings already open turns the layer off.
-// Keeping all three on one button is what the sites people know by heart do, and
-// the tooltip says which press is which.
+// danmakuButton is the layer's switch: a press turns the comments on the
+// picture on and off, and nothing else. The settings are their own button, so
+// turning the comments off keeps the box exactly where the viewer left it.
 func (p *Page) danmakuButton(c *ui.Context, m locales.Messages) {
-	tip := m.DanmakuLabel()
-	if p.danmaku && p.danmakuOpen {
-		tip = m.DanmakuPanelFold()
-	} else if p.danmaku {
-		tip = m.DanmakuSettings()
-	}
-	// The button keeps its own name whatever state it is in: the label a
-	// reader hears is the control ("Danmaku"), while the tooltip says what the
-	// next press will do, and folding the settings must not rename the button
-	// that folds them.
+	// The button keeps its own name whatever state it is in: the label a reader
+	// hears is the control ("Danmaku"), while the tooltip says what the next
+	// press will do.
 	button := ui.ButtonBase(c).Key("p-danmaku").Size(stageButtonSize, stageButtonSize).Radius(999).
-		Label(m.DanmakuLabel()).Tooltip(tip).Background(ui.Transparent)
+		Label(m.DanmakuLabel()).Tooltip(m.DanmakuLabel()).Background(ui.Transparent)
 	ink := mediaMuted
 	switch {
 	case p.danmaku:
@@ -538,15 +540,35 @@ func (p *Page) danmakuButton(c *ui.Context, m locales.Messages) {
 	}
 	button.Children(func() { ui.Icon(c, icons.Parse("chat-round-linear")).Size(18, 18).TextColor(ink) })
 	if button.Clicked() {
-		switch {
-		case !p.danmaku:
-			p.ToggleDanmaku()
-			p.SetDanmakuOpen(true)
-		case !p.danmakuOpen:
-			p.SetDanmakuOpen(true)
-		default:
-			p.ToggleDanmaku()
-		}
+		p.ToggleDanmaku()
+	}
+}
+
+// danmakuSettingsButton folds and unfolds the layer's settings. It sits beside
+// the switch whether the layer is on or off: the box is where the kinds of
+// comment are chosen, and turning one back on starts from the box.
+func (p *Page) danmakuSettingsButton(c *ui.Context, m locales.Messages) {
+	tip := m.DanmakuPanelUnfold()
+	if p.danmakuOpen {
+		tip = m.DanmakuPanelFold()
+	}
+	button := ui.ButtonBase(c).Key("p-danmaku-settings").Size(stageButtonSize, stageButtonSize).Radius(999).
+		Label(m.DanmakuSettings()).Tooltip(tip).Background(ui.Transparent)
+	ink := mediaMuted
+	switch {
+	case p.danmakuOpen:
+		// Unfolded is a filled pill, the way the panel toggle reads open.
+		button.Background(mediaInk)
+		ink = ui.RGBA(20, 20, 22, 1)
+	case button.Hovered():
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		ink = mediaInk
+	}
+	button.Children(func() {
+		ui.Icon(c, icons.Parse("settings-minimalistic-linear")).Size(18, 18).TextColor(ink)
+	})
+	if button.Clicked() {
+		p.SetDanmakuOpen(!p.danmakuOpen)
 	}
 }
 
@@ -1041,6 +1063,65 @@ func rateLabel(rate float64) string {
 		return strconv.Itoa(int(rate)) + "x"
 	}
 	return strconv.FormatFloat(rate, 'g', -1, 64) + "x"
+}
+
+// Geometry of the settings box, named once so the box itself and the layer that
+// fades behind it always agree on where it is.
+const (
+	danmakuBoxWidthMax float32 = 268
+	danmakuBoxMargin   float32 = 24
+	danmakuBoxGap      float32 = 12
+	// danmakuBoxFade is how much of the crossing a line spends fading down as it
+	// nears the box: a short share, so a line is either plainly readable or
+	// plainly behind the box, not half of both.
+	danmakuBoxFade float32 = 0.12
+)
+
+// danmakuBoxWidth is how wide the settings box is at this stage width: the
+// picture's own width less a margin either side when the picture is too narrow
+// to hang it in.
+func danmakuBoxWidth(width float32) float32 {
+	if width < danmakuBoxWidthMax+96 {
+		return width - 48
+	}
+	return danmakuBoxWidthMax
+}
+
+// clearOfBox is how much of a line is left showing when its span of the picture
+// runs into the settings box: 1 while it is clear of the box, 0 once it is
+// inside it, and a slide between the two as it goes under. A pinned line that
+// stays under the box ends up invisible rather than hidden, which is the same
+// thing to the viewer and costs no separate rule.
+func clearOfBox(left, textWidth, boxLeft, boxEdge, fade float32) float32 {
+	if boxEdge <= 0 {
+		return 1
+	}
+	right := left + textWidth
+	switch {
+	case right <= boxEdge:
+		return 1
+	case left >= boxLeft:
+		return 0
+	}
+	// The line is partway in: measure how far its right edge has crossed the gap
+	// under the box.
+	if fade <= 0 || boxLeft <= boxEdge {
+		return 0
+	}
+	inside := (right - boxEdge) / (boxLeft - boxEdge)
+	if inside <= 0 {
+		return 1
+	}
+	if inside >= 1 {
+		return 0
+	}
+	return 1 - inside
+}
+
+// lanesWidth is how wide a line of the layer is, measured the way the layer
+// measures it when it seats lanes.
+func lanesWidth(text string, size float32) float32 {
+	return float32(textWidth(text, size))
 }
 
 // rowsIn is how many rows of the layer fit between from and to, the top and

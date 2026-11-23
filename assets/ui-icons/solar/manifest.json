@@ -525,6 +525,21 @@
       "sha256": "17f17e6d1dfb76f83ae9f16d0fa28d8fe91fb1d97cf9aa203eadaac13b145270",
       "source": "https://api.iconify.design/solar/settings-linear.svg"
     },
+    "solar:settings-minimalistic-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/settings-minimalistic-linear/",
+      "file": "solar--settings-minimalistic-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "887f4aa7d994235db658c4b03ee481b4807257f02f3da917cab8699c96cc3df7",
+      "source": "https://api.iconify.design/solar/settings-minimalistic-linear.svg"
+    },
     "solar:share-linear": {
       "author": {
         "name": "480 Design",

@@ -1088,15 +1088,12 @@ func (p *Page) Muted() bool { return p.muted }
 // Volume reports the level the track beside the speaker holds.
 func (p *Page) Volume() float64 { return p.volume }
 
-// ToggleDanmaku shows or hides the comment layer over the picture.
+// ToggleDanmaku shows or hides the comment layer over the picture. The settings
+// box is the viewer's own business and stays where it was: turning the comments
+// off is not a request to close it, and turning them back on is not a request to
+// open it.
 func (p *Page) ToggleDanmaku() {
 	p.danmaku = !p.danmaku
-	if !p.danmaku {
-		// A layer that is off keeps its settings away with it, so a viewer who
-		// turned danmaku off does not find a settings box still open the next
-		// time it comes on.
-		p.danmakuOpen = false
-	}
 	p.invalidate()
 }
 
