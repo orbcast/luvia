@@ -176,6 +176,18 @@ go tool mygo build -platform darwin/arm64 -skip-dmg
 
 产物在 `apps/desktop/build/<平台>/`。macOS 分发需要签名与公证（`mygo.json` 的 `macos.signingIdentity`），Windows 与 Linux 的打包细节见 [MyGo CLI 文档](https://mygo.run/zh/docs/cli)。
 
+### 自动发布
+
+推一个 `v*` tag 就会在 GitHub Actions 上跑 [release.yml](.github/workflows/release.yml)：先过 `make check` 与 `make check-gen` 的门禁，再用各自的原生 runner 把 macOS（arm64 与 amd64 各一台）、Windows 和 Linux 各打一份，连同 `SHA256SUMS.txt` 挂到该 tag 的 Release 上。想重发某个版本时在 Actions 里手动触发 `Release`，填上已存在的 tag 即可。
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+不用等 tag 也能拿到临时产物：CI 的 `apps/desktop checks` 任务会构建当前平台，但那份产物只留在该次运行的 artifact 里，不会作为下载页发布。别人用你的版本时直接下 Release 里的压缩包，解压即可运行，不需要在自己机器上编译。
+
+macOS 产物未签名时首次打开会被 Gatekeeper 拦下，右键“打开”或在“系统设置 → 隐私与安全性”里放行；要免去这一步就得配好证书与公证。
+
 ## 约束
 
 当前桌面应用只能用 Go 与 `github.com/egoist/mygo/ui` 编写界面，禁止 WebView、Web 前端及通过 `mygo.Bind` 生成 TypeScript 客户端驱动界面，详见 [桌面应用约束](apps/desktop/AGENTS.md)。其他应用遵循自身技术规范；共同目录、解耦、UI 简洁原则与风险分级验证要求见根目录 [AGENTS.md](AGENTS.md)。
