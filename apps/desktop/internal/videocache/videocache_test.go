@@ -715,6 +715,41 @@ func TestEvictionTakesUnwatchedBytesBeforeWatchedOnes(t *testing.T) {
 	}
 }
 
+// A warm-up is warm from the first byte it writes, not from the moment its
+// transfer ends: counting the bytes can evict, and an object half written ahead
+// of need that is not yet marked would be dropped as though a playback had read
+// it. The warm-up would then vanish the moment it grew large enough to matter.
+func TestAWarmUpIsWarmWhileItIsStillArriving(t *testing.T) {
+	release := make(chan struct{})
+	arriving := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".m3u8") {
+			body := "#EXTM3U\n#EXTINF:4,\nseg0.ts\n#EXT-X-ENDLIST\n"
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			_, _ = io.WriteString(w, body)
+			return
+		}
+		body := strings.Repeat("s", 400)
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		select {
+		case arriving <- struct{}{}:
+		default:
+		}
+		<-release // hold the transfer open while the test reads the cache
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(release) })
+
+	cache := newCache(t, t.TempDir(), Options{Client: server.Client()})
+	cache.Prefetch(server.URL + "/v/index.m3u8")
+	<-arriving
+	key := keyOf(server.URL + "/v/seg0.ts")
+	if !cache.warm(cache.pathOf(key)) {
+		t.Fatal("a warm-up was not warm while its transfer was still arriving")
+	}
+}
+
 // A playback reading a warmed object turns it into wanted data, so eviction
 // stops preferring it as the first thing to drop.
 func TestReadingAWarmedObjectMakesItWanted(t *testing.T) {

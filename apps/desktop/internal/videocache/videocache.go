@@ -261,6 +261,11 @@ func (c *Cache) prefetchObject(raw string) ([]byte, bool) {
 		return nil, false
 	}
 	c.inflight[key] = &call{done: make(chan struct{})}
+	// The key joins the warm set before the first byte lands, not after: the
+	// transfer itself calls addSize, and that can evict. An object half written
+	// ahead of need that is not yet marked as one would be dropped as though a
+	// playback had read it, taking the room the warm-up was meant to fill.
+	c.unwatched[key] = struct{}{}
 	c.mu.Unlock()
 
 	parsed, _ := url.Parse(raw)
@@ -271,8 +276,9 @@ func (c *Cache) prefetchObject(raw string) ([]byte, bool) {
 
 	c.mu.Lock()
 	delete(c.inflight, key)
-	if err == nil {
-		c.unwatched[key] = struct{}{}
+	if err != nil {
+		// Nothing was stored, so nothing is warm.
+		delete(c.unwatched, key)
 	}
 	c.mu.Unlock()
 	if err != nil {
