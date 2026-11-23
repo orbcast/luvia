@@ -803,7 +803,7 @@ func (p *Page) errorView(c *ui.Context, t *ui.Theme, m locales.Messages) {
 }
 
 func (p *Page) noticeText(m locales.Messages) (string, bool) {
-	switch p.notice {
+	switch p.currentNotice() {
 	case noticePlayer:
 		return m.PlayerSoon(), true
 	case noticeDetail:

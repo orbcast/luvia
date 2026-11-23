@@ -12,6 +12,7 @@ import (
 
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/source"
+	"luvia/apps/desktop/locales"
 )
 
 // fakeSource answers Home with a fixed document, answers Updates from its
@@ -288,8 +289,8 @@ func TestToggleFollowWritesThroughLibrary(t *testing.T) {
 	if !store.IsFollowing(card.Ref) {
 		t.Fatal("follow not stored")
 	}
-	if page.notice != noticeFollowed {
-		t.Fatalf("notice %v", page.notice)
+	if page.currentNotice() != noticeFollowed {
+		t.Fatalf("notice %v", page.currentNotice())
 	}
 	page.toggleFollow(card)
 	if store.IsFollowing(card.Ref) {
@@ -312,12 +313,12 @@ func TestPlayAndDetailUseCallbacks(t *testing.T) {
 	}
 	page.deps.OnPlay, page.deps.OnDetail = nil, nil
 	page.play(card)
-	if page.notice != noticePlayer {
-		t.Fatalf("missing player must be explained, notice %v", page.notice)
+	if page.currentNotice() != noticePlayer {
+		t.Fatalf("missing player must be explained, notice %v", page.currentNotice())
 	}
 	page.detail(card)
-	if page.notice != noticeDetail {
-		t.Fatalf("missing detail page must be explained, notice %v", page.notice)
+	if page.currentNotice() != noticeDetail {
+		t.Fatalf("missing detail page must be explained, notice %v", page.currentNotice())
 	}
 }
 
@@ -716,6 +717,35 @@ func TestEmptyWeekKeepsTheEmptyPanel(t *testing.T) {
 		if !tt.HasText(want) {
 			t.Fatalf("missing %q in %v", want, tt.Texts())
 		}
+	}
+}
+
+// The notice is cleared by a timer, so a page that flashes one is read from a
+// goroutine the page does not own. Both the write and the comparison have to
+// hold the same lock the drawing threads do.
+func TestFlashNoticeIsReadableWhileTheTimerRuns(t *testing.T) {
+	page, _ := newPage(t, Deps{Source: &fakeSource{home: sampleHome()}})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			page.flash(noticePlayer)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = page.currentNotice()
+			_, _ = page.noticeText(locales.In("en"))
+		}
+	}()
+	wg.Wait()
+	if !page.clearNotice(page.currentNotice()) {
+		t.Fatal("the flashed notice could not be cleared")
+	}
+	if page.currentNotice() != noticeNone {
+		t.Fatalf("notice stayed %v", page.currentNotice())
 	}
 }
 

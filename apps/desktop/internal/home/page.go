@@ -69,6 +69,10 @@ type Page struct {
 	loading   bool
 	err       error
 	notice    notice
+	// noticeMu guards the flash above. It is separate from mu because the
+	// notice changes on a timer's goroutine while a frame is being built, and
+	// the two would otherwise take each other's locks in the wrong order.
+	noticeMu sync.Mutex
 	// redraw is what a change asks the window to repaint, and mu guards it with
 	// the rest of the state below: a day answer asks for that frame.
 	redraw func()
@@ -353,17 +357,43 @@ func (p *Page) invalidate() {
 	}
 }
 
+// flash shows a notice for a few seconds. The timer runs on its own goroutine,
+// so both the write and the comparison go through noticeMu rather than riding
+// on the state the drawing threads read.
 func (p *Page) flash(n notice) {
-	p.notice = n
+	p.setNotice(n)
 	p.invalidate()
 	time.AfterFunc(4*time.Second, func() {
 		p.deps.Run(func() {
-			if p.notice == n {
-				p.notice = noticeNone
+			if p.clearNotice(n) {
 				p.invalidate()
 			}
 		})
 	})
+}
+
+func (p *Page) setNotice(n notice) {
+	p.noticeMu.Lock()
+	p.notice = n
+	p.noticeMu.Unlock()
+}
+
+// clearNotice drops the notice when it is still the one that was flashed. A
+// later notice keeps its own timer.
+func (p *Page) clearNotice(n notice) bool {
+	p.noticeMu.Lock()
+	defer p.noticeMu.Unlock()
+	if p.notice != n {
+		return false
+	}
+	p.notice = noticeNone
+	return true
+}
+
+func (p *Page) currentNotice() notice {
+	p.noticeMu.Lock()
+	defer p.noticeMu.Unlock()
+	return p.notice
 }
 
 func (p *Page) toggleFollow(card source.Card) {
