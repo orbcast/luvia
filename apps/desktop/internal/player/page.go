@@ -165,6 +165,11 @@ type Page struct {
 	danmakuDirty bool
 	comments     []source.Danmaku
 	commentGen   uint64
+	// layer is where the layer over the picture believes the playhead is, which
+	// is between the samples the player gives, so a comment glides on every
+	// frame instead of stepping on each one. It is set aside while the picture
+	// is paused or the layer off, because neither is a straight run of time.
+	layer layerClock
 	// commentWhy says why the layer over the picture is empty, so the panel
 	// can name the reason instead of showing an empty list.
 	commentWhy  commentWhy
@@ -177,6 +182,9 @@ type Page struct {
 	scrubHandle ui.Handle
 	scrubW      float32
 	redraw      func()
+	// now reads the monotonic clock the layer is timed by; a test puts its own
+	// here so it can walk time frame by frame instead of sleeping.
+	now func() time.Time
 }
 
 var rates = []float64{1, 1.25, 1.5, 2, 0.75, 0.5}
@@ -195,7 +203,7 @@ func New(deps Deps) *Page {
 	}
 	// The comment layer opens off: a viewer who has not asked for comments
 	// gets the picture alone, and the danmaku button is one press away.
-	p := &Page{deps: deps, index: -1, muted: true, volume: defaultVolume, restore: defaultVolume, rate: 1, playing: true}
+	p := &Page{deps: deps, index: -1, muted: true, volume: defaultVolume, restore: defaultVolume, rate: 1, playing: true, now: time.Now}
 	// The layer opens on the viewer's own settings when the file holds one,
 	// and on the defaults otherwise, so a player nobody has set up yet draws
 	// comments instead of nothing.
@@ -487,12 +495,16 @@ func (p *Page) ruleComments(ctx context.Context, commenter source.Commenter, can
 }
 
 // flying is one comment crossing the picture: its text, the kind of crossing it
-// makes, the lane it takes and the share of the crossing it has made. A pinned
-// comment's share is how long it still has to stay up.
+// makes, the lane it takes, the playhead moment it entered at and the share of
+// the crossing it had made when the layer last placed it. The stage works the
+// share out again from entry and the playhead it is drawing, so the line keeps
+// to the pace of the clock even on a frame that skipped one. A pinned comment's
+// share is how long it still has to stay up.
 type flying struct {
 	text  string
 	kind  int
 	lane  int
+	entry time.Duration
 	slide float32
 }
 
@@ -544,6 +556,9 @@ func laneShare(set Settings, rows int) (scroll, top, bottom int) {
 // than a short one, and two lines in one lane overlap when the next one enters
 // on the same beat. A lane a comment has just left stays quiet for a moment so
 // the next one enters with a gap.
+//
+// now is where the layer is walking, the playhead carried between reports rather
+// than the reports themselves: see layerPosition.
 func (p *Page) flyingComments(now time.Duration, width, height float32) []flying {
 	if !p.danmaku || len(p.comments) == 0 {
 		return nil
@@ -625,7 +640,7 @@ func (p *Page) flyingComments(now time.Duration, width, height float32) []flying
 		if lane < 0 {
 			continue
 		}
-		out = append(out, flying{text: comment.Text, kind: kind, lane: lane, slide: slide})
+		out = append(out, flying{text: comment.Text, kind: kind, lane: lane, entry: from, slide: slide})
 	}
 	// The lane number is a place inside the kind's own block, and the stage turns
 	// it into a row: scrolling lines fill the band from the top down, pinned-above
@@ -1112,6 +1127,17 @@ func (p *Page) SetDanmakuOpen(open bool) {
 
 // DanmakuSettings returns a copy of the layer's settings for the view.
 func (p *Page) DanmakuSettings() Settings { return p.danmakuSettings }
+
+// SetClock gives the comment layer the clock it times itself by, which a test
+// moves on by hand: the layer carries the playhead across the frames between the
+// player's reports, and that pace is only readable if the test owns the clock.
+func (p *Page) SetClock(now func() time.Time) {
+	if now == nil {
+		p.now = time.Now
+		return
+	}
+	p.now = now
+}
 
 // SetDanmakuSettings takes the settings the viewer just changed, fits them to
 // the range the controls offer, draws the layer with them and keeps them for

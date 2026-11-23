@@ -151,7 +151,11 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 // under the pill at the top-right while they are unfolded.
 func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 	_, height := c.Size()
-	flying := p.flyingComments(p.position(), width, height)
+	// The layer walks the playhead itself between the samples the player gives,
+	// so a line crosses in even steps instead of the several per second the
+	// player reports.
+	at := p.layerPosition()
+	flying := p.flyingComments(at, width, height)
 	set := p.danmakuSettings
 	top, bottom := design.DanmakuBand(set.Area)
 	// The band is a share of the picture, with the stage's own top line and
@@ -179,6 +183,12 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 	for _, item := range flying {
 		item := item
 		row := 0
+		// Where the line is right now: the seat it was given when it entered, and
+		// how far across it has come since.
+		slide := item.slide
+		if item.entry > 0 {
+			slide = float32(at-item.entry) / float32(p.danmakuWindow())
+		}
 		switch item.kind {
 		case kindScroll:
 			// A scrolled line keeps its own row from the top of the band down. A
@@ -188,7 +198,7 @@ func (p *Page) stageDanmaku(c *ui.Context, width float32) {
 				continue
 			}
 			row = item.lane
-			left := width - (width+240)*item.slide
+			left := width - (width+240)*slide
 			fade := clearOfBox(left, lanesWidth(item.text, set.Size), boxLeft, boxEdge, danmakuBoxFade)
 			ui.Row(c).Absolute().Left(left).Top(from + float32(row)*design.DanmakuLaneHeight).
 				Height(design.DanmakuLaneHeight).AlignItems(ui.Center).Children(func() {
