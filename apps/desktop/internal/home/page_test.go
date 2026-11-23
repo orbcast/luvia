@@ -588,18 +588,25 @@ func TestDayFailureFallsBackToFollowsWithoutTouchingOtherDays(t *testing.T) {
 }
 
 func TestDayPanelShowsWaitingStateWhileADayIsOutstanding(t *testing.T) {
-	// The runner holds the answers, so the page cannot finish the week before
-	// the test has seen what it shows in the meantime.
+	// The page cannot finish the week before the test has seen what it shows
+	// in the meantime, so the runner holds every weekday answer. The home
+	// sections are filled straight from the source and stay out of the
+	// runner's way: they are what the page draws the week inside, and a test
+	// about the waiting week needs a page it can draw at all.
 	held := make(chan func(), 32)
 	src := weekSource(map[int]int{7: 1})
 	page, _ := newPage(t, Deps{
 		Source: src, Updates: true,
 		Run: func(fn func()) { held <- fn },
 	})
+	home, err := src.Home(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.requested, page.loading = true, false
+	page.accept(home)
 	page.selectDay(6)
-	page.Start()
-	// The home answer is the one the page applies synchronously; the day
-	// answers stay in the queue.
+	page.loadWeek()
 	if !page.dayLoading(6) {
 		t.Fatal("an unanswered day must report a loading state")
 	}
