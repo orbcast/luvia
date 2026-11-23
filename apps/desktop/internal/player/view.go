@@ -718,6 +718,10 @@ func (p *Page) stageControls(c *ui.Context, t *ui.Theme, m locales.Messages) {
 				p.iconButton(c, "next", "skip-next-linear", m.NextEpisode(), p.Next)
 				p.rateButton(c, m)
 				p.fullscreenButton(c, m)
+				// The way out of the player lives here, on the controls the
+				// picture keeps, rather than on the side panel: the panel's
+				// own cross puts the panel away and leaves the viewer watching.
+				p.iconButton(c, "leave", "close-circle-linear", m.ClosePlayer(), p.Back)
 			})
 		})
 	})
@@ -865,14 +869,18 @@ func (p *Page) panelHeader(c *ui.Context, t *ui.Theme, m locales.Messages) {
 			}
 			ui.Text(c, p.metaLine(m)).FontSize(11).TextColor(t.TextMuted)
 		})
-		close := ui.ButtonBase(c).Key("p-close").Size(30, 30).Radius(15).Label(m.ClosePlayer()).
-			Tooltip(m.ClosePlayer()).Background(ui.Transparent)
+		// The cross here puts the panel away, not the player: it is the
+		// panel's own close button, so a viewer who is done with the episode
+		// list keeps watching. The stage's own control in the pill does the
+		// same, and the stage's fallback keeps the way out of the player.
+		close := ui.ButtonBase(c).Key("p-close").Size(30, 30).Radius(15).Label(m.CollapsePanel()).
+			Tooltip(m.CollapsePanel()).Background(ui.Transparent)
 		if close.Hovered() {
 			close.Background(t.SurfaceHover)
 		}
 		close.Children(func() { ui.Icon(c, icons.Parse("close-circle-linear")).Size(20, 20).TextColor(t.TextMuted) })
 		if close.Clicked() {
-			p.Back()
+			p.CollapsePanel()
 		}
 	})
 }

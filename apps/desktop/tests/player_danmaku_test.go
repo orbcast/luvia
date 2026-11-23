@@ -161,3 +161,57 @@ func TestPlayerSpreadsUntimedComments(t *testing.T) {
 		}
 	}
 }
+
+// TestPlayerPanelCloseHidesThePanel covers the cross in the panel's header: it
+// puts the panel away and leaves the player running, rather than leaving the
+// player, which is what the stage's own controls are for.
+func TestPlayerPanelCloseHidesThePanel(t *testing.T) {
+	base, _ := sampleTitle()
+	src := &commentingSource{detail: base.detail, episodes: base.episodes}
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := make(chan func(), 8)
+	left := 0
+	page := player.New(player.Deps{
+		Source: src, Library: store, Run: func(fn func()) { run <- fn },
+		OnBack:    func() { left++ },
+		OpenVideo: func(string) (*ui.VideoPlayer, error) { return newGIFPlayer(t), nil },
+	})
+	page.Open(src.detail, src.episodes, 0)
+	apply(t, run)
+	apply(t, run)
+
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(ui.DarkTheme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 1280, 900)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	// A player opens with the panel away, so the viewer asks for it first.
+	page.RevealPanel()
+	tt.Frame()
+	// The cross carries the panel's own name, not the player's.
+	m := english
+	if err := tt.Click(m.CollapsePanel()); err != nil {
+		t.Fatalf("the panel's close button is unreachable: %v", err)
+	}
+	tt.Frame()
+	if !page.PanelHidden() {
+		t.Fatal("the panel's close button left the panel open")
+	}
+	if left != 0 {
+		t.Fatalf("the panel's close button left the player: %d", left)
+	}
+	// The picture keeps the control that brings it back.
+	if err := tt.Click(m.ExpandPanel()); err != nil {
+		t.Fatalf("the reveal control is unreachable: %v", err)
+	}
+	tt.Frame()
+	if page.PanelHidden() {
+		t.Fatal("the reveal control did not bring the panel back")
+	}
+}

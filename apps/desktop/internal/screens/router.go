@@ -126,6 +126,19 @@ func (r *Router) backFromDetail() {
 	r.refresh()
 }
 
+// Back leaves the player screen, which returns the viewer to the title it
+// played. The player draws its own way out; the shell's back control and the
+// window's own go through here.
+func (r *Router) Back() {
+	if r.mode == modePlayer {
+		r.backFromPlayer()
+		return
+	}
+	if r.mode == modeDetail {
+		r.backFromDetail()
+	}
+}
+
 func (r *Router) backFromPlayer() {
 	r.mode = modeDetail
 	r.setWindowButtons(false)

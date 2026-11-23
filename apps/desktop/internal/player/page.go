@@ -1201,6 +1201,10 @@ func (p *Page) TogglePanel() {
 	p.invalidate()
 }
 
+// PanelHidden reports whether the side panel is away and the picture owns the
+// window.
+func (p *Page) PanelHidden() bool { return p.panelHidden }
+
 // CollapsePanel puts the side panel away; the picture keeps a reveal control.
 func (p *Page) CollapsePanel() { p.setPanelHidden(true) }
 
