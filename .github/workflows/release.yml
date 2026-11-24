@@ -44,12 +44,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 每个平台用各自的原生 runner 构建：MyGo 的打包步骤会调用平台工具链
-          # （macOS 走 actool / codesign，Windows 走 .syso 与安装器），
-          # 交叉编译得不到可运行的产物，图标和安装器也会缺。
-          # 标签里的 arm64 才是 Apple silicon：macos-15 是 Intel 机器，
-          # 写 macos-15 却在 arm64 上构建会拿到 Intel 产物。macos-13 已退役。
-          - os: macos-15-arm64
+          # 两个 Mac 平台都在 Intel 的 macos-15 上出：macos-15-arm64 这条托管队列
+          # 长期分不到机器（job 的 runner_name 恒为空，等到 cancel），一个平台不来
+          # 就换另一种办法。实测在 Intel 机器上交叉编 darwin/arm64 能出完整的
+          # Luvia.app（Mach-O arm64 + Info.plist + luvia-rules），只跳过需要
+          # Xcode 26 的 AppIcon.icon 与需要 macOS 的 dmg，而 AppIcon.icns 照旧生成。
+          # 代价是未签名，本来就未签名，Gatekeeper 一样要右键打开。
+          # 标签里的 arm64 才是 Apple silicon：macos-15 是 Intel 机器。macos-13 已退役。
+          - os: macos-15
             platform: darwin/arm64
             artifact: luvia-macos-arm64
           - os: macos-15
@@ -77,6 +79,25 @@ jobs:
           # 一加载就停在 "sign.secret is not set in the environment"。
           KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
         run: go tool mygo build -platform ${{ matrix.platform }}
+
+      # 交叉编出来的 arm64 包不经过本机自检，至少要确认二进制真是指令集：
+      # 编错了架构在这一步就红，不留到用户那台 Mac 上才炸。
+      - name: Verify the binary arch matches
+        if: runner.os != 'Windows'
+        shell: bash
+        working-directory: apps/desktop
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          dir="build/${PLATFORM%%/*}-${PLATFORM##*/}"
+          case "$PLATFORM" in
+            darwin/*)
+              want="${PLATFORM##*/}"
+              file "$dir/Luvia.app/Contents/MacOS/Luvia" | tee /dev/stderr | grep -q "$want" \
+                || { echo "二进制不是 $want 架构" >&2; exit 1; }
+              ;;
+          esac
 
       # 产物目录名形如 build/darwin-arm64、build/windows-amd64，随平台变化，
       # 所以用 find 找，不猜路径。
@@ -112,8 +133,8 @@ jobs:
 
   publish:
     name: publish
-    # 一个平台的 runner 排不上队（macos-15-arm64 常常久等）不该把已经打好的包
-    # 压着不发：矩阵里任何一条失败或取消，其余照发，缺口记在发布说明里。
+    # 一个平台的 runner 排不上队不该把已经打好的包压着不发：矩阵里任何一条
+    # 失败或取消，其余照发，缺口记在发布说明里。
     needs: build
     if: always() && needs.gate.result == 'success'
     runs-on: ubuntu-latest
