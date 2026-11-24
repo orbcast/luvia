@@ -456,55 +456,19 @@ func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, 
 	})
 }
 
-// stageBackdrop fills the stage under the picture: the stage's own near-black,
-// then the cover blurred behind it. A frame keeps its whole shape on the stage,
-// so one wider or taller than the stage leaves a band on two sides; the blurred
-// cover fills that band, and the stage reads as one picture rather than a frame
-// laid on black.
+// stageBackdrop lays the stage the picture sits on: the near-black letterbox,
+// with its own soft gradient, and nothing over it.
 //
-// The blurred cover keeps out of the picture's own box. Painted over the whole
-// stage, it sat behind the video wherever the two ratios differ, so the band
-// Contain leaves round a picture showed a blown-up copy of the cover instead of
-// the band a viewer expects: the picture read as cut off at any window shape
-// that did not match it. It fills the stage where no picture has come yet, and
-// the bands round the picture once one has.
-// The stage behind a picture that does not match its shape.
-//
-// The picture is the only thing on the stage that carries information, so the
-// room beside it is black, as every desktop player leaves it: a cover blurred
-// into the bands reads as a second, competing picture, and on a portrait drama
-// it is a third of the stage wide on each side. What the blurred cover still
-// does is wash the whole stage in its colours at a strength that cannot be
-// mistaken for content — one image over all of the stage rather than four bands
-// cut to the picture's edges, so there is no seam where the picture ends.
-const (
-	stageBackdropBlur    float32 = 40
-	stageBackdropOpacity float32 = 0.10
-)
-
-// stageBackdrop lays the stage the picture sits on: the near-black letterbox
-// with its own soft gradient, then the cover, blurred and barely there, so a
-// warm poster warms the room round it and a cold one cools it. It runs under
-// the whole stage rather than round the picture, which is what keeps the band
-// from reading as a separate image.
+// The room round a picture is black because the picture is the only thing on the
+// stage that carries information, as every desktop player leaves it. A cover
+// blurred into the bands was tried twice and read wrong both times: at 45% it
+// was a second, competing picture and a third of the stage wide on each side of
+// a portrait drama, and at 10% it was a flat grey wash that made a pale frame
+// look like a badly lit one. The bands are the stage's own colour now, so a
+// picture that does not match the window's shape reads as a picture on black.
 func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme) {
 	ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Gradient(design.PlayerStage(t), t.Surface, 150)
-	url := p.detail.BackdropURL
-	if url == "" {
-		url = p.detail.PosterURL
-	}
-	if p.deps.Images == nil || url == "" {
-		return
-	}
-	bitmap := p.deps.Images.Bitmap(url)
-	if bitmap == nil {
-		return
-	}
-	// A blur is painted off screen every frame it shows, and this one never
-	// changes, so Cache bakes it into a kept layer drawn once.
-	ui.Image(c, bitmap).Absolute().Left(0).Right(0).Top(0).Bottom(0).
-		Fit(ui.Cover).Blur(stageBackdropBlur).Opacity(stageBackdropOpacity).Cache()
 }
 
 // pictureBox is the box a picture of the given ratio fills inside a stage of
