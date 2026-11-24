@@ -24,23 +24,22 @@ const (
 	stageMarkerSize float32 = 13
 	stageButtonSize float32 = 34
 	pillPadding     float32 = 4
-	// The corner's way out, and the marker it pushes right. The margin puts the
-	// button's centre on the 36px line the marker's label is drawn on, so the
-	// two read as one row rather than the button hanging over the text.
-	stageLeaveMargin float32 = 20
-	stageMarkerLeft  float32 = stageLeaveMargin + stageButtonSize + 14
+	// The stage's top line: the way out and the marker at the left, the pill of
+	// controls at the right. All three sit on one baseline — stageTopBox is the
+	// height of the capsule either end draws and stageTopHeight is its bottom
+	// edge, so the corner and the pill are laid at the same top and come out the
+	// same height. The band's blur and the picture's bands are measured from
+	// these, so they follow a change here.
+	stageTopBox    float32 = stageButtonSize + 2*pillPadding
+	stageTopHeight float32 = stageLineTop + stageTopBox
+	stageEdge      float32 = 20
+	// The gap between the corner's capsule and the marker beside it.
+	stageMarkerGap  float32 = 14
+	stageMarkerLeft float32 = stageEdge + stageTopBox + stageMarkerGap
+	// The marker's label sits on the capsule's centre line rather than its top:
+	// a 13px label at the capsule's top edge reads as hanging off the row.
+	stageMarkerTop float32 = stageLineTop + (stageTopBox-stageMarkerSize)/2
 )
-
-// The backdrop's blur is a fixed width, not one that follows the stage: the
-// same cover reads the same at any window size, and a size that grew with the
-// stage would cost more to paint the wider the window got.
-const stageBackdropBlur float32 = 28
-
-// The blurred cover is laid under the stage and shows through the band round a
-// picture that does not match the stage's shape: it dims the stage's black
-// there, so the band reads as the same picture at rest rather than as two flat
-// bars, without ever competing with the picture itself.
-const stageBackdropOpacity float32 = 0.45
 
 var (
 	mediaInk   = ui.RGBA(255, 255, 255, 0.94)
@@ -90,7 +89,7 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width, heig
 	if p.loading && p.player == nil && p.notice == noticeNone {
 		p.stageOpening(c, m)
 	} else if p.player != nil {
-		p.stageBackdrop(c, t, ui.Rect{W: width, H: height}, p.pictureBox(width, height))
+		p.stageBackdrop(c, t)
 		p.stageFallback(c, m)
 		// The stage keeps the whole frame. Cover scales a picture by the larger of
 		// the two ratios, which for a portrait series (short dramas ship 360x640)
@@ -141,7 +140,7 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width, heig
 		// stream's own clock, rather than on the page's thread. An open that
 		// holds the stage longer than an opening may take is reported, so a
 		// stream that never comes back is not a stage that waits for good.
-		p.stageBackdrop(c, t, ui.Rect{W: width, H: height}, ui.Rect{})
+		p.stageBackdrop(c, t)
 		p.stageFallback(c, m)
 		if p.notice == noticeNone {
 			if p.loading {
@@ -264,7 +263,7 @@ func (p *Page) danmakuText(c *ui.Context, text string, fade float32) {
 // pill's own right edge, so opening it never moves the button that opened it.
 func (p *Page) danmakuControls(c *ui.Context, width float32) {
 	m := locales.In(c.Locale())
-	ui.Column(c).Absolute().Right(danmakuBoxMargin).Top(stageLineTop+design.DanmakuLaneHeight+30).
+	ui.Column(c).Absolute().Right(danmakuBoxMargin).Top(stageTopHeight+design.DanmakuLaneHeight+6).
 		Width(danmakuBoxWidth(width)).Radius(18).Padding(16).Gap(14).Background(design.PlayerPanelGlassFill()).
 		Border(1, design.PlayerPanelGlassBorder()).Children(func() {
 		p.danmakuPresets(c, m)
@@ -469,7 +468,26 @@ func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, 
 // the band a viewer expects: the picture read as cut off at any window shape
 // that did not match it. It fills the stage where no picture has come yet, and
 // the bands round the picture once one has.
-func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme, stage, picture ui.Rect) {
+// The stage behind a picture that does not match its shape.
+//
+// The picture is the only thing on the stage that carries information, so the
+// room beside it is black, as every desktop player leaves it: a cover blurred
+// into the bands reads as a second, competing picture, and on a portrait drama
+// it is a third of the stage wide on each side. What the blurred cover still
+// does is wash the whole stage in its colours at a strength that cannot be
+// mistaken for content — one image over all of the stage rather than four bands
+// cut to the picture's edges, so there is no seam where the picture ends.
+const (
+	stageBackdropBlur    float32 = 40
+	stageBackdropOpacity float32 = 0.10
+)
+
+// stageBackdrop lays the stage the picture sits on: the near-black letterbox
+// with its own soft gradient, then the cover, blurred and barely there, so a
+// warm poster warms the room round it and a cold one cools it. It runs under
+// the whole stage rather than round the picture, which is what keeps the band
+// from reading as a separate image.
+func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme) {
 	ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Gradient(design.PlayerStage(t), t.Surface, 150)
 	url := p.detail.BackdropURL
@@ -484,17 +502,7 @@ func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme, stage, picture ui.Rect)
 		return
 	}
 	// A blur is painted off screen every frame it shows, and this one never
-	// changes, so Cache bakes it into a kept layer drawn once. A stage with no
-	// measured picture yet keeps the cover over all of it, so the opening still
-	// reads as one picture; otherwise each band the stage leaves round the
-	// picture takes a cover of its own, scaled to fill that band.
-	if bands := stageBands(picture, stage); len(bands) > 0 {
-		for _, band := range bands {
-			ui.Image(c, bitmap).Absolute().Left(band.X).Top(band.Y).Width(band.W).Height(band.H).
-				Fit(ui.Cover).Blur(stageBackdropBlur).Opacity(stageBackdropOpacity).Cache()
-		}
-		return
-	}
+	// changes, so Cache bakes it into a kept layer drawn once.
 	ui.Image(c, bitmap).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Fit(ui.Cover).Blur(stageBackdropBlur).Opacity(stageBackdropOpacity).Cache()
 }
@@ -598,29 +606,33 @@ func (p *Page) stageFallback(c *ui.Context, m locales.Messages) {
 // still opening draws nothing but this, so leaving never depends on the
 // controls below having been laid yet.
 func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	top := stageLineTop
-	p.stageLeave(c, m, top)
+	p.stageLeave(c, m)
 	if episode, ok := p.current(); ok {
-		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(stageMarkerLeft).Top(top).
+		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(stageMarkerLeft).Top(stageMarkerTop).
 			FontSize(13).Bold().TextColor(mediaInk)
 	}
-	cluster := top + stageMarkerSize/2 - (stageButtonSize+2*pillPadding)/2
-	p.playerPill(c, m, cluster)
+	p.playerPill(c, m, stageLineTop)
 }
 
-// stageLeave is the corner's way out of the player, laid at the top-left where
-// a viewer looks first for one. It is a pill of its own rather than one of the
-// cluster's buttons so it stays put when the panel folds away.
-func (p *Page) stageLeave(c *ui.Context, m locales.Messages, top float32) {
-	button := ui.ButtonBase(c).Key("leave-corner").Absolute().
-		Left(stageLeaveMargin).Top(top).Size(stageButtonSize, stageButtonSize).
-		Radius(stageButtonSize / 2).Label(m.ClosePlayer()).Tooltip(m.ClosePlayer()).
+// stageLeave is the stage's way out, laid at the top-left where a viewer looks
+// first for one. It is a capsule of its own rather than a button in the pill at
+// the right: the way out never moves when the panel folds or the cluster
+// grows, and a player's leave is not one of the picture's controls.
+//
+// The arrow says what it does — the stage is a page, and leaving it steps back
+// to the one under it — rather than borrowing the cross the side panel uses to
+// put itself away. Two crosses a screen apart, one closing a panel and one
+// closing the player, ask a viewer to read a tooltip to tell them apart.
+func (p *Page) stageLeave(c *ui.Context, m locales.Messages) {
+	button := ui.ButtonBase(c).Key("leave-corner").Absolute()
+	button.Left(stageEdge).Top(stageLineTop).Height(stageTopBox).Width(stageTopBox).
+		Radius(stageTopBox / 2).Label(m.ClosePlayer()).Tooltip(m.ClosePlayer()).
 		Material(glass.Glass{})
 	if button.Hovered() {
 		button.Background(ui.RGBA(255, 255, 255, 0.12))
 	}
 	button.Children(func() {
-		ui.Icon(c, icons.Parse("close-circle-linear")).Size(18, 18).TextColor(mediaInk)
+		ui.Icon(c, icons.Parse("alt-arrow-left-linear")).Size(18, 18).TextColor(mediaInk)
 	})
 	if button.Clicked() {
 		p.Back()
@@ -633,7 +645,7 @@ func (p *Page) stageLeave(c *ui.Context, m locales.Messages, top float32) {
 // the level is the thin white track beside the speaker that the system's own
 // player shows, never a slider that folds out and back.
 func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
-	ui.Row(c).Absolute().Right(24).Top(top).AlignItems(ui.Center).Gap(2).Radius(999).
+	ui.Row(c).Absolute().Right(stageEdge).Top(top).AlignItems(ui.Center).Gap(2).Radius(999).
 		Padding(pillPadding).Material(glass.Glass{}).Children(func() {
 		p.volumeTrack(c, m)
 		p.speaker(c, m)

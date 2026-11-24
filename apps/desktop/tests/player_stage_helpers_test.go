@@ -91,37 +91,3 @@ func stageShot(t *testing.T, poster string) image.Image {
 	}
 	return frame
 }
-
-// TestPlayerStageBackdropFillsTheFrameBands covers the room a whole frame
-// leaves: a stage that shows only the near-black behind the picture reads as a
-// picture that did not fill it, so the cover is blurred over all of the stage
-// and the bands take its colours.
-func TestPlayerStageBackdropFillsTheFrameBands(t *testing.T) {
-	theme := design.Theme(ui.DarkTheme())
-	stage := design.PlayerStage(&theme)
-	bare := [3]uint8{stage.R, stage.G, stage.B}
-
-	// 1280×900 stage, 1280×600 frame: the picture sits from y 150 to 750, so
-	// these points are the bands above and below it, clear of the controls
-	// that hang at the top line and along the bottom.
-	points := [][2]int{{640, 60}, {200, 60}, {1000, 60}, {640, 775}}
-
-	filled := stageShot(t, "https://cdn.example/poster.png")
-	empty := stageShot(t, "")
-
-	for _, p := range points {
-		got := sampleAt(t, filled, p[0], p[1])
-		if luma := (299*int(got[0]) + 587*int(got[1]) + 114*int(got[2])) / 1000; luma < 90 {
-			t.Fatalf("stage at %v is %v (luma %d): the backdrop does not reach it", p, got, luma)
-		}
-		if d := delta(got, bare); d < 60 {
-			t.Fatalf("stage at %v is %v, only %d from the bare stage %v", p, got, d, bare)
-		}
-		// The band is the backdrop's, not something the stage drew anyway: with
-		// no poster to blur, the same point stays the stage's own colour.
-		none := sampleAt(t, empty, p[0], p[1])
-		if luma := (299*int(none[0]) + 587*int(none[1]) + 114*int(none[2])) / 1000; luma > 40 {
-			t.Fatalf("stage at %v without a poster is %v (luma %d), too bright to be the stage", p, none, luma)
-		}
-	}
-}
