@@ -57,7 +57,7 @@ func NavigationTint() ui.Color { return ui.RGBA(128, 128, 128, 0.22) }
 
 // PlayIntroBackground is the dark backdrop the play-intro (启播) animation sits
 // on. The intro is always dark, whatever the desktop appearance, so its blue
-// mark and white wordmark stay legible.
+// mark stays legible.
 func PlayIntroBackground() ui.Color { return ui.Hex("#0B0A0F") }
 
 // The window controls are a capsule of glass floating over the page, so they
