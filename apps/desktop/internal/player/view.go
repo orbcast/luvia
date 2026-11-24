@@ -24,6 +24,11 @@ const (
 	stageMarkerSize float32 = 13
 	stageButtonSize float32 = 34
 	pillPadding     float32 = 4
+	// The corner's way out, and the marker it pushes right. The margin puts the
+	// button's centre on the 36px line the marker's label is drawn on, so the
+	// two read as one row rather than the button hanging over the text.
+	stageLeaveMargin float32 = 20
+	stageMarkerLeft  float32 = stageLeaveMargin + stageButtonSize + 14
 )
 
 // The backdrop's blur is a fixed width, not one that follows the stage: the
@@ -584,18 +589,42 @@ func (p *Page) stageFallback(c *ui.Context, m locales.Messages) {
 	}
 }
 
-// stageTop draws the episode marker at the top-left and the floating control
-// cluster (speaker / danmaku / panel buttons) at the top-right. The two sit on
-// one line: the cluster's buttons hang at the middle of the marker, so they
-// read level with the label of the episode they belong to.
+// stageTop draws the way out and the episode marker at the top-left, and the
+// floating control cluster (speaker / danmaku / panel buttons) at the top-right.
+// The marker and the cluster sit on one line: the cluster's buttons hang at the
+// middle of the marker, so they read level with the label of the episode they
+// belong to. The way out is the first thing on that line, above the marker in
+// the top-left corner a window's own close button would occupy: a stage that is
+// still opening draws nothing but this, so leaving never depends on the
+// controls below having been laid yet.
 func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	top := stageLineTop
+	p.stageLeave(c, m, top)
 	if episode, ok := p.current(); ok {
-		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(84).Top(top).
+		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(stageMarkerLeft).Top(top).
 			FontSize(13).Bold().TextColor(mediaInk)
 	}
 	cluster := top + stageMarkerSize/2 - (stageButtonSize+2*pillPadding)/2
 	p.playerPill(c, m, cluster)
+}
+
+// stageLeave is the corner's way out of the player, laid at the top-left where
+// a viewer looks first for one. It is a pill of its own rather than one of the
+// cluster's buttons so it stays put when the panel folds away.
+func (p *Page) stageLeave(c *ui.Context, m locales.Messages, top float32) {
+	button := ui.ButtonBase(c).Key("leave-corner").Absolute().
+		Left(stageLeaveMargin).Top(top).Size(stageButtonSize, stageButtonSize).
+		Radius(stageButtonSize / 2).Label(m.ClosePlayer()).Tooltip(m.ClosePlayer()).
+		Material(glass.Glass{})
+	if button.Hovered() {
+		button.Background(ui.RGBA(255, 255, 255, 0.12))
+	}
+	button.Children(func() {
+		ui.Icon(c, icons.Parse("close-circle-linear")).Size(18, 18).TextColor(mediaInk)
+	})
+	if button.Clicked() {
+		p.Back()
+	}
 }
 
 // playerPill is the level / speaker / danmaku / panel-toggle cluster at the top-right.
@@ -810,10 +839,6 @@ func (p *Page) stageControls(c *ui.Context, t *ui.Theme, m locales.Messages) {
 				p.iconButton(c, "next", "skip-next-linear", m.NextEpisode(), p.Next)
 				p.rateButton(c, m)
 				p.fullscreenButton(c, m)
-				// The way out of the player lives here, on the controls the
-				// picture keeps, rather than on the side panel: the panel's
-				// own cross puts the panel away and leaves the viewer watching.
-				p.iconButton(c, "leave", "close-circle-linear", m.ClosePlayer(), p.Back)
 			})
 		})
 	})
