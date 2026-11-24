@@ -112,10 +112,24 @@ jobs:
 
   publish:
     name: publish
+    # 一个平台的 runner 排不上队（macos-15-arm64 常常久等）不该把已经打好的包
+    # 压着不发：矩阵里任何一条失败或取消，其余照发，缺口记在发布说明里。
     needs: build
+    if: always() && needs.gate.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Note what is missing
+        id: missing
+        env:
+          RESULT: ${{ needs.build.result }}
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            echo "note=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "note=一次或多平台没有构建成功（build: $RESULT），本页可能缺少某个平台的包，稍后重跑 Release 会补齐。" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v4
         with:
@@ -133,8 +147,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          NOTE: ${{ steps.missing.outputs.note }}
         run: |
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --generate-notes \
-            dist/*.zip dist/SHA256SUMS.txt
+          set -euo pipefail
+          # 已经发过就只补附件：重跑 Release 时不该因为 tag 已用而失败。
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes \
+              --notes "$NOTE" \
+              dist/*.zip dist/SHA256SUMS.txt
+          fi
