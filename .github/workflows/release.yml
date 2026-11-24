@@ -116,12 +116,35 @@ jobs:
             exit 1
           fi
           echo "打包 $dir → $archive"
-          if command -v zip >/dev/null 2>&1; then
-            ( cd apps/desktop/build && zip -ry "$GITHUB_WORKSPACE/$archive" "$(basename "$dir")" )
-          else
-            # Windows runner 的 bash 里没有 zip，改用 PowerShell 的 Compress-Archive。
-            powershell -NoProfile -Command "Compress-Archive -Path '$dir' -DestinationPath '$GITHUB_WORKSPACE/$archive' -Force"
-          fi
+          # 不能用 PowerShell 的 Compress-Archive：它把条目名写成反斜杠
+          # （windows-amd64\Luvia.exe），多数解压器只认正斜杠，Windows 资源管理器
+          # 会解出一堆文件名里带反斜杠的碎片。改用 Go 的 archive/zip，两边一致。
+          python3 - "$dir" "$archive" <<'PY'
+          import os, sys, zipfile
+
+          source, archive = sys.argv[1], sys.argv[2]
+          root = os.path.basename(source.rstrip("/\\"))
+          with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as out:
+              for base, dirs, files in os.walk(source):
+                  dirs.sort()
+                  files.sort()
+                  rel = os.path.relpath(base, source)
+                  prefix = root if rel == "." else f"{root}/{rel}"
+                  prefix = prefix.replace(os.sep, "/")
+                  for name in files:
+                      path = os.path.join(base, name)
+                      out.write(path, f"{prefix}/{name}")
+          print(f"{len(zipfile.ZipFile(archive).namelist())} entries written")
+          PY
+          python3 - "$archive" <<'PY'
+          import sys, zipfile
+
+          # 解压器只认正斜杠，发出去的包里不能有反斜杠。
+          bad = [n for n in zipfile.ZipFile(sys.argv[1]).namelist() if "\\" in n]
+          if bad:
+              raise SystemExit(f"archive has backslash entries: {bad[:3]}")
+          print("archive paths use forward slashes")
+          PY
           ls -la "$archive"
 
       - uses: actions/upload-artifact@v4
