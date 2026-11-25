@@ -95,10 +95,18 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width, heig
 		// the two ratios, which for a portrait series (short dramas ship 360x640)
 		// crops it to a centre band of a wide stage: the picture reads as zoomed
 		// in and cut off. Contain scales by the smaller ratio, so the frame fits
-		// whole with a band on two sides; the stage's black and the backdrop's
-		// cover fill those bands. A frame that already matches the stage's ratio
-		// fills it either way.
-		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Contain)
+		// whole with a band on two sides; the stage's black fills those bands. A
+		// frame that already matches the stage's ratio fills it either way.
+		//
+		// The video is laid on the picture's own box and clipped to it rather
+		// than stretched over the stage and fitted inside: a fitted video
+		// draws its frame in a window of its own, several DIPs larger than the
+		// picture, with the frame's edge faded into that window's corners. Over
+		// a stage that window's apron and fade read as grey smudges at the
+		// bottom of the picture and as a soft edge on its rim, which is not a
+		// letterbox. Clipped to the picture, the fade has nothing to fade into
+		// but the picture, and the bands stay the stage's colour.
+		p.stagePicture(c)
 		// An engine that has not delivered its first frame is still opening the
 		// stream, which on a slow line is the longest wait of all; one that has
 		// its picture and waits for more data is buffering. Both say so, with the
@@ -475,6 +483,30 @@ func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, 
 func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme) {
 	ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Background(design.PlayerStage(t))
+}
+
+// stagePicture lays the video on the box the picture fills, clipped to it, so
+// nothing of the frame — nor of the window the engine draws it in — reaches the
+// bands round it. The video is not fitted inside a stage-wide box: an engine's
+// video draws with its edge faded into the window it is drawn in, and over the
+// stage that fade and the window's apron show below the picture as a grey
+// smudge and on its rim as a soft edge, which reads as a picture hanging in a
+// wash instead of a letterbox.
+//
+// The box is unknown until the engine reports the frames' size, so while the
+// stream opens the video keeps the stage it has always had; the first frame
+// gives it its box, and the backdrop under the bands never moves.
+func (p *Page) stagePicture(c *ui.Context) {
+	width, height := c.Size()
+	picture := p.pictureBox(width, height)
+	box := ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).Clip()
+	if picture.W > 0 && picture.H > 0 {
+		box = ui.Box(c).Absolute().Left(picture.X).Top(picture.Y).
+			Width(picture.W).Height(picture.H).Clip()
+	}
+	box.Children(func() {
+		ui.Video(c, p.player).Absolute().Left(0).Right(0).Top(0).Bottom(0).Fit(ui.Contain)
+	})
 }
 
 // pictureBox is the box a picture of the given ratio fills inside a stage of
