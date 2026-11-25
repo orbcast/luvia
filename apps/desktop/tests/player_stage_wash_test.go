@@ -30,18 +30,17 @@ func TestPlayerBandStaysTheStagesOwnBlack(t *testing.T) {
 	// and of the control bar along the bottom.
 	points := [][2]int{{640, 110}, {200, 110}, {1000, 110}, {640, 775}}
 
-	for _, name := range []string{"", "https://cdn.example/poster.png"} {
-		shot := stageShot(t, name)
-		for _, p := range points {
-			got := sampleAt(t, shot, p[0], p[1])
-			// A gradient runs down the stage, so the band is not one value; it
-			// stays dark enough that no reader takes it for a picture.
-			if luma := lumaOf(got); luma > 40 {
-				t.Fatalf("band at %v with poster %q is %v (luma %d): a picture beside the picture is not a letterbox", p, name, got, luma)
-			}
-			// And it is the stage's own colour, not a wash laid over it.
-			if d := delta(got, bare); d > 24 {
-				t.Fatalf("band at %v with poster %q is %v, %d from the stage's %v: something is painted over the stage", p, name, got, d, bare)
+	for _, dark := range []bool{true, false} {
+		for _, name := range []string{"", "https://cdn.example/poster.png"} {
+			shot := stageShotIn(t, name, dark)
+			for _, p := range points {
+				got := sampleAt(t, shot, p[0], p[1])
+				if luma := lumaOf(got); luma > 40 {
+					t.Fatalf("band at %v with poster %q in dark=%v is %v (luma %d): a picture beside the picture is not a letterbox", p, name, dark, got, luma)
+				}
+				if d := delta(got, bare); d > 24 {
+					t.Fatalf("band at %v with poster %q in dark=%v is %v, %d from the stage's %v: something is painted over the stage", p, name, dark, got, d, bare)
+				}
 			}
 		}
 	}
@@ -51,15 +50,17 @@ func TestPlayerBandStaysTheStagesOwnBlack(t *testing.T) {
 // read the same as each other: one wash cut to the picture's edges lit them from
 // two images that met at a seam, which is what made the picture look cut off.
 func TestPlayerBandsOnBothSidesMatch(t *testing.T) {
-	shot := stageShot(t, "https://cdn.example/poster.png")
-	left := sampleAt(t, shot, 60, 450)
-	right := sampleAt(t, shot, 1220, 450)
-	if delta(left, right) > 12 {
-		t.Fatalf("the two bands read %v and %v: they are not the same stage", left, right)
-	}
-	for _, c := range [][3]uint8{left, right} {
-		if luma := lumaOf(c); luma > 40 {
-			t.Fatalf("band %v (luma %d) is lit: a letterbox is the stage's own colour", c, luma)
+	for _, dark := range []bool{true, false} {
+		shot := stageShotIn(t, "https://cdn.example/poster.png", dark)
+		left := sampleAt(t, shot, 60, 450)
+		right := sampleAt(t, shot, 1220, 450)
+		if delta(left, right) > 12 {
+			t.Fatalf("in dark=%v the two bands read %v and %v: they are not the same stage", dark, left, right)
+		}
+		for _, c := range [][3]uint8{left, right} {
+			if luma := lumaOf(c); luma > 40 {
+				t.Fatalf("in dark=%v band %v (luma %d) is lit: a letterbox is the stage's own colour", dark, c, luma)
+			}
 		}
 	}
 }

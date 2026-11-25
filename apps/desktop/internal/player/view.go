@@ -457,7 +457,7 @@ func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, 
 }
 
 // stageBackdrop lays the stage the picture sits on: the near-black letterbox,
-// with its own soft gradient, and nothing over it.
+// in the stage's own colour, and nothing over it.
 //
 // The room round a picture is black because the picture is the only thing on the
 // stage that carries information, as every desktop player leaves it. A cover
@@ -466,9 +466,15 @@ func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, 
 // a portrait drama, and at 10% it was a flat grey wash that made a pale frame
 // look like a badly lit one. The bands are the stage's own colour now, so a
 // picture that does not match the window's shape reads as a picture on black.
+//
+// One colour, not a gradient: the gradient this drew ran from the stage to the
+// theme's surface, which is #FFFBFE in the light theme, so the letterbox climbed
+// from near-black on one side to almost white on the other — measured in the
+// running app at luma 52 at the left edge and 189 at the right beside a portrait
+// picture. A band is the stage's colour or it is not a band.
 func (p *Page) stageBackdrop(c *ui.Context, t *ui.Theme) {
 	ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
-		Gradient(design.PlayerStage(t), t.Surface, 150)
+		Background(design.PlayerStage(t))
 }
 
 // pictureBox is the box a picture of the given ratio fills inside a stage of

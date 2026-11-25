@@ -49,6 +49,16 @@ func wideFrame(t *testing.T) *ui.VideoPlayer {
 // whether the backdrop fills them.
 func stageShot(t *testing.T, poster string) image.Image {
 	t.Helper()
+	return stageShotIn(t, poster, true)
+}
+
+// stageShotIn draws the stage in either theme. The bands have to read the same
+// in both: the light theme's surface is near-white, so anything that reaches for
+// it as the far end of a gradient turns a letterbox into a bright wash, which is
+// exactly what happened — measured at luma 52 on the left edge rising to 189 on
+// the right of a portrait picture.
+func stageShotIn(t *testing.T, poster string, dark bool) image.Image {
+	t.Helper()
 	src, _ := sampleTitle()
 	src.detail.PosterURL = poster
 	src.detail.BackdropURL = ""
@@ -80,6 +90,9 @@ func stageShot(t *testing.T, poster string) image.Image {
 	}
 	tt := ui.NewTester(func(c *ui.Context) {
 		theme := design.Theme(ui.DarkTheme())
+		if !dark {
+			theme = design.Theme(ui.LightTheme())
+		}
 		c.SetTheme(&theme)
 		page.View(c)
 	}, 1280, 900)
