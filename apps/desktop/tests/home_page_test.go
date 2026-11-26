@@ -223,3 +223,26 @@ func TestDiscoverFitsANarrowWindow(t *testing.T) {
 		t.Fatalf("hero title overflows the narrow page: %+v", title)
 	}
 }
+
+// TestErrorPageClearsTheNavigation keeps the failure text readable on a wide
+// window: the floating navigation sits in the first 56 DIPs, so the page
+// starts at the page inset rather than the narrow gutter it used to.
+func TestErrorPageClearsTheNavigation(t *testing.T) {
+	page := home.New(home.Deps{
+		Source: failingSource{},
+		Run:    func(fn func()) { fn() },
+		Now:    func() time.Time { return time.Date(2026, 11, 15, 20, 0, 0, 0, time.Local) },
+	})
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1400, 900)
+	tt.Frame()
+	rect, ok := tt.Find("This source could not load")
+	if !ok {
+		t.Fatalf("error title not drawn: %v", tt.Texts())
+	}
+	if rect.X < design.ContentInset {
+		t.Fatalf("title starts at %v, inside the navigation at %v", rect.X, design.ContentInset)
+	}
+	if w, ok := tt.Find("Retry"); ok && w.W > 200 {
+		t.Fatalf("retry button is %v wide, want its label", w.W)
+	}
+}

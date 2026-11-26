@@ -783,7 +783,12 @@ func (p *Page) emptyPanel(c *ui.Context, t *ui.Theme, title, hint string) {
 }
 
 func (p *Page) errorView(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	ui.Column(c).FillWidth().Padding(80, design.NarrowGutter).Gap(12).Children(func() {
+	// The inset keeps the text clear of the floating navigation, and the
+	// retry button is sized to its label rather than the page: a failure to
+	// load is a short message, and a full-width button reads as the point of
+	// the page.
+	width, _ := c.Size()
+	ui.Column(c).FillWidth().Padding(80, design.Inset(width)).Gap(12).Children(func() {
 		ui.Text(c, m.HomeError()).FontSize(18).Bold().TextColor(t.Text)
 		if p.err != nil {
 			ui.Text(c, p.err.Error()).FontSize(12).TextColor(t.TextMuted).MaxLines(3)
@@ -794,17 +799,19 @@ func (p *Page) errorView(c *ui.Context, t *ui.Theme, m locales.Messages) {
 		if kind, ok := source.KindOf(p.err); ok && kind == source.ErrUnauthorized {
 			ui.Text(c, m.AccessKeyNeeded()).FontSize(12).TextColor(t.TextMuted)
 		}
-		retry := ui.ButtonBase(c).Height(34).Radius(10).Padding(16, 0).Label(m.Retry()).
-			Background(t.Inverse).TextColor(t.InverseText)
-		if retry.Hovered() {
-			retry.Background(t.Inverse.Mix(t.InverseText, 0.08))
-		}
-		retry.Children(func() {
-			ui.Text(c, m.Retry()).FontSize(12).Bold().TextColor(t.InverseText)
+		ui.Row(c).Children(func() {
+			retry := ui.ButtonBase(c).Height(34).Radius(10).PaddingX(16).Label(m.Retry()).
+				Background(t.Inverse).TextColor(t.InverseText)
+			if retry.Hovered() {
+				retry.Background(t.Inverse.Mix(t.InverseText, 0.08))
+			}
+			retry.Children(func() {
+				ui.Text(c, m.Retry()).FontSize(12).Bold().TextColor(t.InverseText)
+			})
+			if retry.Clicked() {
+				p.Retry()
+			}
 		})
-		if retry.Clicked() {
-			p.Retry()
-		}
 	})
 }
 
