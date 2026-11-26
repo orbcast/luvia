@@ -6,6 +6,7 @@
 
 - 站点：`kanju1.com`，接口带 HMAC-SHA256 请求签名（`x-ai-movie-*` 头），签名消息为 `METHOD\n路径与查询\n时间戳\n随机数`；客户端头写在 `rule.json` 的 `http.headers` 里，签名密钥不落盘，`sign.secret` 用 `${env:KANJU_SECRET}` 从环境变量取。
 - 密钥放在仓库根目录的 `.env`（`.gitignore` 挡住 `.env*`，只放行不含值的 `.env.example`），先 `cp .env.example .env` 再填 `KANJU_SECRET=...`，`make dev` 会自动加载；已 export 的同名变量优先于文件。变量缺失时引擎不再发请求，直接报 `unauthorized` 并在详情里点名缺失的变量，界面上就是「这个数据源加载失败」加这行说明；`${env:NAME}` 的替换规则见 [规则 DSL](../../../docs/rule-dsl.md)。
+- 签名在**应用运行期**求值：安装包里的 `rule.json` 原样保留 `${env:KANJU_SECRET}`，构建不会把密钥烤进二进制，所以装好之后点开剧集报 unauthorized，说明运行它的那台机器上没有这个变量。Windows 可在 PowerShell 里执行 `[Environment]::SetEnvironmentVariable("KANJU_SECRET", "<密钥>", "User")` 并从**新开的**窗口启动应用；macOS / Linux 在启动脚本或登录环境里 export 同名变量。CI 的 `secrets.KANJU_SECRET` 只服务门禁阶段那些签名用例，不随发布包下发。
 - 首页：`/v1/feed/home`，取 11 个分区、每区 8 张卡；发现页的 Hero 挑横幅最全的分区。
 - 列表与搜索：`/v1/browse/catalog`，每页 24 条。不带关键词时按最新列表浏览；带关键词时通过 `searchIntent` 把 `intent` 换成 `search`——上游只在该取值下按关键词匹配，浏览时不发这个参数。
 - 当日更新：`/v1/watch-calendar`，按周取某一天的更新单。上游每天每类只给 6 条预览（`limit` 再大也是 6），超过的只有 `more_url` 游标，本规则暂不跟进；周表按 `[by:weekday]` 挑出请求的那一天，整周一起返回时也不会串天。

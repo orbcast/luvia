@@ -31,8 +31,9 @@ jobs:
       - name: Check app
         run: make check
         env:
-          # 规则里的 ${env:KANJU_SECRET} 在构建期就被求值，缺了它打出来的包
-          # 一启动点 Kanju 源就报 unauthorized。门禁这一步先把它按真实取值跑一遍。
+          # 规则里的 ${env:KANJU_SECRET} 是运行期才展开的，这个变量不会进构建产物；
+          # 这里给值只是让签名相关的检查按真实密钥跑一遍，别把 Secret 当成
+          # 打包装备。发布包要在运行它的机器上自备该变量，见 apps/luvia-rules/kanju/README.md。
           KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
       - name: Check generated code
         run: make check-gen
@@ -75,8 +76,9 @@ jobs:
         shell: bash
         working-directory: apps/desktop
         env:
-          # 密钥在打包时求值并写进产物；漏了这行，发出去的包里 Kanju 源
-          # 一加载就停在 "sign.secret is not set in the environment"。
+          # 构建只把 luvia-rules 原样拷进产物，规则里的 ${env:KANJU_SECRET}
+          # 要等应用启动后从运行环境取；有值不影响产物内容，缺值也不会
+          # 在这里失败，别指望靠这行给发布包带上密钥。
           KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
         run: go tool mygo build -platform ${{ matrix.platform }}
 

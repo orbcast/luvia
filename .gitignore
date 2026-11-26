@@ -4,6 +4,9 @@
 # 当前应用的构建产物（正式资源和图标母版仍需版本管理）
 /apps/*/build/
 /apps/*/.mygo/
+# `go build` 在应用目录里直接落下的可执行文件，属于产物、不是源码
+/apps/*/*.exe
+/apps/*/[Ll]uvia
 mygo_windows_*.syso
 
 # Swift / Xcode 的本地生成物；保留工程、共享 schemes 与 Package.resolved
