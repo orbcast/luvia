@@ -332,11 +332,14 @@ func (p *Page) resolve() {
 			p.warmNext(episode, line, gen)
 			// The stream opens off this thread: an engine that opened and never
 			// drew would otherwise hold the page, and the wait it owes the viewer
-			// would never be drawn at all.
-			url := playback.URL
+			// would never be drawn at all. The address it opens is worked out
+			// here, so the goroutine is handed a string instead of reaching into
+			// the page for the cache and the opener.
+			url := p.streamURL(playback.URL)
+			open, run := p.deps.OpenVideo, p.deps.Run
 			go func() {
-				system, err := p.open(url)
-				p.deps.Run(func() { p.takePlayer(system, err, openSeq) })
+				system, err := openStream(url, open)
+				run(func() { p.takePlayer(system, err, openSeq) })
 			}()
 			p.invalidate()
 		})
@@ -353,6 +356,8 @@ func (p *Page) warmNext(current source.Episode, line string, gen uint64) {
 	if p.deps.Cache == nil || p.deps.Source == nil {
 		return
 	}
+	// The episode and the line are worked out here on the main thread: the
+	// goroutine starts from values it was handed, and asks the page nothing.
 	next, ok := p.adjacent(current, 1)
 	if !ok {
 		return
@@ -365,6 +370,8 @@ func (p *Page) warmNext(current source.Episode, line string, gen uint64) {
 		if err != nil {
 			return
 		}
+		// The generation is read in the callback, never before it: gen is the
+		// page's own counter and only the main thread reads it.
 		run(func() {
 			if gen != p.gen {
 				return
@@ -411,9 +418,13 @@ func (p *Page) loadComments(episode source.Episode, gen uint64) {
 	p.comments, p.commentWhy = nil, commentLoading
 	run := p.deps.Run
 	title := p.detail.Title
+	// The source's own answers are taken here rather than in the callback, so
+	// the goroutine holds no page of the app: the page is main-thread state, and
+	// a background thread that reads it is a race however soon it reads.
+	src := p.deps.Source
 	lookup := p.deps.Danmaku
-	commenter, canComment := p.deps.Source.(source.Commenter)
-	publisher, publishes := p.deps.Source.(source.Manifest)
+	commenter, canComment := src.(source.Commenter)
+	publisher, publishes := src.(source.Manifest)
 	if lookup == nil && !canComment && !publishes {
 		p.commentWhy = commentUnsupported
 		return
@@ -422,6 +433,9 @@ func (p *Page) loadComments(episode source.Episode, gen uint64) {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
 		items, why := p.commentsFor(ctx, lookup, commenter, canComment, publisher, publishes, title, episode)
+		// Every read of the page, the generations included, happens in the
+		// callback: another resolve may have bumped them while this one was out
+		// fetching, and only the main thread is allowed to look.
 		run(func() {
 			if epoch != p.commentGen || gen != p.gen {
 				return
@@ -764,17 +778,31 @@ func (p *Page) spreadMoment(index, count int) time.Duration {
 	return time.Duration(index)*step + step/2
 }
 
-// open starts a system player for url, off the page's thread, which the engine
-// may take long to return from, or never return from at all. It returns what
-// OpenVideo gave, for the page's thread to take up with takePlayer.
-func (p *Page) open(url string) (*ui.VideoPlayer, error) {
+// openStream starts a system player for url with open, off the page's thread,
+// which the engine may take long to return from, or never return from at all. It
+// returns what open gave, for the page's thread to take up with takePlayer.
+//
+// It takes the opener rather than the page so the goroutine that runs it holds
+// nothing of the page: the page is main-thread state, and an address that came
+// back empty is the one failure this side can raise on its own.
+func openStream(url string, open func(string) (*ui.VideoPlayer, error)) (*ui.VideoPlayer, error) {
 	if url == "" {
 		return nil, errNoURL
+	}
+	return open(url)
+}
+
+// streamURL is the address the engine is asked for: the source's own, routed
+// through the cache when one is set. It is worked out on the main thread, so the
+// goroutine that opens the stream carries no reference to the page with it.
+func (p *Page) streamURL(url string) string {
+	if url == "" {
+		return ""
 	}
 	if p.deps.Cache != nil {
 		url = p.deps.Cache.ProxyURL(url)
 	}
-	return p.deps.OpenVideo(url)
+	return url
 }
 
 // takePlayer takes up the stream open started for the open of seq, or drops it

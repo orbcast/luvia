@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"luvia/apps/desktop/internal/source"
@@ -110,10 +109,6 @@ func passesOver(passed []string, id string) bool {
 // before the original playback stands.
 const lineBudget = 8
 
-// probePool reuses the response heads a line check reads. A page holds a few
-// at once and drops them, so they are kept rather than allocated per line.
-var probePool = sync.Pool{New: func() any { b := make([]byte, headBytes); return &b }}
-
 // headBytes is how many leading bytes tell media from a picture.
 const headBytes = 64
 
@@ -160,9 +155,10 @@ func readHead(ctx context.Context, request *http.Request) head {
 		return head{err: err}
 	}
 	defer response.Body.Close()
-	buffer := probePool.Get().(*[]byte)
-	defer probePool.Put(buffer)
-	body := *buffer
+	// Each head reads into a buffer of its own. A pool would hand a second line
+	// check the bytes the first one is still reading: a retry starts the next
+	// resolve while the last one is walking its lines, so two reads overlap.
+	body := make([]byte, headBytes)
 	n, err := io.ReadAtLeast(response.Body, body, 1)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 		return head{err: err}
