@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -14,17 +15,22 @@ type fakePreferences struct {
 	locale  string
 	sources []string
 	source  string
+	names   []string
+	secrets map[string]string
 }
 
 func (p *fakePreferences) deps() settings.Deps {
 	return settings.Deps{
-		Theme:     func() mygo.ThemeSource { return p.theme },
-		SetTheme:  func(source mygo.ThemeSource) { p.theme = source },
-		Locale:    func() string { return p.locale },
-		SetLocale: func(tag string) { p.locale = tag },
-		Sources:   func() []string { return p.sources },
-		Source:    func() string { return p.source },
-		SetSource: func(id string) { p.source = id },
+		Theme:       func() mygo.ThemeSource { return p.theme },
+		SetTheme:    func(source mygo.ThemeSource) { p.theme = source },
+		Locale:      func() string { return p.locale },
+		SetLocale:   func(tag string) { p.locale = tag },
+		Sources:     func() []string { return p.sources },
+		Source:      func() string { return p.source },
+		SetSource:   func(id string) { p.source = id },
+		SecretNames: func() []string { return p.names },
+		Secrets:     func() map[string]string { return p.secrets },
+		SetSecrets:  func(values map[string]string) { p.secrets = values },
 	}
 }
 
@@ -169,5 +175,80 @@ func TestSettingsShowsTheSystemLanguageWhenFollowingIt(t *testing.T) {
 	choose(t, tt, "简体中文", "English")
 	if prefs.locale != "en" {
 		t.Fatalf("locale = %q, want en", prefs.locale)
+	}
+}
+
+// TestSettingsOffersAFieldPerAccessKey covers the machine that never sees a
+// shell profile: a rule names its secret as ${env:NAME}, so the page offers
+// one field per name and stores what is typed there.
+func TestSettingsOffersAFieldPerAccessKey(t *testing.T) {
+	prefs := newPreferences()
+	prefs.names = []string{"KANJU_SECRET"}
+	page := settings.New(prefs.deps())
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
+	tt.SetLocale("zh-Hans")
+	tt.Frame()
+	if !tt.HasText("访问密钥") {
+		t.Fatalf("access key section missing: %v", tt.Texts())
+	}
+	if !tt.HasText("KANJU_SECRET") {
+		t.Fatalf("variable name missing: %v", tt.Texts())
+	}
+	// Click the field's own box: the name is on a label beside it.
+	x, y, err := fieldCentre(t, tt, prefs.names)
+	if err != nil {
+		t.Fatalf("field: %v", err)
+	}
+	tt.ClickAt(x, y)
+	tt.Type("s3cr3t-value")
+	// The value is handed over when the field loses focus, so a reader is
+	// not interrupted halfway through a secret.
+	tt.ClickAt(860, 560)
+	tt.Frame()
+	if got := prefs.secrets["KANJU_SECRET"]; got != "s3cr3t-value" {
+		t.Fatalf("stored %q, want s3cr3t-value", got)
+	}
+}
+
+// TestSettingsHidesAccessKeySectionsWithoutNames keeps a source that asks for
+// no variable from growing an empty section.
+func TestSettingsHidesAccessKeySectionsWithoutNames(t *testing.T) {
+	prefs := newPreferences()
+	page := settings.New(prefs.deps())
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
+	tt.SetLocale("zh-Hans")
+	tt.Frame()
+	if tt.HasText("访问密钥") {
+		t.Fatalf("empty access key section drawn: %v", tt.Texts())
+	}
+}
+
+// fieldCentre finds the box of the access key field, which sits to the right
+// of the row that names it: the page draws the name, then a 200 DIP input.
+func fieldCentre(t *testing.T, tt *ui.Tester, names []string) (float32, float32, error) {
+	t.Helper()
+	row, ok := tt.Find(names[0])
+	if !ok {
+		return 0, 0, errFieldMissing
+	}
+	return row.X + row.W + 100, row.Y + row.H/2, nil
+}
+
+var errFieldMissing = errors.New("access key row not drawn")
+
+// TestFieldCentreFindsTheInput pins the geometry the access key test relies
+// on: the name sits in the row, the input 200 DIPs to its right.
+func TestFieldCentreFindsTheInput(t *testing.T) {
+	prefs := newPreferences()
+	prefs.names = []string{"KANJU_SECRET"}
+	page := settings.New(prefs.deps())
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
+	tt.Frame()
+	x, y, err := fieldCentre(t, tt, prefs.names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x < 0 || y < 0 {
+		t.Fatalf("field at (%v, %v)", x, y)
 	}
 }

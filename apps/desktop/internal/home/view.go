@@ -788,6 +788,12 @@ func (p *Page) errorView(c *ui.Context, t *ui.Theme, m locales.Messages) {
 		if p.err != nil {
 			ui.Text(c, p.err.Error()).FontSize(12).TextColor(t.TextMuted).MaxLines(3)
 		}
+		// A signed source fails this way for one fixable reason: the machine
+		// has no value for the variable the rule names. Saying so here saves
+		// a reader from reading a signature error that looks like a bug.
+		if kind, ok := source.KindOf(p.err); ok && kind == source.ErrUnauthorized {
+			ui.Text(c, m.AccessKeyNeeded()).FontSize(12).TextColor(t.TextMuted)
+		}
 		retry := ui.ButtonBase(c).Height(34).Radius(10).Padding(16, 0).Label(m.Retry()).
 			Background(t.Inverse).TextColor(t.InverseText)
 		if retry.Hovered() {

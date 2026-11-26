@@ -49,6 +49,10 @@ type Set struct {
 	sources     []source.Source
 	byID        map[string]source.Source
 	diagnostics []Diagnostic
+	// rules keeps the decoded rule behind each source, so a caller can read
+	// what the file declares — the ${env:NAME} variables it asks for — without
+	// reading the directory again or narrowing the source interface.
+	rules []*rule.Rule
 }
 
 // Load reads dir, one source per subdirectory. Directories whose name starts
@@ -120,6 +124,7 @@ func Load(dir string, options engine.Options) (*Set, error) {
 			continue
 		}
 		set.sources = append(set.sources, built)
+		set.rules = append(set.rules, parsed)
 		set.byID[built.ID()] = built
 	}
 	return set, nil

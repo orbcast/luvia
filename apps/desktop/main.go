@@ -42,6 +42,14 @@ func main() {
 		sourcePath := filepath.Join(userData, "source.json")
 		localePath := filepath.Join(userData, "locale.json")
 		preferences.RestoreTheme(themePath, mygo.Theme.SetSource)
+		// A rule that signs its requests names the secret as ${env:NAME}, and
+		// the engine reads the process environment: an application opened from
+		// the Finder, the Dock or the Start menu inherits no shell profile, so
+		// the values a reader typed into the settings page are applied here,
+		// before any rule is loaded. Values the environment already defines
+		// win, so a shell that exports its own copy stays in charge.
+		secrets := preferences.LoadSecrets(userData)
+		preferences.ApplySecrets(secrets)
 		// The app is made for Simplified Chinese readers, but MyGo falls back
 		// on the language the catalogs are written in, English, whenever the
 		// system speaks none of the app's languages. Choosing the language
@@ -118,6 +126,23 @@ func main() {
 				}
 				window.Refresh()
 			},
+			// The variables the loaded rules ask for by name. A value typed
+			// here is stored and applied to this process, so the pages can be
+			// built again without a restart.
+			SecretNames: func() []string { return profile.secretNames },
+			Secrets:     func() map[string]string { return preferences.LoadSecrets(userData) },
+			SetSecrets: func(values map[string]string) {
+				if err := preferences.SaveSecrets(userData, values); err != nil {
+					log.Printf("secrets %s: %v", userData, err)
+					return
+				}
+				secrets = values
+				preferences.ApplySecrets(secrets)
+				// A newly supplied secret is what a failed request needed, so
+				// the pages are built again rather than left on the error.
+				applySource(sourceID(profile.source))
+				window.Refresh()
+			},
 		})
 		applySource = func(id string) {
 			profile = chooseSource(profile, id)
@@ -170,6 +195,9 @@ type profile struct {
 	// updates reports whether the chosen source carries an updates block, so
 	// the Discover page knows whether the week strip can ask it for a day.
 	updates bool
+	// secretNames lists the variables the loaded rules ask for by name, in
+	// the order they appear, so the settings page can offer a field for each.
+	secretNames []string
 }
 
 // openProfile opens the configured rule directory, the local library and the
@@ -198,7 +226,8 @@ func openProfile(ctx context.Context, userData, cache, wanted string) profile {
 	chosen := preferredSource(set, wanted)
 	return profile{
 		source: chosen, library: store, images: images, video: video,
-		rules: set, updates: hasUpdates(ctx, chosen),
+		secretNames: set.SecretNames(),
+		rules:       set, updates: hasUpdates(ctx, chosen),
 	}
 }
 

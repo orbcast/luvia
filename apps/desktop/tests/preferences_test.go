@@ -6,6 +6,7 @@ import (
 	"luvia/apps/desktop/internal/preferences"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -149,5 +150,79 @@ func TestLocalePreferenceFailures(t *testing.T) {
 func TestDefaultLocaleIsChinese(t *testing.T) {
 	if appshell.DefaultLocale != "zh-Hans" {
 		t.Fatalf("default locale: %q", appshell.DefaultLocale)
+	}
+}
+
+// TestSecretsRoundTrip covers the file a machine without a shell profile
+// needs: a rule asks for ${env:NAME}, the page stores NAME, and the next
+// launch reads it back.
+func TestSecretsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	if got := preferences.LoadSecrets(dir); got != nil {
+		t.Fatalf("first launch: %v", got)
+	}
+	want := map[string]string{"KANJU_SECRET": "abc123", "OTHER": "xyz"}
+	if err := preferences.SaveSecrets(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	got := preferences.LoadSecrets(dir)
+	if len(got) != len(want) {
+		t.Fatalf("loaded %v, want %v", got, want)
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Fatalf("%s = %q, want %q", name, got[name], value)
+		}
+	}
+	// The file holds a secret: only the owner may read it. Windows decides
+	// access with ACLs rather than permission bits, so the mode is only
+	// meaningful where the platform has them.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(filepath.Join(dir, "secrets.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0600 {
+			t.Fatalf("mode %v, want 0600", info.Mode().Perm())
+		}
+	}
+	// An empty set removes the file rather than leaving an empty object.
+	if err := preferences.SaveSecrets(dir, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := preferences.LoadSecrets(dir); got != nil {
+		t.Fatalf("after clearing: %v", got)
+	}
+}
+
+// TestSecretsIgnoreBrokenFiles keeps a half-written file from stopping the
+// application: the rules then ask for their variables the way they did
+// before the file existed.
+func TestSecretsIgnoreBrokenFiles(t *testing.T) {
+	dir := t.TempDir()
+	for _, data := range []string{"{", `{"KANJU_SECRET": 42}`, `{"": "x", "KANJU_SECRET": "  "}`} {
+		if err := os.WriteFile(filepath.Join(dir, "secrets.json"), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if got := preferences.LoadSecrets(dir); got != nil {
+			t.Fatalf("%q loaded as %v", data, got)
+		}
+	}
+}
+
+// TestApplySecretsLeavesTheEnvironmentInCharge keeps a shell that exports
+// its own copy from being overridden by a stored value.
+func TestApplySecretsLeavesTheEnvironmentInCharge(t *testing.T) {
+	t.Setenv("LU-EXPORTED", "from-shell")
+	if err := os.Unsetenv("LU-STORED"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Unsetenv("LU-STORED") })
+	preferences.ApplySecrets(map[string]string{"LU-EXPORTED": "from-file", "LU-STORED": "from-file"})
+	if got := os.Getenv("LU-EXPORTED"); got != "from-shell" {
+		t.Fatalf("exported value replaced with %q", got)
+	}
+	if got := os.Getenv("LU-STORED"); got != "from-file" {
+		t.Fatalf("stored value not applied: %q", got)
 	}
 }

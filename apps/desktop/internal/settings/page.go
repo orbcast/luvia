@@ -25,6 +25,14 @@ type Deps struct {
 	Sources   func() []string
 	Source    func() string
 	SetSource func(string)
+	// SecretNames lists the variables the loaded rules ask for by name, and
+	// Secrets returns the values stored for them. A rule signs its requests
+	// with one, and an application started from the Finder or the Start menu
+	// inherits no shell profile, so the page offers a field per name: a
+	// reader supplies the value here instead of exporting it in a terminal.
+	SecretNames func() []string
+	Secrets     func() map[string]string
+	SetSecrets  func(map[string]string)
 }
 
 // themeSources is the order of the appearance drop-down's choices.
@@ -50,6 +58,16 @@ type Page struct {
 	localeSynced int
 	source       int
 	sourceSynced int
+	// keys holds what the fields show, one per name in secretNames, and
+	// keysSynced is what was last loaded from or written to the store.
+	keys       []string
+	keysSynced []string
+	// editing is the index of the field that was last typed in, or -1, and
+	// focusedField is the field that held focus in the last frame, or -1.
+	// Both are needed: a value is stored when the field the reader typed in
+	// is no longer the focused one.
+	editing      int
+	focusedField int
 }
 
 // New builds the page over the stored preferences.
@@ -63,6 +81,8 @@ func New(deps Deps) *Page {
 	p.localeSynced = -1
 	p.source = sourceIndex(p.sources(), p.current())
 	p.sourceSynced = p.source
+	p.editing = -1
+	p.focusedField = -1
 	return p
 }
 
@@ -158,6 +178,7 @@ func (p *Page) View(c *ui.Context) ui.Element {
 			ui.Text(c, m.Settings()).FontSize(26).Bold().TextColor(theme.Text)
 			p.row(c, &theme, m.Appearance(), []string{m.FollowSystem(), m.Light(), m.Dark()}, &p.theme)
 			p.row(c, &theme, m.Language(), localeNames(m), &p.locale)
+			p.keysRow(c, &theme, m)
 			// A second source is the first moment choosing one means
 			// anything, so the row appears with it. The ids are the rule
 			// directory names, which is also what a viewer recognises.
@@ -180,7 +201,110 @@ func (p *Page) View(c *ui.Context) ui.Element {
 		p.deps.SetSource(ids[p.source])
 		p.sourceSynced = p.source
 	}
+	// A field hands its value over when it loses focus, so a reader is not
+	// interrupted halfway through a secret, and the other fields keep what
+	// they show. The fields report focus while they are drawn, so the frame
+	// that follows a blur is the one that stores what was typed.
+	if p.editing >= 0 && p.focusedField < 0 {
+		p.commitKeys()
+	}
 	return column
+}
+
+// commitKeys stores what the fields hold. An empty field means the variable
+// is left to the process environment, so it is dropped from the store.
+func (p *Page) commitKeys() {
+	if p.deps.SetSecrets == nil {
+		p.keysSynced = append([]string{}, p.keys...)
+		p.editing = -1
+		return
+	}
+	if changed(p.keys, p.keysSynced) {
+		values := make(map[string]string, len(p.keys))
+		for i, name := range p.secretNames() {
+			if i < len(p.keys) && strings.TrimSpace(p.keys[i]) != "" {
+				values[name] = strings.TrimSpace(p.keys[i])
+			}
+		}
+		p.deps.SetSecrets(values)
+	}
+	p.keysSynced = append([]string{}, p.keys...)
+	p.editing = -1
+}
+
+// secretNames is the list the fields are built from.
+func (p *Page) secretNames() []string {
+	if p.deps.SecretNames == nil {
+		return nil
+	}
+	return p.deps.SecretNames()
+}
+
+// changed reports whether two lists differ.
+func changed(a, b []string) bool {
+	if len(a) != len(b) {
+		return true
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// keysRow draws one field per variable the loaded rules ask for. A source
+// without such a variable adds no section at all.
+func (p *Page) keysRow(c *ui.Context, theme *ui.Theme, m locales.Messages) {
+	names := p.secretNames()
+	if len(names) == 0 || p.deps.Secrets == nil {
+		p.keys = nil
+		p.keysSynced = nil
+		return
+	}
+	p.focusedField = -1
+	stored := p.deps.Secrets()
+	fresh := make([]string, len(names))
+	for i, name := range names {
+		fresh[i] = stored[name]
+	}
+	// Three cases, and no fourth: a field list that does not exist yet is
+	// built from the store; one being typed in keeps what the reader typed;
+	// one sitting idle follows the store, so a value written elsewhere or
+	// cleared in the file shows up without a restart. The idle case only
+	// applies once the list has a length, because a store with no value and
+	// an empty field look the same and must not fight each other.
+	// The slice the inputs edit is kept for its own lifetime: rebuilding it
+	// every frame would hand the fields a new home mid-typing and lose what
+	// was typed. It is rebuilt only when the set of names changes.
+	if len(p.keys) != len(names) {
+		p.keys = fresh
+		p.keysSynced = append([]string{}, fresh...)
+	} else if p.editing < 0 && changed(fresh, p.keysSynced) {
+		copy(p.keys, fresh)
+		p.keysSynced = append([]string{}, fresh...)
+	}
+
+	ui.Column(c).MaxWidth(560).Gap(12).Children(func() {
+		ui.Text(c, m.AccessKeys()).FontSize(15).TextColor(theme.Text)
+		ui.Text(c, m.AccessKeyHint()).FontSize(13).TextColor(theme.TextMuted)
+		for i, name := range names {
+			i := i
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(20).Children(func() {
+				ui.Text(c, name).FontSize(14).TextColor(theme.Text).Grow(1)
+				input := ui.TextInputBase(c, &p.keys[i]).Password().Width(200).Height(38).
+					Placeholder(m.AccessKeyMissing()).Label(name)
+				// The field keeps what was typed in its own value, so the
+				// frame that follows typing draws the text rather than the
+				// placeholder it started from.
+				if input.Focused() {
+					p.editing = i
+					p.focusedField = i
+					input.TextColor(theme.Text)
+				}
+			})
+		}
+	})
 }
 
 // row is a setting: its name, and the drop-down choosing it, on one line.

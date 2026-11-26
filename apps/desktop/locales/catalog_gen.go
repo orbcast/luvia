@@ -174,6 +174,62 @@ func (msgs Messages) DataSource() string {
 	return Catalog.Format(msgs.locale, "dataSource", nil)
 }
 
+// AccessKeys says "Access keys"
+// in the language the app shows.
+//
+// Access key field in settings
+func AccessKeys() string { return In(i18n.Locale()).AccessKeys() }
+
+// AccessKeys says "Access keys"
+// in the language of msgs.
+//
+// Access key field in settings
+func (msgs Messages) AccessKeys() string {
+	return Catalog.Format(msgs.locale, "accessKeys", nil)
+}
+
+// AccessKeyHint says "Stored on this computer and used when a source asks for one."
+// in the language the app shows.
+//
+// Access key field in settings
+func AccessKeyHint() string { return In(i18n.Locale()).AccessKeyHint() }
+
+// AccessKeyHint says "Stored on this computer and used when a source asks for one."
+// in the language of msgs.
+//
+// Access key field in settings
+func (msgs Messages) AccessKeyHint() string {
+	return Catalog.Format(msgs.locale, "accessKeyHint", nil)
+}
+
+// AccessKeyMissing says "not set"
+// in the language the app shows.
+//
+// Access key field in settings
+func AccessKeyMissing() string { return In(i18n.Locale()).AccessKeyMissing() }
+
+// AccessKeyMissing says "not set"
+// in the language of msgs.
+//
+// Access key field in settings
+func (msgs Messages) AccessKeyMissing() string {
+	return Catalog.Format(msgs.locale, "accessKeyMissing", nil)
+}
+
+// AccessKeyNeeded says "Add an access key in Settings to use this source."
+// in the language the app shows.
+//
+// Hint shown on the Discover error page when a source lacks its access key
+func AccessKeyNeeded() string { return In(i18n.Locale()).AccessKeyNeeded() }
+
+// AccessKeyNeeded says "Add an access key in Settings to use this source."
+// in the language of msgs.
+//
+// Hint shown on the Discover error page when a source lacks its access key
+func (msgs Messages) AccessKeyNeeded() string {
+	return Catalog.Format(msgs.locale, "accessKeyNeeded", nil)
+}
+
 // FollowSystem says "Follow System"
 // in the language the app shows.
 //

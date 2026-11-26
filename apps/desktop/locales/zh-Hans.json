@@ -10,6 +10,22 @@
   "appearance": "外观",
   "language": "语言",
   "dataSource": "数据源",
+  "accessKeys": "访问密钥",
+  "@accessKeys": {
+    "description": "Access key field in settings"
+  },
+  "accessKeyHint": "保存在这台电脑上，数据源需要时自动使用。",
+  "@accessKeyHint": {
+    "description": "Access key field in settings"
+  },
+  "accessKeyMissing": "未填写",
+  "accessKeyNeeded": "在设置里填写访问密钥后即可使用这个数据源。",
+  "@accessKeyNeeded": {
+    "description": "Hint shown on the Discover error page when a source lacks its access key"
+  },
+  "@accessKeyMissing": {
+    "description": "Access key field in settings"
+  },
   "followSystem": "跟随系统",
   "light": "浅色",
   "dark": "深色",

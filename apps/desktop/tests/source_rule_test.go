@@ -332,3 +332,90 @@ func writeRule(t *testing.T, dir, name, content string) {
 		t.Fatalf("write rule %s: %v", name, err)
 	}
 }
+
+// TestLoaderListsAccessKeys covers the variables the settings page offers a
+// field for: every ${env:NAME} a rule sends, wherever it writes one, sorted
+// and without duplicates.
+func TestLoaderListsAccessKeys(t *testing.T) {
+	dir := t.TempDir()
+	writeRule(t, dir, "signed", `{
+		"schemaVersion": 1, "id": "signed", "name": "Signed", "baseURL": "https://signed.test",
+		"http": {"headers": [{"name": "x-extra", "value": "${env:FROM_HTTP}"}]},
+		"sign": {
+			"secret": "${env:KANJU_SECRET}",
+			"message": "{method}\n{path}\n{timestamp}\n{nonce}",
+			"headers": [{"name": "x-signature", "value": "{signature}"}]
+		},
+		"home": {
+			"steps": [{
+				"op": "request", "as": "res", "path": "/v1/home",
+				"query": [{"key": "k", "value": "static"}]
+			}],
+			"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+				"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}
+		},
+		"resolve": {
+			"steps": [{"op": "request", "as": "res", "path": "/v1/playback/{payload}"}],
+			"lines": {
+				"from": "res.lines[*]", "fields": {"id": "id", "url": "url"},
+				"exchange": {"ticket": "res.ticket", "url": "res.url", "urlKind": {"literal": "mp4"},
+					"request": {"method": "POST", "path": "/v1/exchange"}}
+			}
+		}
+	}`)
+	writeRule(t, dir, "plain", minimalRule("plain", "Plain"))
+	set, err := loader.Load(dir, engine.Options{})
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	want := []string{"FROM_HTTP", "KANJU_SECRET"}
+	got := set.SecretNames()
+	if len(got) != len(want) {
+		t.Fatalf("names = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("names = %v, want %v", got, want)
+		}
+	}
+}
+
+// TestVariablesCannotHideInTemplates pins why SecretNames only reads plain
+// string fields: a template field rejects ${env:X} at load time, so the
+// settings page cannot miss a variable written in one.
+func TestVariablesCannotHideInTemplates(t *testing.T) {
+	dir := t.TempDir()
+	writeRule(t, dir, "hidden", `{
+		"schemaVersion": 1, "id": "hidden", "name": "Hidden", "baseURL": "https://hidden.test",
+		"home": {
+			"steps": [{"op": "request", "as": "res", "path": "/v1/home",
+				"headers": [{"name": "x-token", "value": "${env:FROM_HEADER}"}]}],
+			"output": {"from": "res.sections[*]", "fields": {"id": "id", "title": "title"},
+				"cards": {"from": "cards[*]", "fields": {"id": "id", "title": "title"}}}
+		}
+	}`)
+	set, err := loader.Load(dir, engine.Options{})
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(set.Sources()) != 0 || len(set.Diagnostics()) != 1 {
+		t.Fatalf("sources = %v, diagnostics = %v", set.Sources(), set.Diagnostics())
+	}
+	if names := set.SecretNames(); len(names) != 0 {
+		t.Fatalf("names = %v, want none", names)
+	}
+}
+
+// TestLoaderReportsNoAccessKeysWithoutPlaceholders keeps a rule that writes
+// its own constants from growing an empty section in the settings page.
+func TestLoaderReportsNoAccessKeysWithoutPlaceholders(t *testing.T) {
+	dir := t.TempDir()
+	writeRule(t, dir, "plain", minimalRule("plain", "Plain"))
+	set, err := loader.Load(dir, engine.Options{})
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if names := set.SecretNames(); len(names) != 0 {
+		t.Fatalf("names = %v, want none", names)
+	}
+}

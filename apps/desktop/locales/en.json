@@ -37,6 +37,22 @@
     "description": "Application language submenu"
   },
   "dataSource": "Data source",
+  "accessKeys": "Access keys",
+  "@accessKeys": {
+    "description": "Access key field in settings"
+  },
+  "accessKeyHint": "Stored on this computer and used when a source asks for one.",
+  "@accessKeyHint": {
+    "description": "Access key field in settings"
+  },
+  "accessKeyMissing": "not set",
+  "accessKeyNeeded": "Add an access key in Settings to use this source.",
+  "@accessKeyNeeded": {
+    "description": "Hint shown on the Discover error page when a source lacks its access key"
+  },
+  "@accessKeyMissing": {
+    "description": "Access key field in settings"
+  },
   "@dataSource": {
     "description": "Source the app reads its titles from"
   },
@@ -327,7 +343,7 @@
   "playbackSpeed": "Playback speed",
   "subtitlesLabel": "Subtitles",
   "danmakuLabel": "Danmaku",
-  "danmakuLoading": "Looking for danmaku\u2026",
+  "danmakuLoading": "Looking for danmaku…",
   "danmakuNoMatch": "No danmaku source matched this show",
   "danmakuNoEpisode": "The show was found, but not this episode",
   "danmakuEmpty": "This episode has no danmaku yet",

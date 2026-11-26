@@ -89,6 +89,8 @@ make skills   # 更新 .agents/skills
 
 首次开发先 `cp .env.example .env`，按模板填写源规则需要的密钥（当前只有 `KANJU_SECRET`）；`make dev` 会自动加载 `.env`，已 export 的同名变量优先。模板本身不含任何值，仓库规则会拦下填了值的 `.env.example`，真实密钥只留在本地 `.env`。
 
+安装包不带密钥，也不能指望用户去改 shell 环境：从开始菜单、Finder 或 Dock 启动的进程读不到 `.env` 和 shell 配置。所以发布版在「设置 → 访问密钥」里为规则声明的每个变量提供一个输入框，值存进用户数据目录的 `secrets.json`（权限 0600），启动时补进进程环境，已有的同名变量优先。理由与代价见 [ADR 0019](docs/adr/0019-access-keys-in-the-app.md)。
+
 ## 桌面框架
 
 主窗口提供发现、资源库、追剧、搜索、设置五个导航入口，点击、菜单和 `⌘1`～`⌘5` 同步选中状态，`⌘,` 进入设置；发现、资源库、详情与播放为已实现页面，追剧、搜索仍为占位。显示菜单可切换主题和语言并记住选择，系统菜单和窗口行为复用 MyGo。框架代码按 `internal/` 下的导航、窗口与偏好职责划分，`main.go` 只做组装，详见 [桌面说明](apps/desktop/README.md) 与 [ADR 0007](docs/adr/0007-desktop-shell.md)。
