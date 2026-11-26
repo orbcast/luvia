@@ -133,6 +133,7 @@ make skills   # 更新 .agents/skills
 
 - `identifier` 决定应用数据目录与单实例身份，正式使用前改成自己的反向域名；改名会让旧数据目录失效。
 - `i18n.dir` 指向 catalogs 目录，`source` 是源语言；改这两项会改变生成代码与语言回退行为。
+- 源语言是 `en`，但面向中文用户：首次启动不跟随系统英文回退，而由入口显式落到 `zh-Hans` 并记住选择（`apps/desktop/internal/appshell/locale.go` 的 `DefaultLocale`、`internal/preferences/locale.go`）。菜单与设置页的语言项按各自语言书写（`English` / `简体中文`），因此读不懂当前界面也能找回中文。
 - 原生界面应用不需要 `mygo.config.ts`，也不需要 Node 工具链。
 
 ### 图标

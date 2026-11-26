@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
+	"luvia/apps/desktop/internal/appshell"
 	"luvia/apps/desktop/internal/design"
 	"luvia/apps/desktop/internal/icons"
 	"luvia/apps/desktop/locales"
@@ -29,10 +30,11 @@ type Deps struct {
 // themeSources is the order of the appearance drop-down's choices.
 var themeSources = [...]mygo.ThemeSource{mygo.ThemeSystem, mygo.ThemeLight, mygo.ThemeDark}
 
-// localeTags is the order of the language drop-down's choices. The follow
-// system choice stays reachable from the menu: when it is in force the
-// drop-down shows the language now in effect.
-var localeTags = [...]string{"en", "zh-Hans"}
+// localeTags is the order of the language drop-down's choices, shared with
+// the menu so the two never disagree. The follow system choice stays
+// reachable from the menu: when it is in force the drop-down shows the
+// language now in effect.
+var localeTags = appshell.LocaleTags()
 
 // Page is the settings view. It holds no preference of its own; the
 // controls write the choice back, so the menu and the page always agree.
@@ -102,6 +104,16 @@ func themeIndex(source mygo.ThemeSource) int {
 	return 0
 }
 
+// localeNames names the languages of the drop-down in the language of m,
+// as the menu does, so the choice stays findable whatever is shown now.
+func localeNames(m locales.Messages) []string {
+	names := make([]string, 0, len(localeTags))
+	for _, tag := range localeTags {
+		names = append(names, appshell.LocaleName(m, tag))
+	}
+	return names
+}
+
 func localeIndex(tag string) int {
 	for i, it := range localeTags {
 		if tag == it || strings.HasPrefix(tag, it) {
@@ -145,7 +157,7 @@ func (p *Page) View(c *ui.Context) ui.Element {
 		ui.Column(c).MaxWidth(560).Gap(30).Children(func() {
 			ui.Text(c, m.Settings()).FontSize(26).Bold().TextColor(theme.Text)
 			p.row(c, &theme, m.Appearance(), []string{m.FollowSystem(), m.Light(), m.Dark()}, &p.theme)
-			p.row(c, &theme, m.Language(), []string{m.English(), m.SimplifiedChinese()}, &p.locale)
+			p.row(c, &theme, m.Language(), localeNames(m), &p.locale)
 			// A second source is the first moment choosing one means
 			// anything, so the row appears with it. The ids are the rule
 			// directory names, which is also what a viewer recognises.

@@ -2,6 +2,7 @@ package appshell
 
 import (
 	"fmt"
+
 	"github.com/egoist/mygo"
 	"luvia/apps/desktop/locales"
 )
@@ -21,6 +22,9 @@ func (s *Shell) SyncMenu(menu *mygo.Menu) {
 	}
 }
 
+// Menu builds the application menu. The language items name their language
+// in the language of the menu being built, so a reader who cannot read the
+// language shown still finds the one they want.
 func (s *Shell) Menu(m locales.Messages, actions MenuActions) *mygo.Menu {
 	navigate := func(p Page) func(*mygo.MenuItem, *mygo.Window) {
 		return func(_ *mygo.MenuItem, _ *mygo.Window) { s.Navigate(p) }
@@ -36,10 +40,11 @@ func (s *Shell) Menu(m locales.Messages, actions MenuActions) *mygo.Menu {
 			Label: []string{m.FollowSystem(), m.Light(), m.Dark()}[i], Type: mygo.MenuItemRadio, Checked: actions.Theme() == source,
 			Click: func(_ *mygo.MenuItem, _ *mygo.Window) { actions.SetTheme(source) }})
 	}
-	languages := make([]*mygo.MenuItem, 0, 3)
-	for i, tag := range []string{"", "zh-Hans", "en"} {
+	languages := make([]*mygo.MenuItem, 0, len(LocaleTags())+1)
+	choices := append([]string{""}, LocaleTags()...)
+	for _, tag := range choices {
 		languages = append(languages, &mygo.MenuItem{ID: "locale-" + tag,
-			Label: []string{m.FollowSystem(), m.SimplifiedChinese(), m.English()}[i], Type: mygo.MenuItemRadio, Checked: actions.Locale() == tag,
+			Label: LocaleName(m, tag), Type: mygo.MenuItemRadio, Checked: actions.Locale() == tag,
 			Click: func(_ *mygo.MenuItem, _ *mygo.Window) { actions.SetLocale(tag) }})
 	}
 	view := append(navigation, mygo.Separator(),

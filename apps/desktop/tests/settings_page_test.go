@@ -104,7 +104,9 @@ func TestSettingsLanguageChoiceIsSaved(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
 	tt.SetLocale("en")
 	tt.Frame()
-	choose(t, tt, "English", "Simplified Chinese")
+	// The drop-down names each language in the language shown, so a reader
+	// who cannot read English still finds their own.
+	choose(t, tt, "English", "简体中文")
 	if prefs.locale != "zh-Hans" {
 		t.Fatalf("locale = %q, want zh-Hans", prefs.locale)
 	}
@@ -115,7 +117,7 @@ func TestSettingsLanguageChoiceIsSaved(t *testing.T) {
 			t.Fatalf("missing %q in %v", want, tt.Texts())
 		}
 	}
-	choose(t, tt, "简体中文", "英文")
+	choose(t, tt, "简体中文", "English")
 	if prefs.locale != "en" {
 		t.Fatalf("locale = %q, want en", prefs.locale)
 	}
@@ -164,7 +166,7 @@ func TestSettingsShowsTheSystemLanguageWhenFollowingIt(t *testing.T) {
 	if !tt.HasText("简体中文") {
 		t.Fatalf("follow system language not shown: %v", tt.Texts())
 	}
-	choose(t, tt, "简体中文", "英文")
+	choose(t, tt, "简体中文", "English")
 	if prefs.locale != "en" {
 		t.Fatalf("locale = %q, want en", prefs.locale)
 	}

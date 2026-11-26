@@ -2,6 +2,7 @@ package tests
 
 import (
 	"github.com/egoist/mygo"
+	"luvia/apps/desktop/internal/appshell"
 	"luvia/apps/desktop/internal/preferences"
 	"os"
 	"path/filepath"
@@ -108,5 +109,45 @@ func TestPreferenceSourceFailures(t *testing.T) {
 	}
 	if entries, err := os.ReadDir(dir); err != nil || len(entries) != 1 {
 		t.Fatalf("failed save left files: %v %v", entries, err)
+	}
+}
+
+func TestLocalePreferenceRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "preferences", "locale.json")
+	if got := preferences.LoadLocale(path); got != "" {
+		t.Fatalf("first launch: %q", got)
+	}
+	for _, want := range []string{"zh-Hans", "en", ""} {
+		if err := preferences.SaveLocale(path, want); err != nil {
+			t.Fatal(err)
+		}
+		if got := preferences.LoadLocale(path); got != want {
+			t.Fatalf("roundtrip: %q, want %q", got, want)
+		}
+		entries, err := os.ReadDir(filepath.Dir(path))
+		if err != nil || len(entries) != 1 {
+			t.Fatalf("temporary files left behind: %v %v", entries, err)
+		}
+	}
+}
+
+func TestLocalePreferenceFailures(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "locale.json")
+	for _, data := range []string{"{", `{"locale":42}`} {
+		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if got := preferences.LoadLocale(path); got != "" {
+			t.Fatalf("bad file did not fall back: %q %q", data, got)
+		}
+	}
+}
+
+// TestDefaultLocaleIsChinese keeps the first launch on a system whose
+// language the app is not written in from showing English, the language of
+// the catalogs: the app opens in Simplified Chinese instead.
+func TestDefaultLocaleIsChinese(t *testing.T) {
+	if appshell.DefaultLocale != "zh-Hans" {
+		t.Fatalf("default locale: %q", appshell.DefaultLocale)
 	}
 }

@@ -40,7 +40,18 @@ func main() {
 		}
 		themePath := filepath.Join(userData, "theme.json")
 		sourcePath := filepath.Join(userData, "source.json")
+		localePath := filepath.Join(userData, "locale.json")
 		preferences.RestoreTheme(themePath, mygo.Theme.SetSource)
+		// The app is made for Simplified Chinese readers, but MyGo falls back
+		// on the language the catalogs are written in, English, whenever the
+		// system speaks none of the app's languages. Choosing the language
+		// here, before the window is built, keeps that fallback from ever
+		// showing, and MyGo keeps the choice for the next launch.
+		if chosen := preferences.LoadLocale(localePath); chosen != "" {
+			mygo.App.SetLocale(chosen)
+		} else if tag := mygo.App.Locale(); tag == "en" {
+			mygo.App.SetLocale(appshell.DefaultLocale)
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -77,7 +88,13 @@ func main() {
 		actions := appshell.MenuActions{
 			Theme:    mygo.Theme.Source,
 			SetTheme: func(source mygo.ThemeSource) { preferences.ChangeTheme(themePath, source, mygo.Theme.SetSource) },
-			Locale:   mygo.App.ChosenLocale, SetLocale: mygo.App.SetLocale,
+			Locale:   mygo.App.ChosenLocale,
+			SetLocale: func(tag string) {
+				mygo.App.SetLocale(tag)
+				if err := preferences.SaveLocale(localePath, tag); err != nil {
+					log.Printf("locale preference %s: %v", localePath, err)
+				}
+			},
 		}
 
 		// applySource points every source-bound page at id, and is how both the

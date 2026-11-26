@@ -21,11 +21,12 @@
 
 ## 多语言与组件复用
 
-- 用户可见文案、导航提示、无障碍名称和自定义菜单标签必须接入 MyGo 内置多语言功能，不在界面或动作代码中写死中文或英文；`scripts/check-rules.py` 会检查非测试 Go 代码里的中日韩字符串字面量。当前语言为英文（`en`，源语言）和简体中文（`zh-Hans`）。
-- 文案在 `locales/en.json` 与 `locales/zh-Hans.json`，`mygo.json` 的 `i18n` 段指向该目录，`go tool mygo generate` 生成 `locales/catalog_gen.go`。界面只调用生成函数（如 `locales.Discover()`、`locales.Settings()`），改文案先改 catalogs 再生成，不自行实现平行字典或语言持久化。
-- 品牌名 `Luvia` 不翻译，保留字面量；其余文案一律进 catalogs。语言选择与持久化复用 MyGo 提供的 API，切换后同步自定义菜单等一次性设置的标签。
-- 测试用 `locales.In("en")` 取查找标签与断言文本，不写死中文；验证“界面跟随语言”时用 `i18n.SetLocaleFunc` 指向 `zh-Hans` 并在 `t.Cleanup` 恢复。流程与取舍见 [ADR 0005](../../docs/adr/0005-localized-messages.md)。
-- 优先复用当前 MyGo 版本提供的控件、布局、输入、焦点和无障碍能力，减少自绘制组件。液态玻璃效果优先用官方 `plugins/glass` 材质或适用的窗口材质，不自绘一套玻璃效果。
+- 用户可见文案、导航提示、无障碍名称和自定义菜单标签必须接入 MyGo 多语言，不在界面或动作代码里写死中文或英文；`scripts/check-rules.py` 检查非测试 Go 代码中的中日韩字面量。当前语言为 `en`（源语言）与 `zh-Hans`。
+- 文案在 `locales/en.json` 与 `locales/zh-Hans.json`，`mygo.json` 的 `i18n` 段指向该目录，`go tool mygo generate` 生成 `locales/catalog_gen.go`；界面只调用生成函数，改文案先改 catalogs 再生成，不另建字典。
+- 品牌名 `Luvia` 不翻译；其余文案进 catalogs，语言用 MyGo API，切换后同步菜单标签。
+- 测试用 `locales.In("en")` 取标签与断言，不写死中文；验证“界面跟随语言”时用 `i18n.SetLocaleFunc` 指向 `zh-Hans` 并在 `t.Cleanup` 恢复，见 [ADR 0005](../../docs/adr/0005-localized-messages.md)。
+- 源语言英文、读者面向中文：系统语言不匹配时 MyGo 回退源语言，入口因此在窗口构建前按 `appshell.InitialLocale` 落到 `zh-Hans` 并写 `locale.json`；语言项按各自语言书写（`English` / `简体中文`）。
+- 优先复用当前 MyGo 版本的控件、布局、输入、焦点与无障碍能力，减少自绘制组件；玻璃效果用官方 `plugins/glass` 材质或窗口材质，不自绘。
 - UI 命名复用 [UI 术语表](../../docs/terminology.md)；新增术语按根目录规则与用户确认并简短记录。
 
 ## 设计 Token 与界面图标

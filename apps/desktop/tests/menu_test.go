@@ -95,3 +95,30 @@ func TestMenuLocalizationAndRoles(t *testing.T) {
 		t.Fatal("invalid page has label")
 	}
 }
+
+// TestMenuNamesLanguagesInTheirOwnLanguage keeps the language submenu
+// readable to a reader who cannot read the language shown: each item says
+// its language's own name.
+func TestMenuNamesLanguagesInTheirOwnLanguage(t *testing.T) {
+	s := appshell.New()
+	actions := appshell.MenuActions{
+		Theme:  func() mygo.ThemeSource { return mygo.ThemeSystem },
+		Locale: func() string { return "zh-Hans" }, SetLocale: func(string) {},
+	}
+	for _, shown := range []string{"en", "zh-Hans"} {
+		m := locales.In(shown)
+		menu := s.Menu(m, actions)
+		if got := menu.ItemByID("locale-en").Label; got != "English" {
+			t.Fatalf("en item in %s: %q", shown, got)
+		}
+		if got := menu.ItemByID("locale-zh-Hans").Label; got != "简体中文" {
+			t.Fatalf("zh-Hans item in %s: %q", shown, got)
+		}
+		if got := menu.ItemByID("locale-").Label; got != m.FollowSystem() {
+			t.Fatalf("follow system item in %s: %q", shown, got)
+		}
+		if !menu.ItemByID("locale-zh-Hans").IsChecked() || menu.ItemByID("locale-en").IsChecked() {
+			t.Fatalf("checked language is wrong in %s", shown)
+		}
+	}
+}
