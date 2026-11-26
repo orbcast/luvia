@@ -41,12 +41,21 @@ func TestPlayerBandsStayClearOfThePicture(t *testing.T) {
 		}
 		images := media.New(t.TempDir(), media.Options{})
 		images.SetRunner(func(fn func()) { fn() })
+		// The resolve posts its result to the page's own thread; the case runs
+		// those callbacks between frames the way the running app's main thread
+		// does, so the background resolve never writes state this one draws.
+		run := make(chan func(), 16)
 		page := player.New(player.Deps{
 			Source: src, Library: store, Images: images,
-			Run:       func(fn func()) { fn() },
+			Run:       func(fn func()) { run <- fn },
 			OpenVideo: func(string) (*ui.VideoPlayer, error) { return portraitFrame(t), nil },
 		})
 		page.Open(src.detail, src.episodes, 0)
+		// The resolve posts its first answer here, and taking the stream up posts
+		// the next one from a goroutine of its own. Both have to have landed
+		// before a frame is drawn: the case reads the picture's own pixels, and a
+		// stage that has not taken its player up yet draws no picture at all.
+		applyAll(t, run)
 		tt := ui.NewTester(func(c *ui.Context) {
 			theme := design.Theme(ui.DarkTheme())
 			if !dark {

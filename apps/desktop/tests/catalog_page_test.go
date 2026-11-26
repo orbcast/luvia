@@ -88,6 +88,36 @@ func apply(t *testing.T, run chan func()) {
 	}
 }
 
+// applyAll runs the callbacks queued for the page's own thread and reports how
+// many it ran, counting only the run that was still going when the queue went
+// quiet for a moment. A page callback often posts the next one from a goroutine
+// of its own, so an empty queue right after one callback means nothing: a case
+// that reads what the page built from an answer waits for the quiet, otherwise it
+// draws a page that has not taken its player up yet.
+func applyAll(t *testing.T, run chan func()) int {
+	t.Helper()
+	ran := 0
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		select {
+		case fn := <-run:
+			fn()
+			ran++
+		case <-time.After(idleQueued):
+			// Nothing came in for a whole quiet window: whatever the last
+			// callback posted has either landed again or never will.
+			return ran
+		case <-time.After(time.Until(deadline)):
+			t.Fatal("the page's callbacks never settled")
+		}
+	}
+}
+
+// idleQueued is how long a queue has to stay empty before the callbacks are
+// taken for settled. It is a window, not a poll interval: the goroutine that
+// posts the next callback has already been started by the one just run.
+const idleQueued = 50 * time.Millisecond
+
 func TestCatalogRendersAndFiltersCategories(t *testing.T) {
 	page, _, run := newCatalogPage(t)
 	page.Start()

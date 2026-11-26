@@ -3,6 +3,7 @@ package tests
 import (
 	"image"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -107,6 +108,11 @@ func isGlass(frame image.Image, x, y int) bool {
 // waitingStageShot draws the player on a stream that never opens, so the top
 // line is the frame a viewer sees while the stage waits — the frame they have
 // to be able to leave from.
+//
+// The callbacks the resolve posts are run one at a time between frames, the way
+// the running app's main thread runs them, rather than on the goroutine that
+// posted them: the page is main-thread state, and a Run that executes inline
+// lets a background thread write it while this one draws it.
 func waitingStageShot(t *testing.T, width, height int) image.Image {
 	t.Helper()
 	src, _ := sampleTitle()
@@ -114,9 +120,10 @@ func waitingStageShot(t *testing.T, width, height int) image.Image {
 	if err != nil {
 		t.Fatal(err)
 	}
+	run := make(chan func(), 16)
 	page := player.New(player.Deps{
 		Source: src, Library: store,
-		Run:       func(fn func()) { fn() },
+		Run:       func(fn func()) { run <- fn },
 		OpenVideo: func(string) (*ui.VideoPlayer, error) { select {} },
 	})
 	tt := ui.NewTester(func(c *ui.Context) {
@@ -126,6 +133,15 @@ func waitingStageShot(t *testing.T, width, height int) image.Image {
 	}, width, height)
 	tt.SetLocale("en")
 	page.Open(src.detail, src.episodes, 0)
+	// The stream's open never returns, so the only callback that ever lands is
+	// the resolve's own: the stage keeps waiting, which is the frame this case
+	// measures. Nothing is drained after the last frame for the same reason.
+	select {
+	case fn := <-run:
+		fn()
+	case <-time.After(5 * time.Second):
+		t.Fatal("the resolve never landed")
+	}
 	tt.Frame()
 	frame := tt.Image()
 	if frame == nil {
