@@ -634,3 +634,79 @@ func TestNarrowGridKeepsMoreThanOneColumn(t *testing.T) {
 		t.Fatalf("wide grid is %v wide by %d columns, want %v by 7", wide, wideColumns, posterWidth)
 	}
 }
+
+func TestClearedBoxLabelsTheLastResults(t *testing.T) {
+	src := &fakeSource{answers: map[string][]source.Card{
+		"dune": {movie("dune", "Dune")},
+	}}
+	page, finished := newPage(t, Deps{Source: src})
+	tt := render(page, 1100, 720, true)
+	tt.Frame()
+	page.Search("dune")
+	wait(t, finished)
+	tt.Frame()
+
+	if tt.HasText("Last search") {
+		t.Fatalf("a running keyword's results carry a last-search head: %v", tt.Texts())
+	}
+
+	// Clear the box as the field's own button does: the keyword and the
+	// submitted search part ways, and the view reads that as the last search.
+	page.keyword = ""
+	page.invalidate()
+	tt.Frame()
+	if !page.lastSearch() {
+		t.Fatalf("cleared box is not read as the last search (submitted %q, box %q, %d cards)",
+			page.submitted, page.keyword, len(page.cards))
+	}
+	if !tt.HasText("Last search") || !tt.HasText("Search again") {
+		t.Fatalf("cleared box did not label the last results: %v", tt.Texts())
+	}
+	if tt.HasText("Search the catalog") || tt.HasText("browse the library") {
+		t.Fatalf("the cleared page says two contradictory things: %v", tt.Texts())
+	}
+
+	before := len(src.queries())
+	if err := tt.Click("Search again"); err != nil {
+		t.Fatalf("clicking search again: %v", err)
+	}
+	wait(t, finished)
+	tt.Frame()
+	if got := src.queries(); len(got) != before+1 || got[len(got)-1] != "dune" {
+		t.Fatalf("queries are %v, want dune again", got)
+	}
+	if page.lastSearch() || tt.HasText("Last search") {
+		t.Fatalf("the head outlived the search it named: %v", tt.Texts())
+	}
+}
+
+func TestEmptyStateNamesNoUnverifiedKeyword(t *testing.T) {
+	src := &fakeSource{answers: map[string][]source.Card{
+		"dune": {movie("dune", "Dune")},
+	}}
+	page, finished := newPage(t, Deps{Source: src})
+	tt := render(page, 1100, 720, true)
+	tt.Frame()
+	page.Search("dune")
+	wait(t, finished)
+	page.Search("nothing")
+	wait(t, finished)
+	tt.Frame()
+
+	if !tt.HasText("has no match") {
+		t.Fatalf("empty state missing in %v", tt.Texts())
+	}
+	// "dune" answered, but the empty state may not offer it as something that
+	// will answer: the historical words stay on the keyword line, and the
+	// page's own copy only tells the user how to search again.
+	if !tt.HasText("Try another spelling") {
+		t.Fatalf("empty state has no hint: %v", tt.Texts())
+	}
+	for _, text := range tt.Texts() {
+		if strings.Contains(text, "Try") {
+			if strings.Contains(text, "dune") {
+				t.Fatalf("hint names a keyword: %q", text)
+			}
+		}
+	}
+}
