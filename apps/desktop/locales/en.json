@@ -395,5 +395,57 @@
   "expandPanel": "Show panel",
   "listSeparator": ", ",
   "searchPlaceholder": "Search titles, cast",
-  "searchIdle": "Search the catalog"
+  "searchIdle": "Search the catalog",
+  "searchRecent": "Recently",
+  "@searchRecent": {
+    "description": "Label of the keywords searched this session, beside the search box"
+  },
+  "searchIdleHint": "Search titles, people and tags from the source.",
+  "@searchIdleHint": {
+    "description": "Line under the idle search page's heading"
+  },
+  "searchIdleExample": "Try a title such as “dune”, or an actor's name.",
+  "@searchIdleExample": {
+    "description": "Example keywords of the idle search page"
+  },
+  "searchRecentSession": "This session",
+  "@searchRecentSession": {
+    "description": "Note that the recent keywords last only for this session"
+  },
+  "searchNoResults": "“{keyword}” has no match",
+  "@searchNoResults": {
+    "description": "Heading of a search that answered no titles"
+  },
+  "searchNoResultsHint": "{source} answered nothing. Check the spelling, or search for what the title is known as.",
+  "@searchNoResultsHint": {
+    "description": "Explanation of a search that answered no titles; {source} is the source's name"
+  },
+  "searchStatus": "{status} · {episodes}",
+  "@searchStatus": {
+    "description": "A show's second line under a search result: whether it is still updating or complete, then its episodes when the source names a count, as in “Updating · 8 episodes”."
+  },
+  "searchLastQuery": "Last search",
+  "@searchLastQuery": {
+    "description": "Shelf head over the titles the last keyword answered, while the box is empty."
+  },
+  "searchSearchAgain": "Search again",
+  "@searchSearchAgain": {
+    "description": "Button that runs the last keyword once more."
+  },
+  "searchNoResultsHintAgain": "Try another spelling, or a cast member's name.",
+  "@searchNoResultsHintAgain": {
+    "description": "Says how to search again after a keyword answered nothing, without naming keywords."
+  },
+  "searchBrowseLibrary": "You can also browse the library by category.",
+  "@searchBrowseLibrary": {
+    "description": "Line that points to the resource library under an empty search"
+},
+  "episodesUpdating": "Up to episode {count}",
+  "@episodesUpdating": {
+    "description": "Episodes a show that still airs has reached, as its search card says"
+  },
+  "episodesComplete": "{count, plural, one {# episode} other {# episodes}}",
+  "@episodesComplete": {
+    "description": "Episodes a finished show holds, as its search card says"
+  }
 }

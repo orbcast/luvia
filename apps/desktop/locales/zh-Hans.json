@@ -182,5 +182,57 @@
   "expandPanel": "展开侧栏",
   "listSeparator": "、",
   "searchPlaceholder": "搜索片名、演员",
-  "searchIdle": "搜索资源库"
+  "searchIdle": "搜索资源库",
+  "searchRecent": "最近",
+  "@searchRecent": {
+    "description": "Label of the keywords searched this session, beside the search box"
+  },
+  "searchIdleHint": "按片名、演员和标签搜索数据源。",
+  "@searchIdleHint": {
+    "description": "Line under the idle search page's heading"
+  },
+  "searchIdleExample": "试试“沙丘”这样的片名，或某个演员的名字。",
+  "@searchIdleExample": {
+    "description": "Example keywords of the idle search page"
+  },
+  "searchRecentSession": "本次会话",
+  "@searchRecentSession": {
+    "description": "Note that the recent keywords last only for this session"
+  },
+  "searchNoResults": "“{keyword}”没有结果",
+  "@searchNoResults": {
+    "description": "Heading of a search that answered no titles"
+  },
+  "searchNoResultsHint": "{source}没有返回结果。检查拼写，或换个大家都用的译名再搜。",
+  "@searchNoResultsHint": {
+    "description": "Explanation of a search that answered no titles; {source} is the source's name"
+  },
+  "searchStatus": "{status} · {episodes}",
+  "@searchStatus": {
+    "description": "搜索结果里剧集卡片第二行：先说明是否更新中或已完结，数据源给出集数时再接集数，例如“更新中 · 第 8 集”。"
+  },
+  "searchLastQuery": "上次搜索",
+  "@searchLastQuery": {
+    "description": "输入框为空时，上一批结果上方的分隔标签。"
+  },
+  "searchSearchAgain": "重新搜索",
+  "@searchSearchAgain": {
+    "description": "再搜一次上次关键词的按钮。"
+  },
+  "searchNoResultsHintAgain": "换个写法，或者试试演员的名字。",
+  "@searchNoResultsHintAgain": {
+    "description": "关键词没有结果时提示如何再搜，不点名任何关键词。"
+  },
+  "searchBrowseLibrary": "也可以去资源库按分类翻找。",
+  "@searchBrowseLibrary": {
+    "description": "Line that points to the resource library under an empty search"
+},
+  "episodesUpdating": "更新至第 {count} 集",
+  "@episodesUpdating": {
+    "description": "Episodes a show that still airs has reached, as its search card says"
+  },
+  "episodesComplete": "全 {count} 集",
+  "@episodesComplete": {
+    "description": "Episodes a finished show holds, as its search card says"
+  }
 }

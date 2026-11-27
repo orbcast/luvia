@@ -450,6 +450,21 @@
       "sha256": "4db49f718db7e554646242397ae5da56cec7ceadeb5eff56177a7fe428935f99",
       "source": "https://api.iconify.design/solar/playlist-linear.svg"
     },
+    "solar:refresh-linear": {
+      "author": {
+        "name": "480 Design",
+        "url": "https://www.figma.com/community/file/1166831539721848736"
+      },
+      "catalog": "https://icon-sets.iconify.design/solar/refresh-linear/",
+      "file": "solar--refresh-linear.svg",
+      "license": {
+        "spdx": "CC-BY-4.0",
+        "title": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "sha256": "928301b9516eb6870ded36b053392df804222039963a7a28585393e71b5cf19d",
+      "source": "https://api.iconify.design/solar/refresh-linear.svg"
+    },
     "solar:rewind-10-seconds-back-linear": {
       "author": {
         "name": "480 Design",

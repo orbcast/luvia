@@ -49,6 +49,7 @@ ICONS = (
     ("slider-horizontal", "linear"),
     ("slider-horizontal", "bold"),
     ("settings-minimalistic", "linear"),
+    ("refresh", "linear"),
 )
 
 OUTPUT = "apps/desktop/internal/icons/icons_gen.go"

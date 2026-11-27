@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -206,7 +207,9 @@ func TestSubmittingKeywordSearches(t *testing.T) {
 	if query := src.lastQuery(); query.Keyword != "dune" || query.Page != 1 {
 		t.Fatalf("query was %+v, want keyword dune on page 1", query)
 	}
-	for _, want := range []string{"Dune", "Severance", "4K", "1080P", "Updating", "Completed"} {
+	// Each kind gets its own shelf, named and counted, and a show's second
+	// line says where it stands.
+	for _, want := range []string{"Dune", "Severance", "4K", "1080P", "Series", "Movies", "Updating"} {
 		if !tt.HasText(want) {
 			t.Fatalf("missing %q in %v", want, tt.Texts())
 		}
@@ -522,5 +525,112 @@ func TestNarrowLayoutDrawsResults(t *testing.T) {
 	}
 	if _, ok := tt.Find("Search"); !ok {
 		t.Fatalf("search box missing in %v", tt.Texts())
+	}
+}
+
+func TestIdleKeepsRememberedKeywords(t *testing.T) {
+	page, finished := newPage(t, Deps{Source: &fakeSource{}})
+	tt := render(page, 1100, 720, true)
+	tt.Frame()
+
+	page.Search("dune")
+	wait(t, finished)
+	page.Search("")
+	tt.Frame()
+
+	// The box is empty again, so the page offers what it searched instead of
+	// claiming the source had no match.
+	if !tt.HasText("Search the catalog") || !tt.HasText("dune") {
+		t.Fatalf("idle state lost its remembered keyword in %v", tt.Texts())
+	}
+	if tt.HasText("has no match") {
+		t.Fatalf("an empty box reported no results: %v", tt.Texts())
+	}
+}
+
+func TestAnsweredTitleHighlightsTheKeyword(t *testing.T) {
+	src := &fakeSource{answers: map[string][]source.Card{
+		"Dune": {movie("part-two", "Dune: Part Two")},
+	}}
+	page, finished := newPage(t, Deps{Source: src})
+	tt := render(page, 1100, 720, true)
+	tt.Frame()
+	page.Search("Dune")
+	wait(t, finished)
+	tt.Frame()
+
+	// The match is drawn as its own run of text, so the accent can color it.
+	var runs []string
+	for _, text := range tt.Texts() {
+		if text == "Dune" || strings.HasPrefix(text, ": Part Two") {
+			runs = append(runs, text)
+		}
+	}
+	if !strings.Contains(strings.Join(runs, "|"), "Dune|: Part Two") {
+		t.Fatalf("the keyword is not its own run in %v", tt.Texts())
+	}
+}
+
+func TestEmptyStateRetryAsksAgain(t *testing.T) {
+	src := &fakeSource{answers: map[string][]source.Card{}}
+	page, finished := newPage(t, Deps{Source: src})
+	tt := render(page, 1100, 720, true)
+	tt.Frame()
+	page.Search("nothing")
+	wait(t, finished)
+	tt.Frame()
+
+	if !tt.HasText("has no match") || !tt.HasText("nothing") {
+		t.Fatalf("empty state missing in %v", tt.Texts())
+	}
+	before := len(src.queries())
+	if err := tt.Click("Retry"); err != nil {
+		t.Fatalf("clicking retry: %v", err)
+	}
+	wait(t, finished)
+	if got := src.queries(); len(got) != before+1 || got[len(got)-1] != "nothing" {
+		t.Fatalf("queries are %v, want nothing again", got)
+	}
+}
+
+func TestShelvesFollowTheKindOrder(t *testing.T) {
+	src := &fakeSource{answers: map[string][]source.Card{
+		"dune": {
+			{Ref: source.Ref{ID: "anime"}, Title: "Anime Hit", Kind: source.Anime},
+			movie("movie", "Movie Hit"),
+			{Ref: source.Ref{ID: "show"}, Title: "Show Hit", Kind: source.Series},
+		},
+	}}
+	page, finished := newPage(t, Deps{Source: src})
+	tt := render(page, 1100, 720, true)
+	tt.Frame()
+	page.Search("dune")
+	wait(t, finished)
+	tt.Frame()
+
+	var order []string
+	for _, text := range tt.Texts() {
+		switch text {
+		case "Series", "Movies", "Anime":
+			order = append(order, text)
+		}
+	}
+	if strings.Join(order, ">") != "Series>Movies>Anime" {
+		t.Fatalf("shelf order is %v, want Series, Movies, Anime", order)
+	}
+}
+
+func TestNarrowGridKeepsMoreThanOneColumn(t *testing.T) {
+	w, gap, columns := gridFor(430-design.NarrowGutter*2, true)
+	if columns < 2 {
+		t.Fatalf("narrow grid holds %d columns at %v wide posters", columns, w)
+	}
+	if w != narrowPoster || gap != narrowGap {
+		t.Fatalf("narrow grid uses %v×%v gap, want %v/%v", w, gap, narrowPoster, narrowGap)
+	}
+	// 1440 wide holds seven 168 posters, so a poster keeps its size instead of
+	// stretching; the reference frame's six columns leave 20px over.
+	if wide, wideGap, wideColumns := gridFor(1440-design.PageInset-design.PageGutter, false); wide != posterWidth || wideGap != posterGap || wideColumns != 7 {
+		t.Fatalf("wide grid is %v wide by %d columns, want %v by 7", wide, wideColumns, posterWidth)
 	}
 }

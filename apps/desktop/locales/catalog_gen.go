@@ -2023,3 +2023,197 @@ func SearchIdle() string { return In(i18n.Locale()).SearchIdle() }
 func (msgs Messages) SearchIdle() string {
 	return Catalog.Format(msgs.locale, "searchIdle", nil)
 }
+
+// SearchRecent says "Recently"
+// in the language the app shows.
+//
+// Label of the keywords searched this session, beside the search box
+func SearchRecent() string { return In(i18n.Locale()).SearchRecent() }
+
+// SearchRecent says "Recently"
+// in the language of msgs.
+//
+// Label of the keywords searched this session, beside the search box
+func (msgs Messages) SearchRecent() string {
+	return Catalog.Format(msgs.locale, "searchRecent", nil)
+}
+
+// SearchIdleHint says "Search titles, people and tags from the source."
+// in the language the app shows.
+//
+// Line under the idle search page's heading
+func SearchIdleHint() string { return In(i18n.Locale()).SearchIdleHint() }
+
+// SearchIdleHint says "Search titles, people and tags from the source."
+// in the language of msgs.
+//
+// Line under the idle search page's heading
+func (msgs Messages) SearchIdleHint() string {
+	return Catalog.Format(msgs.locale, "searchIdleHint", nil)
+}
+
+// SearchIdleExample says "Try a title such as “dune”, or an actor's name."
+// in the language the app shows.
+//
+// Example keywords of the idle search page
+func SearchIdleExample() string { return In(i18n.Locale()).SearchIdleExample() }
+
+// SearchIdleExample says "Try a title such as “dune”, or an actor's name."
+// in the language of msgs.
+//
+// Example keywords of the idle search page
+func (msgs Messages) SearchIdleExample() string {
+	return Catalog.Format(msgs.locale, "searchIdleExample", nil)
+}
+
+// SearchRecentSession says "This session"
+// in the language the app shows.
+//
+// Note that the recent keywords last only for this session
+func SearchRecentSession() string { return In(i18n.Locale()).SearchRecentSession() }
+
+// SearchRecentSession says "This session"
+// in the language of msgs.
+//
+// Note that the recent keywords last only for this session
+func (msgs Messages) SearchRecentSession() string {
+	return Catalog.Format(msgs.locale, "searchRecentSession", nil)
+}
+
+// SearchNoResults says "“{keyword}” has no match"
+// in the language the app shows.
+//
+// Heading of a search that answered no titles
+func SearchNoResults(keyword string) string { return In(i18n.Locale()).SearchNoResults(keyword) }
+
+// SearchNoResults says "“{keyword}” has no match"
+// in the language of msgs.
+//
+// Heading of a search that answered no titles
+func (msgs Messages) SearchNoResults(keyword string) string {
+	return Catalog.Format(msgs.locale, "searchNoResults", map[string]any{"keyword": keyword})
+}
+
+// SearchNoResultsHint says "{source} answered nothing. Check the spelling, or search for what the title is known as."
+// in the language the app shows.
+//
+// Explanation of a search that answered no titles; {source} is the source's
+// name
+func SearchNoResultsHint(source string) string { return In(i18n.Locale()).SearchNoResultsHint(source) }
+
+// SearchNoResultsHint says "{source} answered nothing. Check the spelling, or search for what the title is known as."
+// in the language of msgs.
+//
+// Explanation of a search that answered no titles; {source} is the source's
+// name
+func (msgs Messages) SearchNoResultsHint(source string) string {
+	return Catalog.Format(msgs.locale, "searchNoResultsHint", map[string]any{"source": source})
+}
+
+// SearchStatus says "{status} · {episodes}"
+// in the language the app shows.
+//
+// A show's second line under a search result: whether it is still updating
+// or complete, then its episodes when the source names a count, as in
+// “Updating · 8 episodes”.
+func SearchStatus(status string, episodes string) string {
+	return In(i18n.Locale()).SearchStatus(status, episodes)
+}
+
+// SearchStatus says "{status} · {episodes}"
+// in the language of msgs.
+//
+// A show's second line under a search result: whether it is still updating
+// or complete, then its episodes when the source names a count, as in
+// “Updating · 8 episodes”.
+func (msgs Messages) SearchStatus(status string, episodes string) string {
+	return Catalog.Format(msgs.locale, "searchStatus", map[string]any{"status": status, "episodes": episodes})
+}
+
+// SearchLastQuery says "Last search"
+// in the language the app shows.
+//
+// Shelf head over the titles the last keyword answered, while the box is
+// empty.
+func SearchLastQuery() string { return In(i18n.Locale()).SearchLastQuery() }
+
+// SearchLastQuery says "Last search"
+// in the language of msgs.
+//
+// Shelf head over the titles the last keyword answered, while the box is
+// empty.
+func (msgs Messages) SearchLastQuery() string {
+	return Catalog.Format(msgs.locale, "searchLastQuery", nil)
+}
+
+// SearchSearchAgain says "Search again"
+// in the language the app shows.
+//
+// Button that runs the last keyword once more.
+func SearchSearchAgain() string { return In(i18n.Locale()).SearchSearchAgain() }
+
+// SearchSearchAgain says "Search again"
+// in the language of msgs.
+//
+// Button that runs the last keyword once more.
+func (msgs Messages) SearchSearchAgain() string {
+	return Catalog.Format(msgs.locale, "searchSearchAgain", nil)
+}
+
+// SearchNoResultsHintAgain says "Try another spelling, or a cast member's name."
+// in the language the app shows.
+//
+// Says how to search again after a keyword answered nothing, without naming
+// keywords.
+func SearchNoResultsHintAgain() string { return In(i18n.Locale()).SearchNoResultsHintAgain() }
+
+// SearchNoResultsHintAgain says "Try another spelling, or a cast member's name."
+// in the language of msgs.
+//
+// Says how to search again after a keyword answered nothing, without naming
+// keywords.
+func (msgs Messages) SearchNoResultsHintAgain() string {
+	return Catalog.Format(msgs.locale, "searchNoResultsHintAgain", nil)
+}
+
+// SearchBrowseLibrary says "You can also browse the library by category."
+// in the language the app shows.
+//
+// Line that points to the resource library under an empty search
+func SearchBrowseLibrary() string { return In(i18n.Locale()).SearchBrowseLibrary() }
+
+// SearchBrowseLibrary says "You can also browse the library by category."
+// in the language of msgs.
+//
+// Line that points to the resource library under an empty search
+func (msgs Messages) SearchBrowseLibrary() string {
+	return Catalog.Format(msgs.locale, "searchBrowseLibrary", nil)
+}
+
+// EpisodesUpdating says "Up to episode {count}"
+// in the language the app shows.
+//
+// Episodes a show that still airs has reached, as its search card says
+func EpisodesUpdating(count string) string { return In(i18n.Locale()).EpisodesUpdating(count) }
+
+// EpisodesUpdating says "Up to episode {count}"
+// in the language of msgs.
+//
+// Episodes a show that still airs has reached, as its search card says
+func (msgs Messages) EpisodesUpdating(count string) string {
+	return Catalog.Format(msgs.locale, "episodesUpdating", map[string]any{"count": count})
+}
+
+// EpisodesComplete says "{count, plural, one {# episode} other {# episodes}}"
+// in the language the app shows.
+//
+// Episodes a finished show holds, as its search card says
+func EpisodesComplete(count int) string { return In(i18n.Locale()).EpisodesComplete(count) }
+
+// EpisodesComplete says "{count, plural, one {# episode} other {# episodes}}"
+// in the language of msgs.
+//
+// Episodes a finished show holds, as its search card says
+func (msgs Messages) EpisodesComplete(count int) string {
+	return Catalog.Format(msgs.locale, "episodesComplete", map[string]any{"count": count})
+}

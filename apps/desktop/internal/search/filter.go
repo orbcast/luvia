@@ -15,6 +15,10 @@ func marker(codes ...rune) string { return string(codes) }
 // below as well.
 var completedMarkers = []string{"complete", "completed", "full", marker(0x5B8C, 0x7ED3)} // 完结
 
+// epUnit is the unit a source counts episodes in, as in its remarks; the
+// search view reads a show's count from it.
+var epUnit = rune(0x96C6) // 集
+
 // qualityMarkers flag a 4K master.
 var qualityMarkers = []string{"4k", "2160"}
 

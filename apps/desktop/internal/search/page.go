@@ -1,7 +1,8 @@
-// Package search is the search destination: one box for a keyword, a short
-// history of what was looked up in this session, and the titles the source
-// answers with. The page keeps view state only; every title it shows comes
-// from the source, and the viewer's followed set from the local library.
+// Package search is the search destination: one keyword line, a short history
+// of what was searched this session, and the titles the source answered,
+// grouped into one shelf per kind. The page keeps view state only; every title
+// it shows comes from the source, and the viewer's followed set from the local
+// library. The layout and its reasoning are in docs/search-redesign-brief.md.
 package search
 
 import (
