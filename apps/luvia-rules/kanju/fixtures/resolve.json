@@ -25,6 +25,39 @@
       "resolve_mode": "ticket",
       "resolve_ticket": "ticket-mp4",
       "selected": false
+    },
+    {
+      "playback_source_id": "line-direct",
+      "id": "provider-direct",
+      "label": "线路三",
+      "display_label": "线路三",
+      "provider_name": "魔都资源",
+      "provider_id": "provider-direct",
+      "play_from": "moduzy",
+      "url": "https://play.example/direct/index.m3u8",
+      "url_kind": "unknown",
+      "resolve_mode": "direct",
+      "resolve_required": false,
+      "default_priority": false,
+      "preference_weight": 900,
+      "selected": false
+    },
+    {
+      "playback_source_id": "line-gated",
+      "id": "provider-gated",
+      "label": "线路四",
+      "display_label": "线路四",
+      "provider_name": "高清-官方B",
+      "provider_id": "bytedance",
+      "play_from": "bytedance",
+      "url": "resolve://ticket-gated",
+      "url_kind": "resolve_ticket",
+      "resolved": false,
+      "resolve_mode": "parse",
+      "resolve_required": true,
+      "default_priority": false,
+      "preference_weight": 1000,
+      "selected": false
     }
   ]
 }
