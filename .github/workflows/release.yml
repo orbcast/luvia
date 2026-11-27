@@ -81,21 +81,28 @@ jobs:
           # 泄露只属于这一次发版。
           KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
           LUVIA_SEED_SALT: ${{ vars.LUVIA_SEED_SALT }}
+          # mygo build 只从 GOFLAGS 取额外 tag，没有自己的 -tags 开关；
+          # 少了这一行，二进制用的是 seeddev 的开发盐，封进去的种子在
+          # 用户那里会被判成「另一个构建封的」，然后一路请求 401。
+          GOFLAGS: -tags=prodseed
         run: |
           set -euo pipefail
           out="$(mktemp -d)"
           go run -tags prodseed ./cmd/seedpack -out "$out/kanju.seed"
           go tool mygo build -platform ${{ matrix.platform }}
           dir="build/$(echo '${{ matrix.platform }}' | tr / -)"
-          # 产物目录里规则是 Resource 的一部分，种子要和规则放在一起，
-          # 位置随平台不同，所以用 find 找那份 rule.json 的旁边。
-          target="$(find "$dir" -type d -name luvia-rules | head -1)"
-          if [ -z "$target" ]; then
+          # 种子要落在资源根上，不是规则目录里。mygo.App.Path(PathResources)
+          # 返回的是产物目录本身（macOS 上是 Contents/Resources），启动时
+          # ApplyAccessKeys 就在那里找 kanju.seed；规则目录是它下面的
+          # luvia-rules。放错一层，构建照样绿，运行时却当作没有种子。
+          rules="$(find "$dir" -type d -name luvia-rules | head -1)"
+          if [ -z "$rules" ]; then
             echo "发布包里没有 luvia-rules，种子无处可放" >&2
             exit 1
           fi
-          cp "$out/kanju.seed" "$target/kanju.seed"
-          ls -l "$target"
+          root="$(dirname "$rules")"
+          cp "$out/kanju.seed" "$root/kanju.seed"
+          ls -l "$root/kanju.seed" "$rules"
 
       # 交叉编出来的 arm64 包不经过本机自检，至少要确认二进制真是指令集：
       # 编错了架构在这一步就红，不留到用户那台 Mac 上才炸。
