@@ -2130,6 +2130,20 @@ func (msgs Messages) SearchStatus(status string, episodes string) string {
 	return Catalog.Format(msgs.locale, "searchStatus", map[string]any{"status": status, "episodes": episodes})
 }
 
+// SearchTitles says "{count, plural, one {# title} other {# titles}}"
+// in the language the app shows.
+//
+// How many titles a shelf holds, beside its name
+func SearchTitles(count int) string { return In(i18n.Locale()).SearchTitles(count) }
+
+// SearchTitles says "{count, plural, one {# title} other {# titles}}"
+// in the language of msgs.
+//
+// How many titles a shelf holds, beside its name
+func (msgs Messages) SearchTitles(count int) string {
+	return Catalog.Format(msgs.locale, "searchTitles", map[string]any{"count": count})
+}
+
 // SearchLastQuery says "Last search"
 // in the language the app shows.
 //

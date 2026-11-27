@@ -15,21 +15,25 @@ import (
 
 const (
 	posterRatio = 1.5 // height over width for a 2:3 poster
-	// posterWidth and posterGap fix the wide layout's grid: the columns it
-	// holds follow from the width, so a poster keeps its size on any screen.
-	posterWidth = 168
-	posterGap   = 20
-	// narrowPoster and narrowGap do the same for a window with the sidebar
-	// docked, smaller and closer, so more than one column still fits.
+	// posterGap separates a row's posters. Columns fill the content width:
+	// the count follows from the width, the posters take what is left, so a
+	// full row ends on the page's right edge instead of short of it.
+	posterGap = 20
+	// narrowPoster is the narrowest a poster is allowed to get; the column
+	// count is chosen so no poster falls below it. maxColumns caps a shelf in
+	// a very wide window: two rows of posters are a search result, not a wall
+	// of them.
 	narrowPoster = 128
-	narrowGap    = 14
-	// maxColumns caps a shelf in a very wide window; two rows of posters are
-	// a search result, not a wall of them.
-	maxColumns = 8
-	// keywordSize is the keyword's type size; the narrow one keeps a long
-	// keyword inside a docked window.
-	keywordSize       = 46
-	narrowKeywordSize = 34
+	maxColumns   = 8
+	// keywordSize is the field's type size, sized so the field's own line box
+	// lands near 46 and reads as the page's one loud element; the narrow one
+	// keeps a long keyword inside a docked window.
+	keywordSize       = 34
+	narrowKeywordSize = 24
+	// keywordLine is the field's height: its own line box plus the padding the
+	// stock control keeps, so the row under it is a hairline and not a band.
+	keywordLine       = 52
+	narrowKeywordLine = 40
 	// accentRun is the length of the accent segment that ends the rule under
 	// the keyword.
 	accentRun = 28
@@ -113,15 +117,10 @@ func (p *Page) View(c *ui.Context) ui.Element {
 // settles into a search of its own after the debounce, so the page never
 // needs a separate action.
 func (p *Page) queryLine(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	docked := design.Docked(width)
-	size := float32(keywordSize)
-	if docked {
-		size = narrowKeywordSize
-	}
 	ui.Column(c).FillWidth().Padding(28, 0, 0, 0).Children(func() {
-		ui.Column(c).FillWidth().Gap(14).Children(func() {
+		ui.Column(c).FillWidth().Gap(12).Children(func() {
 			ui.Row(c).FillWidth().Wrap().AlignItems(ui.End).Gap(16).Children(func() {
-				p.field(c, t, m, size)
+				p.field(c, t, m, width)
 				p.recent(c, t, m)
 			})
 			p.rule(c, t)
@@ -129,19 +128,25 @@ func (p *Page) queryLine(c *ui.Context, t *ui.Theme, m locales.Messages, width f
 	})
 }
 
-// field is the keyword itself: the stock search field at the keyword's size,
-// in the page's inks and with no plate or border of its own. Its magnifier and
-// its placeholder are the widget's own drawing, on a Solar icon, so the page
-// draws neither; only the words typed are the field's.
+// field is the keyword itself: the stock search field, in the page's inks and
+// with no plate or border of its own, at a size that keeps its line box near
+// the page's one loud element. Its magnifier and its placeholder are the
+// widget's own drawing, on a Solar icon, so the page draws neither; only the
+// words typed are the field's.
 //
 // The field keeps its internal paddings (the icon gap and the text inset), so
 // the words start where the widget places them rather than at a guessed
-// offset; the height leaves the keyword a line of room at the size it is set.
-func (p *Page) field(c *ui.Context, t *ui.Theme, m locales.Messages, size float32) {
+// offset; the height is fixed, so the hairline under it stays a hairline
+// instead of drifting with the type size.
+func (p *Page) field(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
+	size, height := float32(keywordSize), float32(keywordLine)
+	if design.Docked(width) {
+		size, height = narrowKeywordSize, narrowKeywordLine
+	}
 	// The field's own state (focus, caret, text being edited) is identified by
 	// the key given before construction, as Key on the widget itself panics.
 	c.Key("search-input")
-	field := ui.SearchField(c, &p.keyword).Grow(1).Height(size*1.3).
+	field := ui.SearchField(c, &p.keyword).Grow(1).Height(height).
 		Label(m.Search()).Placeholder(m.SearchPlaceholder()).FontSize(size).
 		TextColor(t.Text).Fill().Background(t.Background).Border(0, t.Background).
 		Radius(0)
@@ -213,11 +218,13 @@ func (p *Page) body(c *ui.Context, t *ui.Theme, m locales.Messages, width float3
 			}
 			switch {
 			case p.err != nil:
-				// A failure keeps the titles already answered under the message,
-				// so a retry does not start from an empty page.
+				// A failure keeps the titles already answered under the
+				// message, so a retry does not start from an empty page. The
+				// rows keep their head here too: without it the page offers a
+				// retry over an unlabelled wall of posters.
 				p.errorView(c, t, m)
 				if len(p.cards) > 0 {
-					p.shelves(c, t, m, width, p.cards)
+					p.lastShelf(c, t, m, width)
 				}
 			case p.loading && !p.searched:
 				// The first keyword is on its way; the spinner above says so.
@@ -258,42 +265,13 @@ func (p *Page) lastSearch() bool {
 }
 
 // lastShelf is the last keyword's titles under one head: the page's rule, the
-// keyword, and the way to search it again. The kinds are not split here,
-// because the head already names one search, and its own shelves would read
-// as several.
+// keyword, and the way to search it again. The head says "last search", not
+// "results", because the box already holds a newer keyword (or none): the
+// rows below answer the keyword named in the head, and no other.
 func (p *Page) lastShelf(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	ui.Column(c).FillWidth().Children(func() {
-		ui.Box(c).FillWidth().Height(1).Background(t.Border)
-		ui.Row(c).FillWidth().Padding(10, 0, 12, 0).AlignItems(ui.Center).Gap(10).
-			Children(func() {
-				ui.Text(c, m.SearchLastQuery()).FontSize(15).FontWeight(600).
-					TextColor(t.Text)
-				ui.Text(c, p.submitted).FontSize(12).TextColor(t.TextMuted).
-					MaxLines(1)
-				ui.Box(c).Grow(1)
-				p.searchAgain(c, t, m)
-			})
-		p.grid(c, t, m, width, p.cards)
-	})
-}
-
-// searchAgain runs the last keyword once more, from the head of its shelf.
-func (p *Page) searchAgain(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	ink := t.TextMuted
-	keyword := p.submitted
-	button := ui.ButtonBase(c).Key("search-again").Shrink(0).Height(26).Radius(4).
-		PaddingX(0).Gap(6).Label(m.SearchSearchAgain()).
-		Background(ui.Transparent).Transition(wordMotion)
-	if button.Hovered() {
-		ink = t.Text
-	}
-	button.Children(func() {
-		ui.Icon(c, icons.Parse("refresh-linear")).Size(13, 13).TextColor(ink)
-		ui.Text(c, m.SearchSearchAgain()).FontSize(12).TextColor(ink)
-	})
-	if button.Clicked() {
-		p.Search(keyword)
-	}
+	p.headLine(c, t, m.SearchLastQuery(), p.submitted, m.SearchSearchAgain(),
+		"search-again", func() { p.Search(p.submitted) })
+	p.grid(c, t, m, width, p.cards)
 }
 
 // shelves groups the answered titles by kind, each shelf a rule with its name
@@ -318,22 +296,56 @@ func (p *Page) shelf(c *ui.Context, t *ui.Theme, m locales.Messages, width float
 // shelfHead is the rule, the kind's name and how many it holds. It is not a
 // card or a frame: the rule is the page's own, and the posters hang under it.
 func (p *Page) shelfHead(c *ui.Context, t *ui.Theme, m locales.Messages, kind source.Kind, count int) {
+	p.headLine(c, t, kindLabel(m, kind), m.SearchTitles(count), "", "", nil)
+}
+
+// headLine is every shelf head: the page's rule, a name, a quiet note after
+// it, and an optional action at the far right. Shelves, the last answer and
+// the empty state all use it, so their heads sit on the same line and read as
+// one list instead of three different widgets.
+func (p *Page) headLine(c *ui.Context, t *ui.Theme, name, note, action, key string, run func()) {
 	ui.Column(c).FillWidth().Children(func() {
 		ui.Box(c).FillWidth().Height(1).Background(t.Border)
 		ui.Row(c).FillWidth().Padding(10, 0, 12, 0).AlignItems(ui.Center).Gap(10).
 			Children(func() {
-				ui.Text(c, kindLabel(m, kind)).FontSize(15).FontWeight(600).
-					TextColor(t.Text)
-				ui.Text(c, m.LibraryCount(count)).FontSize(12).TextColor(t.TextMuted)
+				ui.Text(c, name).FontSize(15).FontWeight(600).TextColor(t.Text)
+				if note != "" {
+					ui.Text(c, note).FontSize(12).TextColor(t.TextMuted).MaxLines(1)
+				}
+				if action == "" {
+					return
+				}
+				ui.Box(c).Grow(1)
+				p.quietAction(c, t, action, key, run)
 			})
 	})
 }
 
+// quietAction is the muted, small action a shelf head carries, such as running
+// the last keyword again: text until the pointer finds it, then page ink.
+func (p *Page) quietAction(c *ui.Context, t *ui.Theme, label, key string, run func()) {
+	ink := t.TextMuted
+	button := ui.ButtonBase(c).Key(key).Shrink(0).Height(26).Radius(4).
+		PaddingX(0).Gap(6).Label(label).Background(ui.Transparent).
+		Transition(wordMotion)
+	if button.Hovered() {
+		ink = t.Text
+	}
+	button.Children(func() {
+		ui.Icon(c, icons.Parse("refresh-linear")).Size(13, 13).TextColor(ink)
+		ui.Text(c, label).FontSize(12).TextColor(ink)
+	})
+	if button.Clicked() {
+		run()
+	}
+}
+
 // grid lays a shelf's posters out in the columns the page holds, two rows at
-// most: what the source answered first is what the user is looking for.
+// most: what the source answered first is what the user is looking for. The
+// rows span the content width, so the last column shares its edge with the
+// shelf's head and the accent run above it.
 func (p *Page) grid(c *ui.Context, t *ui.Theme, m locales.Messages, width float32, cards []source.Card) {
-	left, right := margins(width)
-	w, gap, columns := gridFor(width-left-right, design.Docked(width))
+	w, gap, columns := gridFor(width)
 	shown := cards
 	if len(shown) > columns*2 {
 		shown = shown[:columns*2]
@@ -345,18 +357,19 @@ func (p *Page) grid(c *ui.Context, t *ui.Theme, m locales.Messages, width float3
 	})
 }
 
-// gridFor splits the available width into fixed poster columns: as many as
-// fit, at most maxColumns, and one even in a window too narrow for two. A
-// docked window takes the smaller poster, so it still holds two columns.
-func gridFor(available float32, docked bool) (w, gap float32, columns int) {
-	w, gap = posterWidth, posterGap
-	if docked {
-		w, gap = narrowPoster, narrowGap
-	}
-	columns = int((available + gap) / (w + gap))
-	columns = max(columns, 1)
-	columns = min(columns, maxColumns)
-	return w, gap, columns
+// gridFor splits the content width into poster columns. It fills the width
+// rather than leaving a strip at the right: the column count follows the
+// width, the gap keeps to posterGap, and the posters take the rest, so a full
+// row runs from the page's left edge to its right one. A window narrower than
+// the docked poster's column falls back to one column.
+func gridFor(content float32) (w, gap float32, columns int) {
+	gap = posterGap
+	count := int((content + gap) / (narrowPoster + gap))
+	count = min(max(count, 1), maxColumns)
+	w = (content - gap*float32(count-1)) / float32(count)
+	// A hair under the exact share keeps rounding from pushing a full row's
+	// last column onto the next line.
+	return w - 0.5, gap, count
 }
 
 // posterCard is one 2:3 poster with its badges, title, bookmark and metadata.
@@ -562,35 +575,30 @@ func (p *Page) meta(c *ui.Context, t *ui.Theme, m locales.Messages, card source.
 		TextColor(t.TextMuted).MaxLines(1)
 }
 
-// idle is what the page says before a search, or once the box is cleared: what
-// the box searches, and the keywords it can offer from this session.
+// idle is what the page says before a search: what the box searches, and the
+// keywords it can offer from this session. The very first visit has no titles
+// to show, so the page still has to say something a picture could not.
 func (p *Page) idle(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	ui.Column(c).FillWidth().Children(func() {
-		ui.Text(c, m.SearchIdle()).FontSize(15).FontWeight(600).TextColor(t.Text)
+	ui.Column(c).FillWidth().MaxWidth(float32(760)).Gap(10).Children(func() {
+		ui.Text(c, m.SearchIdle()).FontSize(20).FontWeight(600).TextColor(t.Text)
 		ui.Text(c, m.SearchIdleHint()).FontSize(13).TextColor(t.TextMuted).
-			Padding(4, 0, 0, 0)
+			LineHeight(1.6)
 		if len(p.history) > 0 {
 			p.recentSection(c, t, m)
-		} else {
-			ui.Text(c, m.SearchIdleExample()).FontSize(13).
-				TextColor(t.TextMuted).Padding(6, 0, 0, 0)
+			return
 		}
+		ui.Text(c, m.SearchIdleExample()).FontSize(13).
+			TextColor(t.TextMuted).Padding(6, 0, 0, 0)
 	})
 }
 
 // recentSection lists every keyword this session searched, each a line that
-// runs it again, under the page's axis.
+// runs it again, under the page's axis: a head naming the list and a column of
+// words, no plate and no chips.
 func (p *Page) recentSection(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	ui.Column(c).FillWidth().Padding(26, 0, 0, 0).Children(func() {
-		ui.Box(c).FillWidth().Height(1).Background(t.Border)
-		ui.Row(c).FillWidth().Padding(10, 0, 8, 0).AlignItems(ui.Center).Gap(10).
-			Children(func() {
-				ui.Text(c, m.SearchRecent()).FontSize(15).FontWeight(600).
-					TextColor(t.Text)
-				ui.Text(c, m.SearchRecentSession()).FontSize(12).
-					TextColor(t.TextMuted)
-			})
-		ui.Column(c).FillWidth().Children(func() {
+	ui.Column(c).FillWidth().Padding(22, 0, 0, 0).Children(func() {
+		p.headLine(c, t, m.SearchRecent(), m.SearchRecentSession(), "", "", nil)
+		ui.Row(c).FillWidth().Wrap().Gap(0).Children(func() {
 			for _, keyword := range p.history {
 				p.recentRow(c, t, keyword)
 			}
@@ -598,12 +606,13 @@ func (p *Page) recentSection(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	})
 }
 
-// recentRow is one remembered keyword in the idle list: a full-width line
-// that reads as a word until the pointer finds it.
+// recentRow is one remembered keyword in the idle list: a word on the page
+// until the pointer finds it. The rows share the poster columns' width, so the
+// words line up with the shelves above them.
 func (p *Page) recentRow(c *ui.Context, t *ui.Theme, keyword string) {
 	ink := t.TextMuted
-	button := ui.ButtonBase(c).Key("history:" + keyword).FillWidth().Height(30).
-		Radius(6).Justify(ui.Start).Label(keyword).Tooltip(keyword).
+	button := ui.ButtonBase(c).Key("history:" + keyword).Width(float32(224)).
+		Height(32).Radius(6).Justify(ui.Start).Label(keyword).Tooltip(keyword).
 		Background(ui.Transparent).Transition(wordMotion)
 	if button.Hovered() {
 		ink = t.Text

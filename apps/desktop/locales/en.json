@@ -424,6 +424,10 @@
   "@searchStatus": {
     "description": "A show's second line under a search result: whether it is still updating or complete, then its episodes when the source names a count, as in “Updating · 8 episodes”."
   },
+  "searchTitles": "{count, plural, one {# title} other {# titles}}",
+  "@searchTitles": {
+    "description": "How many titles a shelf holds, beside its name"
+  },
   "searchLastQuery": "Last search",
   "@searchLastQuery": {
     "description": "Shelf head over the titles the last keyword answered, while the box is empty."

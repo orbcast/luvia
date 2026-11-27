@@ -211,6 +211,10 @@
   "@searchStatus": {
     "description": "搜索结果里剧集卡片第二行：先说明是否更新中或已完结，数据源给出集数时再接集数，例如“更新中 · 第 8 集”。"
   },
+  "searchTitles": "{count} 部",
+  "@searchTitles": {
+    "description": "How many titles a shelf holds, beside its name"
+  },
   "searchLastQuery": "上次搜索",
   "@searchLastQuery": {
     "description": "输入框为空时，上一批结果上方的分隔标签。"

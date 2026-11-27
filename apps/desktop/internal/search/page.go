@@ -2,7 +2,7 @@
 // of what was searched this session, and the titles the source answered,
 // grouped into one shelf per kind. The page keeps view state only; every title
 // it shows comes from the source, and the viewer's followed set from the local
-// library. The layout and its reasoning are in docs/search-redesign-brief.md.
+// library. The layout and its reasoning are in docs/search-page.md.
 package search
 
 import (

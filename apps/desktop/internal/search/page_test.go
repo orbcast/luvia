@@ -620,18 +620,34 @@ func TestShelvesFollowTheKindOrder(t *testing.T) {
 	}
 }
 
-func TestNarrowGridKeepsMoreThanOneColumn(t *testing.T) {
-	w, gap, columns := gridFor(430-design.NarrowGutter*2, true)
+func TestGridFillsTheContentWidth(t *testing.T) {
+	// A docked window still holds two columns, and neither falls under the
+	// narrowest a poster may get.
+	w, narrowGap, columns := gridFor(430 - design.NarrowGutter*2)
 	if columns < 2 {
 		t.Fatalf("narrow grid holds %d columns at %v wide posters", columns, w)
 	}
-	if w != narrowPoster || gap != narrowGap {
-		t.Fatalf("narrow grid uses %v×%v gap, want %v/%v", w, gap, narrowPoster, narrowGap)
+	if w < narrowPoster {
+		t.Fatalf("narrow grid's poster is %v wide, under %v", w, narrowPoster)
 	}
-	// 1440 wide holds seven 168 posters, so a poster keeps its size instead of
-	// stretching; the reference frame's six columns leave 20px over.
-	if wide, wideGap, wideColumns := gridFor(1440-design.PageInset-design.PageGutter, false); wide != posterWidth || wideGap != posterGap || wideColumns != 7 {
-		t.Fatalf("wide grid is %v wide by %d columns, want %v by 7", wide, wideColumns, posterWidth)
+	if narrowGap != posterGap {
+		t.Fatalf("narrow grid's gap is %v, want %v", narrowGap, posterGap)
+	}
+
+	// A wide page fills its width: the columns and the gaps add up to the
+	// content, so a full row ends where the shelf's head does.
+	content := float32(1440 - design.PageInset - design.PageGutter)
+	wide, wideGap, wideColumns := gridFor(content)
+	if wideGap != posterGap {
+		t.Fatalf("wide grid's gap is %v, want %v", wideGap, posterGap)
+	}
+	span := float32(wideColumns)*wide + float32(wideColumns-1)*wideGap
+	// Columns divide the width evenly and each keeps half a unit of the
+	// share back, so a full row lands on the page's right edge to within half
+	// a unit per column. Anything more is a strip left at the edge.
+	slack := float32(wideColumns) * 0.5
+	if span > content || content-span > slack {
+		t.Fatalf("wide grid spans %v of %v: a strip is left at the right", span, content)
 	}
 }
 
