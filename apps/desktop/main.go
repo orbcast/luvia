@@ -42,14 +42,7 @@ func main() {
 		sourcePath := filepath.Join(userData, "source.json")
 		localePath := filepath.Join(userData, "locale.json")
 		preferences.RestoreTheme(themePath, mygo.Theme.SetSource)
-		// A rule that signs its requests names the secret as ${env:NAME}, and
-		// the engine reads the process environment: an application opened from
-		// the Finder, the Dock or the Start menu inherits no shell profile, so
-		// the values a reader typed into the settings page are applied here,
-		// before any rule is loaded. Values the environment already defines
-		// win, so a shell that exports its own copy stays in charge.
-		secrets := preferences.LoadSecrets(userData)
-		preferences.ApplySecrets(secrets)
+		applyAccessKeys(userData)
 		// The app is made for Simplified Chinese readers, but MyGo falls back
 		// on the language the catalogs are written in, English, whenever the
 		// system speaks none of the app's languages. Choosing the language
@@ -136,8 +129,7 @@ func main() {
 					log.Printf("secrets %s: %v", userData, err)
 					return
 				}
-				secrets = values
-				preferences.ApplySecrets(secrets)
+				preferences.ApplySecrets(values)
 				// A newly supplied secret is what a failed request needed, so
 				// the pages are built again rather than left on the error.
 				applySource(sourceID(profile.source))
@@ -291,4 +283,16 @@ func placeholder(c *ui.Context, page appshell.Page) ui.Element {
 		ui.Text(c, m.PageComing()).FontSize(13).TextColor(t.TextMuted)
 	})
 	return column
+}
+
+// applyAccessKeys puts the values a rule asks for by name into the process
+// environment, which the engine reads: an application opened from the Finder,
+// the Dock or the Start menu inherits no shell profile. The settings page comes
+// first and the release's sealed seed last, because both defer to a value the
+// environment already defines — a reader who supplies a key always keeps it.
+func applyAccessKeys(userData string) {
+	preferences.ApplySecrets(preferences.LoadSecrets(userData))
+	if bundled := preferences.SeedValue(resourceDir()); bundled != "" {
+		preferences.ApplySecrets(map[string]string{preferences.SeedVariable(): bundled})
+	}
 }

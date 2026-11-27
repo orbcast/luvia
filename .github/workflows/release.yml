@@ -31,9 +31,8 @@ jobs:
       - name: Check app
         run: make check
         env:
-          # 规则里的 ${env:KANJU_SECRET} 是运行期才展开的，这个变量不会进构建产物；
-          # 这里给值只是让签名相关的检查按真实密钥跑一遍，别把 Secret 当成
-          # 打包装备。发布包要在运行它的机器上自备该变量，见 apps/luvia-rules/kanju/README.md。
+          # 门禁按真实密钥跑一遍签名用例；这个环境变量不会进产物，
+          # 包里的密钥由 build 步骤的 seedpack 封进去。
           KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
       - name: Check generated code
         run: make check-gen
@@ -76,11 +75,27 @@ jobs:
         shell: bash
         working-directory: apps/desktop
         env:
-          # 构建只把 luvia-rules 原样拷进产物，规则里的 ${env:KANJU_SECRET}
-          # 要等应用启动后从运行环境取；有值不影响产物内容，缺值也不会
-          # 在这里失败，别指望靠这行给发布包带上密钥。
+          # 访问密钥随包下发：seedpack 把它封进 resources/kanju.seed，装好即可用。
+          # 封装的成本意义见 internal/preferences/seed.go——挡的是「打开文件就能读」，
+          # 挡不住有设备控制权的人。LUVIA_SEED_SALT 让每份产物的封口不同，
+          # 泄露只属于这一次发版。
           KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
-        run: go tool mygo build -platform ${{ matrix.platform }}
+          LUVIA_SEED_SALT: ${{ vars.LUVIA_SEED_SALT }}
+        run: |
+          set -euo pipefail
+          out="$(mktemp -d)"
+          go run -tags prodseed ./cmd/seedpack -out "$out/kanju.seed"
+          go tool mygo build -platform ${{ matrix.platform }}
+          dir="build/$(echo '${{ matrix.platform }}' | tr / -)"
+          # 产物目录里规则是 Resource 的一部分，种子要和规则放在一起，
+          # 位置随平台不同，所以用 find 找那份 rule.json 的旁边。
+          target="$(find "$dir" -type d -name luvia-rules | head -1)"
+          if [ -z "$target" ]; then
+            echo "发布包里没有 luvia-rules，种子无处可放" >&2
+            exit 1
+          fi
+          cp "$out/kanju.seed" "$target/kanju.seed"
+          ls -l "$target"
 
       # 交叉编出来的 arm64 包不经过本机自检，至少要确认二进制真是指令集：
       # 编错了架构在这一步就红，不留到用户那台 Mac 上才炸。
