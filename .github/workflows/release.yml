@@ -116,6 +116,9 @@ jobs:
       - name: Verify the packaged seed opens with this build
         shell: bash
         working-directory: apps/desktop
+        env:
+          # set -u 下未定义的变量是错误，必须在这里显式传给这一步。
+          LUVIA_SEED_SALT: ${{ vars.LUVIA_SEED_SALT }}
         run: |
           set -euo pipefail
           dir="build/$(echo '${{ matrix.platform }}' | tr / -)"

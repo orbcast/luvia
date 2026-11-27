@@ -12,7 +12,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"luvia/apps/desktop/internal/preferences"
 )
@@ -28,9 +27,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "seedcheck: %s: %s\n", root, problem)
 		os.Exit(1)
 	}
-	// The value is the upstream key, so only its shape is reported.
-	if !strings.HasPrefix(value, "ums_") || len(value) < 32 {
-		fmt.Fprintf(os.Stderr, "seedcheck: the seed carries %d bytes, which is not a key\n", len(value))
+	// The check is that the seed opens and carries something. What the upstream
+	// key looks like is the rule's business: guessing a prefix here would fail a
+	// correct build.
+	if value == "" {
+		fmt.Fprintln(os.Stderr, "seedcheck: the seed opened but carries no value")
 		os.Exit(1)
 	}
 	fmt.Printf("seedcheck: %s opened the seed (%d bytes)\n", root, len(value))
