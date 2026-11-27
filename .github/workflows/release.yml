@@ -90,7 +90,11 @@ jobs:
         run: |
           set -euo pipefail
           out="$(mktemp -d)"
-          go run -tags prodseed ./cmd/seedpack -out "$out/kanju.seed"
+          # 打包和应用必须用同一份盐。MYGO_LDFLAGS 只有 mygo build 认，
+          # go run 不认，所以这里显式再传一次 -ldflags；漏了它，种子会用
+          # 开发盐封，包发出去谁也打不开。
+          salt_flag="-X luvia/apps/desktop/internal/preferences.releaseSeedSalt=$LUVIA_SEED_SALT"
+          go run -tags prodseed -ldflags "$salt_flag" ./cmd/seedpack -out "$out/kanju.seed"
           go tool mygo build -platform ${{ matrix.platform }}
           dir="build/$(echo '${{ matrix.platform }}' | tr / -)"
           # 种子要落在资源根上，不是规则目录里。mygo.App.Path(PathResources)
@@ -105,6 +109,20 @@ jobs:
           root="$(dirname "$rules")"
           cp "$out/kanju.seed" "$root/kanju.seed"
           ls -l "$root/kanju.seed" "$rules"
+
+      # 同一个构建里，包里的种子必须能打开。少了这一步，盐错配只表现为
+      # 「用户装完仍然要密钥」，构建全绿、发出去才炸。检查走仓库里的正式
+      # 命令 cmd/seedcheck，不在这里手搓 heredoc。
+      - name: Verify the packaged seed opens with this build
+        shell: bash
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          dir="build/$(echo '${{ matrix.platform }}' | tr / -)"
+          root="$(dirname "$(find "$dir" -type d -name luvia-rules | head -1)")"
+          LUVIA_SEED_ROOT="$root" go run -tags prodseed \
+            -ldflags "-X luvia/apps/desktop/internal/preferences.releaseSeedSalt=$LUVIA_SEED_SALT" \
+            ./cmd/seedcheck
 
       # 交叉编出来的 arm64 包不经过本机自检，至少要确认二进制真是指令集：
       # 编错了架构在这一步就红，不留到用户那台 Mac 上才炸。
