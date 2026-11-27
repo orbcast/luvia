@@ -11,6 +11,7 @@
 ## 索引
 
 - [UI 术语表](terminology.md)：已约定的中英文 UI 名称、指向与必要边界。
+- [搜索页](search-page.md)：desktop 搜索页的关键词轴线、结果分组、四种状态与验证方式。
 - [源规则格式（Rule DSL）](rule-dsl.md)：`apps/luvia-rules` 的规则契约、五个操作、步骤与选择器、线路解析和错误分类。
 - [架构决策记录](adr/README.md)：已定工程决策的背景、决定与后果，细分索引在该目录的 README。
 
