@@ -42,7 +42,7 @@ func main() {
 		sourcePath := filepath.Join(userData, "source.json")
 		localePath := filepath.Join(userData, "locale.json")
 		preferences.RestoreTheme(themePath, mygo.Theme.SetSource)
-		applyAccessKeys(userData)
+		preferences.ApplyAccessKeys(userData, resourceDir())
 		// The app is made for Simplified Chinese readers, but MyGo falls back
 		// on the language the catalogs are written in, English, whenever the
 		// system speaks none of the app's languages. Choosing the language
@@ -283,16 +283,4 @@ func placeholder(c *ui.Context, page appshell.Page) ui.Element {
 		ui.Text(c, m.PageComing()).FontSize(13).TextColor(t.TextMuted)
 	})
 	return column
-}
-
-// applyAccessKeys puts the values a rule asks for by name into the process
-// environment, which the engine reads: an application opened from the Finder,
-// the Dock or the Start menu inherits no shell profile. The settings page comes
-// first and the release's sealed seed last, because both defer to a value the
-// environment already defines — a reader who supplies a key always keeps it.
-func applyAccessKeys(userData string) {
-	preferences.ApplySecrets(preferences.LoadSecrets(userData))
-	if bundled := preferences.SeedValue(resourceDir()); bundled != "" {
-		preferences.ApplySecrets(map[string]string{preferences.SeedVariable(): bundled})
-	}
 }

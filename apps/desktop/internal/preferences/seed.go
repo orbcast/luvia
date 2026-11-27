@@ -45,22 +45,81 @@ func seedKey() []byte {
 // MASWE-0005 records that for every client that bundles a credential. The seed
 // is written so that the key is not sitting in the archive as text.
 func SeedValue(resources string) string {
+	values, _, _ := readSeed(resources)
+	return strings.TrimSpace(values[seedVariable])
+}
+
+// SeedProblem says why the bundled seed, when the package carries one, did not
+// supply the key. It is empty when there is no seed at all, which is the normal
+// state of a development checkout rather than a fault.
+//
+// This exists because every failure of the seed is silent by design: the app
+// starts and asks for the key instead of refusing to launch, so a release whose
+// salt was rotated without a rebuild looks exactly like one that shipped
+// without a seed. A line in the log is the only place that difference shows.
+type SeedProblem string
+
+const (
+	// SeedMissing is reported when the resources directory has no seed file.
+	SeedMissing SeedProblem = ""
+	// SeedUnreadable covers a seed that exists but cannot be read as bytes.
+	SeedUnreadable SeedProblem = "the bundled seed cannot be read"
+	// SeedForeign covers a seed sealed under another build's salt, which is what
+	// a rotated LUVIA_SEED_SALT without a new release produces.
+	SeedForeign SeedProblem = "the bundled seed was sealed by another build"
+	// SeedMalformed covers a file that is not a seed at all.
+	SeedMalformed SeedProblem = "the bundled seed is not in a form this build reads"
+	// SeedEmpty covers a seed that opens but carries no key, which is what a
+	// packaging step without KANJU_SECRET leaves behind.
+	SeedEmpty SeedProblem = "the bundled seed carries no " + seedVariable
+)
+
+// InspectSeed reports what the bundled seed in resources gave, and why it gave
+// nothing when it did. Neither return value contains the key.
+func InspectSeed(resources string) (string, SeedProblem) {
+	values, present, problem := readSeed(resources)
+	if problem != SeedMissing {
+		return "", problem
+	}
+	if !present {
+		return "", SeedMissing
+	}
+	key := strings.TrimSpace(values[seedVariable])
+	if key == "" {
+		return "", SeedEmpty
+	}
+	return key, SeedMissing
+}
+
+// readSeed is the one place the seed file is opened; present reports whether the
+// package carried one at all, which tells a checkout apart from a broken
+// release.
+func readSeed(resources string) (values map[string]string, present bool, problem SeedProblem) {
 	if resources == "" {
-		return ""
+		return nil, false, SeedMissing
 	}
 	data, err := os.ReadFile(filepath.Join(resources, seedFile))
 	if err != nil {
-		return ""
+		if os.IsNotExist(err) {
+			return nil, false, SeedMissing
+		}
+		return nil, true, SeedUnreadable
 	}
+	present = true
 	plain, err := openPayload(data)
 	if err != nil {
-		return ""
+		if seedKey() == nil {
+			// The build carries no salt, so no seed could ever open: reporting a
+			// foreign seal would send whoever reads the log after the wrong file.
+			return nil, true, SeedUnreadable
+		}
+		return nil, true, SeedForeign
 	}
 	var document seedPayload
 	if err := json.Unmarshal(plain, &document); err != nil {
-		return ""
+		return nil, true, SeedMalformed
 	}
-	return strings.TrimSpace(document.Secrets[seedVariable])
+	return document.Secrets, true, SeedMissing
 }
 
 // seedVariable is the one name the bundled seed is read for: the key the

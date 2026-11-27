@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"luvia/apps/desktop/internal/preferences"
@@ -61,5 +62,104 @@ func TestSeedSurvivesAnEmptyResourceDir(t *testing.T) {
 	}
 	if got := preferences.SeedValue(foreign); got != "" {
 		t.Fatalf("a foreign seed opened into %d bytes", len(got))
+	}
+}
+
+// TestSeedProblemNamesTheFault pins the reporting that keeps a silent seed from
+// looking like a healthy one: a rotated salt reports a foreign seal, a file that
+// is not a seed reports a malformed one, a seed without the key reports the
+// missing name, and a checkout with no seed reports nothing at all. None of the
+// messages may carry the key.
+func TestSeedProblemNamesTheFault(t *testing.T) {
+	const key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	resources := t.TempDir()
+	if got, problem := preferences.InspectSeed(resources); got != "" || problem != preferences.SeedMissing {
+		t.Fatalf("a checkout without a seed reported %q / %q", got, problem)
+	}
+
+	good := filepath.Join(resources, "kanju.seed")
+	if err := preferences.WriteSeedFile(good, map[string]string{"KANJU_SECRET": key}); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+	if got, problem := preferences.InspectSeed(resources); got != key || problem != preferences.SeedMissing {
+		t.Fatalf("a healthy seed reported %d bytes / %q", len(got), problem)
+	}
+
+	// A flip in the ciphertext is what a seed from another build's salt looks
+	// like: authenticated encryption cannot tell the two apart, and both mean
+	// the same thing to whoever reads the log.
+	sealed, err := os.ReadFile(good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed[len(sealed)-1] ^= 0xFF
+	if err := os.WriteFile(good, sealed, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, problem := preferences.InspectSeed(resources)
+	if problem != preferences.SeedForeign {
+		t.Fatalf("a seed from another seal reported %q", problem)
+	}
+	if text := string(problem); text == "" || strings.Contains(text, key[:8]) {
+		t.Fatalf("the report is empty or leaks the key: %q", text)
+	}
+
+	if err := os.WriteFile(good, []byte{9, 9, 9}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, problem := preferences.InspectSeed(resources); problem != preferences.SeedForeign {
+		t.Fatalf("a file that is not a seed reported %q", problem)
+	}
+
+	if err := preferences.WriteSeedFile(good, map[string]string{"OTHER": key}); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+	if got, problem := preferences.InspectSeed(resources); got != "" || problem != preferences.SeedEmpty {
+		t.Fatalf("a seed without the key reported %q / %q", got, problem)
+	}
+}
+
+// TestApplyAccessKeysPrefersTheReaderOverThePackage pins the startup order the
+// release depends on: a key the environment or the settings page supplies wins
+// over the bundled one, so shipping a seed never takes the choice away. The
+// seed supplies the value only when neither of the other two has one.
+func TestApplyAccessKeysPrefersTheReaderOverThePackage(t *testing.T) {
+	const packaged = "packaged-key-do-not-use"
+	const typed = "typed-key-do-not-use"
+	resources := t.TempDir()
+	if err := preferences.WriteSeedFile(filepath.Join(resources, "kanju.seed"),
+		map[string]string{"KANJU_SECRET": packaged}); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+	name := preferences.SeedVariable()
+	userData := t.TempDir()
+
+	// Nothing supplied: the package's key is what the engine sees.
+	for _, kept := range []string{"", packaged} {
+		t.Setenv(name, kept)
+		if kept == "" {
+			os.Unsetenv(name)
+		}
+		preferences.ApplyAccessKeys(userData, resources)
+		if got := os.Getenv(name); got != packaged {
+			t.Fatalf("without a reader's key the engine got %q", got)
+		}
+	}
+
+	// The settings page wins: a value it saved must not be replaced by the seed.
+	if err := preferences.SaveSecrets(userData, map[string]string{name: typed}); err != nil {
+		t.Fatalf("save secrets: %v", err)
+	}
+	os.Unsetenv(name)
+	preferences.ApplyAccessKeys(userData, resources)
+	if got := os.Getenv(name); got != typed {
+		t.Fatalf("the settings page lost to the package: engine got %q", got)
+	}
+
+	// The environment wins over both.
+	t.Setenv(name, "exported-key-do-not-use")
+	preferences.ApplyAccessKeys(userData, resources)
+	if got := os.Getenv(name); got != "exported-key-do-not-use" {
+		t.Fatalf("the environment lost: engine got %q", got)
 	}
 }
