@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -202,7 +203,7 @@ func (s *sessionStore) claim(ctx context.Context, site callSite) (session, error
 	if cookie == "" {
 		return session{}, s.refused(site, nil)
 	}
-	expiry := s.expiry(answer)
+	expiry := s.expiry(answer, wire)
 	return session{Cookie: cookie, ExpiresAt: expiry}, nil
 }
 
@@ -219,18 +220,66 @@ func (s *sessionStore) refused(site callSite, cause error) *source.Error {
 // field wins because the upstream states it in the claim's own answer, which is
 // the token's expiry rather than the cookie's; the cookie's Max-Age or Expires is
 // the fallback, and a claim that states neither lasts for the process only.
-func (s *sessionStore) expiry(answer []byte) time.Time {
+//
+// The claim's own `expires_at` is a claim on paper — kanju answers 201 with
+// `session.expires_at: "0001-01-01T00:00:00Z"` — so a zero or past instant falls
+// through to the cookie rather than teaching the cache that the session is
+// already dead. The cookie's Max-Age is the number the upstream actually
+// enforces.
+func (s *sessionStore) expiry(answer []byte, wire wireResponse) time.Time {
+	now := time.Now()
 	if name := strings.TrimSpace(s.spec.TTL); name != "" {
 		var object map[string]any
 		if err := json.Unmarshal(answer, &object); err == nil {
 			if raw, ok := lookupField(object, name); ok {
-				if instant, err := time.Parse(time.RFC3339, strings.TrimSpace(toString(raw))); err == nil {
+				if instant, err := time.Parse(time.RFC3339, strings.TrimSpace(toString(raw))); err == nil && instant.After(now) {
 					return instant
 				}
 			}
 		}
 	}
-	return time.Time{}
+	cookieExpiry := time.Time{}
+	for _, header := range wire.setCookie {
+		if instant, ok := parseSetCookieExpiry(header, s.spec.Cookie, now); ok && instant.After(cookieExpiry) {
+			cookieExpiry = instant
+		}
+	}
+	return cookieExpiry
+}
+
+// parseSetCookieExpiry reads the lifetime a Set-Cookie header states, either as
+// Max-Age seconds or as an Expires date. A header that clears the cookie states
+// neither a future Max-Age nor a future date, so it yields nothing.
+func parseSetCookieExpiry(header, name string, now time.Time) (time.Time, bool) {
+	if _, ok := parseSetCookie(header, name); !ok {
+		return time.Time{}, false
+	}
+	for _, attribute := range strings.Split(header, ";")[1:] {
+		key, value, found := strings.Cut(strings.TrimSpace(attribute), "=")
+		if !found {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "max-age":
+			seconds, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil || seconds <= 0 {
+				continue
+			}
+			return now.Add(time.Duration(seconds) * time.Second), true
+		case "expires":
+			// RFC 1123 with GMT is what an upstream writes; the other layouts
+			// are the ones older servers still emit.
+			for _, layout := range []string{http.TimeFormat, time.RFC1123, time.RFC850, time.ANSIC} {
+				if instant, err := time.Parse(layout, strings.TrimSpace(value)); err == nil {
+					if instant.After(now) {
+						return instant, true
+					}
+					return time.Time{}, false
+				}
+			}
+		}
+	}
+	return time.Time{}, false
 }
 
 // lookupField reads a dotted field path out of a decoded answer.

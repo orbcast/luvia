@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/internal/source/engine"
@@ -340,6 +341,44 @@ func TestSessionIsNotSentWhenTheRequestDeclaresCookieFalse(t *testing.T) {
 	}
 	if cookieFreePath != "/v1/playback/bare/token-1" {
 		t.Fatalf("the cookie:false request was not the one left bare (got %q)", cookieFreePath)
+	}
+}
+
+// TestSessionFallsBackToTheCookieLifetime pins the shape kanju actually answers:
+// a 201 whose session.expires_at is the zero time. The cookie's Max-Age is what
+// the upstream enforces, so the cached session must outlive the run instead of
+// being re-claimed on every request.
+func TestSessionFallsBackToTheCookieLifetime(t *testing.T) {
+	dir := sessionsDir(t)
+	_, client := newStubUpstreamWithHeaders(t, kanjuClaims(func(record recordedRequest) (int, string) {
+		// The claim's body claims no lifetime at all, which is the case that
+		// used to poison the cache.
+		if record.Path == sessionPath {
+			return http.StatusCreated, `{"session":{"expires_at":"0001-01-01T00:00:00Z"}}`
+		}
+		return resolveStub(t)(record)
+	}), kanjuClaimHeaders())
+	kanju := kanjuSessionSource(t, client, dir)
+	if _, err := kanju.Resolve(context.Background(), kanjuEpisode(), ""); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "sessions.json"))
+	if err != nil {
+		t.Fatalf("read session cache: %v", err)
+	}
+	var stored map[string]struct {
+		Cookie    string    `json:"cookie"`
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+	if err := json.Unmarshal(data, &stored); err != nil {
+		t.Fatalf("session cache is not JSON: %v\n%s", err, data)
+	}
+	entry := stored["kanju"]
+	if entry.ExpiresAt.IsZero() {
+		t.Fatalf("cached expiry is the zero time; Max-Age was not read: %s", data)
+	}
+	if !entry.ExpiresAt.After(time.Now().Add(24 * time.Hour)) {
+		t.Fatalf("cached expiry = %v, want the cookie's year-long Max-Age", entry.ExpiresAt)
 	}
 }
 
