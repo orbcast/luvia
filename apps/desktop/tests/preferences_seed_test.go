@@ -17,7 +17,7 @@ import (
 func TestSeedRoundTripCoversTheKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "kanju.seed")
 	const key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	if err := preferences.WriteSeedFile(path, map[string]string{"KANJU_SECRET": key}); err != nil {
+	if err := preferences.WriteSeedFile(path, map[string]string{"KANJU_SECRET": key}, preferences.SeedSalt()); err != nil {
 		t.Fatalf("write seed: %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -78,7 +78,7 @@ func TestSeedProblemNamesTheFault(t *testing.T) {
 	}
 
 	good := filepath.Join(resources, "kanju.seed")
-	if err := preferences.WriteSeedFile(good, map[string]string{"KANJU_SECRET": key}); err != nil {
+	if err := preferences.WriteSeedFile(good, map[string]string{"KANJU_SECRET": key}, preferences.SeedSalt()); err != nil {
 		t.Fatalf("write seed: %v", err)
 	}
 	if got, problem := preferences.InspectSeed(resources); got != key || problem != preferences.SeedMissing {
@@ -111,7 +111,7 @@ func TestSeedProblemNamesTheFault(t *testing.T) {
 		t.Fatalf("a file that is not a seed reported %q", problem)
 	}
 
-	if err := preferences.WriteSeedFile(good, map[string]string{"OTHER": key}); err != nil {
+	if err := preferences.WriteSeedFile(good, map[string]string{"OTHER": key}, preferences.SeedSalt()); err != nil {
 		t.Fatalf("write seed: %v", err)
 	}
 	if got, problem := preferences.InspectSeed(resources); got != "" || problem != preferences.SeedEmpty {
@@ -128,7 +128,7 @@ func TestApplyAccessKeysPrefersTheReaderOverThePackage(t *testing.T) {
 	const typed = "typed-key-do-not-use"
 	resources := t.TempDir()
 	if err := preferences.WriteSeedFile(filepath.Join(resources, "kanju.seed"),
-		map[string]string{"KANJU_SECRET": packaged}); err != nil {
+		map[string]string{"KANJU_SECRET": packaged}, preferences.SeedSalt()); err != nil {
 		t.Fatalf("write seed: %v", err)
 	}
 	name := preferences.SeedVariable()
@@ -161,5 +161,36 @@ func TestApplyAccessKeysPrefersTheReaderOverThePackage(t *testing.T) {
 	preferences.ApplyAccessKeys(userData, resources)
 	if got := os.Getenv(name); got != "exported-key-do-not-use" {
 		t.Fatalf("the environment lost: engine got %q", got)
+	}
+}
+
+// TestSeedSaltTravelsWithTheBuild pins the fault that made every shipped
+// package ask for a key: the salt used to be read from the environment at run
+// time, so a reader's machine — which has no LUVIA_SEED_SALT — opened nothing.
+// The salt now belongs to the build, and the packer asks the same source, so a
+// seed this build writes is a seed this build opens.
+func TestSeedSaltTravelsWithTheBuild(t *testing.T) {
+	salt := preferences.SeedSalt()
+	if len(salt) == 0 {
+		t.Fatal("the build carries no salt, so no bundled seed could ever open")
+	}
+	path := filepath.Join(t.TempDir(), "kanju.seed")
+	const key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	if err := preferences.WriteSeedFile(path, map[string]string{"KANJU_SECRET": key}, salt); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+	values, err := preferences.ReadSeedFile(path)
+	if err != nil {
+		t.Fatalf("read seed: %v", err)
+	}
+	if values["KANJU_SECRET"] != key {
+		t.Fatalf("the seed got back %d bytes", len(values["KANJU_SECRET"]))
+	}
+	// A second build's salt is what a seed from another release looks like: it
+	// must not open, or one leak would cover every release.
+	other := append([]byte(nil), salt...)
+	other[0] ^= 0xFF
+	if _, err := preferences.OpenSeedForTest(path, other); err == nil {
+		t.Fatal("a seed sealed under another salt opened")
 	}
 }

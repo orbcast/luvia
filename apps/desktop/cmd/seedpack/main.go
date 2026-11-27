@@ -40,7 +40,17 @@ func main() {
 		}
 		values[name] = value
 	}
-	if err := preferences.WriteSeedFile(*out, values); err != nil {
+	// The salt comes from the same place the app reads it: preferences owns the
+	// hex decoding, so the packer and the shipped binary cannot end up with two
+	// different keys for the same value.
+	salt := preferences.SeedSalt()
+	if len(salt) == 0 {
+		// Without a salt the packer would seal under a key the app cannot
+		// rebuild, and the failure would only show on a reader's machine.
+		fmt.Fprintln(os.Stderr, "seedpack: seed salt is not configured for this build")
+		os.Exit(1)
+	}
+	if err := preferences.WriteSeedFile(*out, values, salt); err != nil {
 		fmt.Fprintf(os.Stderr, "seedpack: %v\n", err)
 		os.Exit(1)
 	}

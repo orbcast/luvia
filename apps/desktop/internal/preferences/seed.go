@@ -20,8 +20,7 @@ const seedFile = "kanju.seed"
 // seedSalt is mixed into the key derivation, so a seed from one release cannot
 // be opened with another one's build. Its value comes from the build, see
 // seedsalt.go and seeddev.go.
-func seedKey() []byte {
-	salt := seedSalt()
+func seedKey(salt []byte) []byte {
 	if len(salt) == 0 {
 		return nil
 	}
@@ -106,9 +105,9 @@ func readSeed(resources string) (values map[string]string, present bool, problem
 		return nil, true, SeedUnreadable
 	}
 	present = true
-	plain, err := openPayload(data)
+	plain, err := openPayload(data, seedSalt())
 	if err != nil {
-		if seedKey() == nil {
+		if seedKey(seedSalt()) == nil {
 			// The build carries no salt, so no seed could ever open: reporting a
 			// foreign seal would send whoever reads the log after the wrong file.
 			return nil, true, SeedUnreadable
@@ -141,12 +140,16 @@ type seedPayload struct {
 // WriteSeedFile seals the named values into path, which is the form the release
 // workflow writes into the bundled resources. It is the only writer of seedFile
 // in the repository; the app itself only reads.
-func WriteSeedFile(path string, values map[string]string) error {
+//
+// salt is passed in rather than looked up here: the packer runs as its own
+// process and the app embeds the salt at link time, so the two agree only when
+// the caller hands over the value the build embedded. See cmd/seedpack.
+func WriteSeedFile(path string, values map[string]string, salt []byte) error {
 	document, err := json.Marshal(seedPayload{Secrets: values})
 	if err != nil {
 		return err
 	}
-	sealed, err := sealPayload(document)
+	sealed, err := sealPayload(document, salt)
 	if err != nil {
 		return err
 	}
@@ -162,7 +165,25 @@ func ReadSeedFile(path string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	plain, err := openPayload(data)
+	plain, err := openPayload(data, seedSalt())
+	if err != nil {
+		return nil, err
+	}
+	var document seedPayload
+	if err := json.Unmarshal(plain, &document); err != nil {
+		return nil, err
+	}
+	return document.Secrets, nil
+}
+
+// OpenSeedForTest opens a seed under a caller-supplied salt, which is how a
+// test checks that one release's build cannot open another release's seed.
+func OpenSeedForTest(path string, salt []byte) (map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	plain, err := openPayload(data, salt)
 	if err != nil {
 		return nil, err
 	}
@@ -176,8 +197,8 @@ func ReadSeedFile(path string) (map[string]string, error) {
 // sealPayload and openPayload are the layout WriteSeedFile and ReadSeedFile
 // share, separate from SealSeed so a test can pin the file format without
 // reaching into the app's resource directory.
-func sealPayload(plain []byte) ([]byte, error) {
-	secret := seedKey()
+func sealPayload(plain []byte, salt []byte) ([]byte, error) {
+	secret := seedKey(salt)
 	if secret == nil {
 		return nil, errors.New("seed salt is not configured for this build")
 	}
@@ -198,11 +219,11 @@ func sealPayload(plain []byte) ([]byte, error) {
 	return out, nil
 }
 
-func openPayload(data []byte) ([]byte, error) {
+func openPayload(data []byte, salt []byte) ([]byte, error) {
 	if len(data) < 2 || data[0] != 1 {
 		return nil, errors.New("seed has an unknown format")
 	}
-	secret := seedKey()
+	secret := seedKey(salt)
 	if secret == nil {
 		return nil, errors.New("seed salt is not configured for this build")
 	}

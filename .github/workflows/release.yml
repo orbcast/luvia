@@ -81,10 +81,12 @@ jobs:
           # 泄露只属于这一次发版。
           KANJU_SECRET: ${{ secrets.KANJU_SECRET }}
           LUVIA_SEED_SALT: ${{ vars.LUVIA_SEED_SALT }}
-          # mygo build 只从 GOFLAGS 取额外 tag，没有自己的 -tags 开关；
-          # 少了这一行，二进制用的是 seeddev 的开发盐，封进去的种子在
-          # 用户那里会被判成「另一个构建封的」，然后一路请求 401。
+          # mygo build 从 GOFLAGS 取额外 tag，从 MYGO_LDFLAGS 取额外 -X，
+          # 它自己没有 -tags / -ldflags 开关。少了 tag 会编译进 seeddev 的
+          # 开发盐；少了 -X，releaseSeedSalt 是空串，种子在用户机器上打不开
+          # （盐必须在构建时固化，用户的进程环境里没有 LUVIA_SEED_SALT）。
           GOFLAGS: -tags=prodseed
+          MYGO_LDFLAGS: -X luvia/apps/desktop/internal/preferences.releaseSeedSalt=${{ vars.LUVIA_SEED_SALT }}
         run: |
           set -euo pipefail
           out="$(mktemp -d)"
