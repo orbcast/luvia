@@ -120,7 +120,7 @@ make skills   # 更新 .agents/skills
 {
   "name": "Luvia",
   "identifier": "com.example.luvia",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "out": "build",
   "i18n": {
     "dir": "locales",
@@ -184,7 +184,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg
 推一个 `v*` tag 就会在 GitHub Actions 上跑 [release.yml](.github/workflows/release.yml)：先过 `make check` 与 `make check-gen` 的门禁，再用各自的原生 runner 把 macOS（arm64 与 amd64 各一台）、Windows 和 Linux 各打一份，连同 `SHA256SUMS.txt` 挂到该 tag 的 Release 上。想重发某个版本时在 Actions 里手动触发 `Release`，填上已存在的 tag 即可。
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
 不用等 tag 也能拿到临时产物：CI 的 `apps/desktop checks` 任务会构建当前平台，但那份产物只留在该次运行的 artifact 里，不会作为下载页发布。别人用你的版本时直接下 Release 里的压缩包，解压即可运行，不需要在自己机器上编译。
