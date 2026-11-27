@@ -31,5 +31,6 @@
 - [0017 源自带时间轴弹幕时站外匹配让位](0017-upstream-danmaku-wins.md)
 - [0018 弹幕层自己走播放头，不等播放器的报告](0018-danmaku-walks-the-playhead-between-reports.md)
 - [0019 访问密钥在应用内填写](0019-access-keys-in-the-app.md)
+- [0020 播放线路需要的上游会话由引擎自行申领](0020-upstream-session-for-playback.md)
 
 新增决策时在本列表补一行，写完跑 `make rules` 确认索引、文件名和链接都在。

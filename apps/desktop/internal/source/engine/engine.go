@@ -21,6 +21,10 @@ type Options struct {
 	// Client overrides the HTTP client. Tests inject one that reaches a local
 	// fixture server; production keeps the default.
 	Client *http.Client
+	// SessionsDir is where a claimed upstream session is kept so the next
+	// launch reuses it. Empty keeps sessions in memory only, which is what a
+	// test that must not touch the user's files wants.
+	SessionsDir string
 }
 
 type sourceImpl struct {
@@ -32,6 +36,9 @@ type sourceImpl struct {
 	// retryWhen is the rule's own list of answers worth another try, copied
 	// out of the rule so a request does not walk a slice it cannot own.
 	retryWhen []rule.RetryWhen
+	// session holds the claimed identity a rule that declares one sends with
+	// every request. It is nil when the rule declares no session.
+	session *sessionStore
 }
 
 // New validates the rule and builds a Source. A rule that fails validation is
@@ -52,14 +59,16 @@ func New(parsed *rule.Rule, opts Options) (source.Source, error) {
 	if concurrency < 1 {
 		concurrency = 1
 	}
-	return &sourceImpl{
+	impl := &sourceImpl{
 		rule:      parsed,
 		client:    client,
 		sem:       make(chan struct{}, concurrency),
 		retries:   retries,
 		timeout:   time.Duration(parsed.HTTP.TimeoutMs) * time.Millisecond,
 		retryWhen: parsed.HTTP.RetryWhen,
-	}, nil
+	}
+	impl.session = newSessionStore(parsed.Session, impl, opts.SessionsDir)
+	return impl, nil
 }
 
 func (s *sourceImpl) ID() string { return s.rule.ID }

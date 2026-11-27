@@ -16,6 +16,7 @@ type functionSpec struct {
 // rejects unknown calls before anything runs.
 var KnownFunctions = map[string]functionSpec{
 	"coalesce":   {minArgs: 1, maxArgs: 0},
+	"anonId":     {minArgs: 0, maxArgs: 0},
 	"trimPrefix": {minArgs: 2, maxArgs: 2},
 	"trimSuffix": {minArgs: 2, maxArgs: 2},
 	"trim":       {minArgs: 1, maxArgs: 1},
@@ -114,6 +115,11 @@ func (r *Rule) Validate() error {
 	}
 	if r.Sign != nil {
 		if err := validateSign(r.Sign); err != nil {
+			return err
+		}
+	}
+	if r.Session != nil {
+		if err := validateSession(r.Session); err != nil {
 			return err
 		}
 	}
@@ -314,6 +320,32 @@ func validateSign(sign *Sign) error {
 		}
 	}
 	return nil
+}
+
+// validateSession checks the block that claims an upstream identity.
+//
+// Its request stands on its own: the claim runs before any block does, so it
+// sees no step variables of its own. A path that is not rooted at the baseURL
+// would send the claim, and the cookie that follows it, to a host the rule does
+// not describe, so it is refused even when the template looks absolute.
+func validateSession(session *Session) error {
+	req := session.Request
+	if req.Path == "" {
+		return fmt.Errorf("session.request.path is required")
+	}
+	if !strings.HasPrefix(req.Path, "/") {
+		return fmt.Errorf("session.request.path must start with / and stay within the baseURL, got %q", req.Path)
+	}
+	if req.Sign != nil && !*req.Sign {
+		return fmt.Errorf("session.request must be signed; omit sign to sign with the rule's own block")
+	}
+	if req.Cookie != nil && !*req.Cookie {
+		return fmt.Errorf("session.request is the claim itself and cannot be sent without the session")
+	}
+	if strings.TrimSpace(session.Cookie) == "" {
+		return fmt.Errorf("session.cookie is required")
+	}
+	return validateRequest("session.request", req, fieldSet())
 }
 
 func validateBlock(name string, steps []Step, out Output, kind outputKind) error {

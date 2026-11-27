@@ -58,6 +58,9 @@ apps/luvia-rules/
   "sign": {"secret": "...", "message": "{method}\n{path}\n{timestamp}\n{nonce}",
            "timestampUnit": "ms", "nonceBytes": 16,
            "headers": [{"name": "x-signature", "value": "{signature}"}]},
+  "session": {"request": {"method": "POST", "path": "/v1/users/anonymous",
+                        "body": {"anonymous_id": {"fn": "anonId"}}},
+              "cookie": "ai_movie_session", "ttl": "expires_at"},
   "home": {"steps": [], "output": {}},
   "list": {"kindValues": {"movie": "1"}, "searchIntent": "search", "steps": [], "output": {}},
   "updates": {"kindValues": {"series": "series"}, "days": "weekday", "steps": [], "output": {}},
@@ -67,13 +70,35 @@ apps/luvia-rules/
 }
 ```
 
-顶层键只有这些；`schemaVersion` 必填且当前为 `1`，未知键导致整条规则被拒绝（严格解码）。`id` 必须等于目录名。`baseURL` 必须是 http/https、带主机、无 query 与 fragment。
+顶层键只有这些（`session` 见下文「上游会话」一节）；`schemaVersion` 必填且当前为 `1`，未知键导致整条规则被拒绝（严格解码）。`id` 必须等于目录名。`baseURL` 必须是 http/https、带主机、无 query 与 fragment。
 
-`http` 与 `sign` 可选。`http` 缺省值：超时 30 秒、重试 2 次、并发上限 4、翻页上限 20。`timeoutMs` 是单次尝试的上限；重试只对幂等方法（GET / HEAD）在传输错误与 5xx 时进行，退避 200 ms × 2ⁿ。
+`http`、`sign` 与 `session` 可选。`http` 缺省值：超时 30 秒、重试 2 次、并发上限 4、翻页上限 20。`timeoutMs` 是单次尝试的上限；重试只对幂等方法（GET / HEAD）在传输错误与 5xx 时进行，退避 200 ms × 2ⁿ。
 
 `retryWhen` 让规则自己点名哪些“看起来成功”或“上游自称临时不可用”的响应值得重试，花的是同一份重试预算、走同一套退避：`status` 是该响应的 HTTP 状态（省略表示任何状态），`contains` 按原文子串匹配响应体，`empty` 要求响应体除空白外为空。每项至少要写 `contains` 或 `empty`，否则会重试每一个响应、连好的也重试，加载规则时直接报错。常见用法是 `{"status": 503, "contains": "project_auth_unavailable"}`——上游鉴权服务短暂不可用时它既回 503 带这个标记，也可能回一个空页；`{"status": 200, "empty": true}` 同时兜住后者。重试耗尽后按其状态归类：5xx 与 `retryWhen` 命中都算 `network`。
 
 “sign” 存在时，除显式写 “sign”: false 的步骤外，所有请求都带签名头：{method}、{path}（含 query）、{timestamp}、{nonce} 四个变量供 message 模板使用，{signature} 供头模板使用。timestampUnit 取 ms 或 s；nonceBytes 是随机字节数，十六进制编码后使用。sign.secret 支持 `${env:NAME}`，取值在发请求前从环境变量替换；变量缺失时不发送请求，直接按 unauthorized 失败（Detail 里带缺失的变量名），不拿占位符去签名。
+
+## 上游会话（`session`）
+
+有的上游除了签名还要一份身份：不是人类账号，而是它自己发给每个访客的匿名会话，没有这份 cookie 时部分接口回 401。`session` 块描述怎么去领：
+
+```json
+"session": {
+  "request": {"method": "POST", "path": "/v1/users/anonymous",
+              "body": {"anonymous_id": {"fn": "anonId"}}},
+  "cookie": "ai_movie_session",
+  "ttl": "expires_at"
+}
+```
+
+- `request` 与步骤、线路兑换用同一套字段，照常受 `sign` 与 `http.headers` 影响。
+- `cookie` 必填，是要保留下来的 cookie 名。上游先发过期 set-cookie 再发新的时（一次清掉几条 Path/Domain 变体），只有最后一个非空值算数。
+- `ttl` 可选，是这个响应里表示过期时刻的字段名。取值是 RFC 3339 时间戳，支持点号分隔的嵌套路径（`session.expires_at`）；省略或不填时按 cookie 的 `Max-Age`/`Expires` 推算，都没有就当作“本次运行内有效”，不写盘。
+- 领到的会话存在用户数据目录的 `sessions.json`（权限 0600），按源 ID 分键，下次启动直接复用，过期前不重复申领。只有真正拿到 cookie 才会写盘，申领失败不留空条目。
+
+带会话的请求不需要在规则里写任何东西：声明了 `session` 后，所有发往 `baseURL` 的请求自动带这份 cookie；某个请求不该带时写 `"cookie": false`，线路兑换同样受这个开关控制。发往 `baseURL` 以外主机（例如弹幕文件服务器）的请求不带会话。上游回 401 且规则声明了 `session` 时，引擎丢掉缓存、重新申领一次、把这次请求重试一遍，仍失败才按 `unauthorized` 报错；没带 cookie 的请求不回环，避免把限流打成死循环。
+
+`{fn: "anonId"}` 是新增的零参函数：首次求值生成 `web_<uuid4>`，同一个引擎实例内保持不变，并发调用拿到同一个值，所以重领会话时上游看到的还是同一个 `anonymous_id`。决定与代价见 [ADR 0020](adr/0020-upstream-session-for-playback.md)。
 
 `request` 对象（步骤里的与线路兑换里的都算）可以声明 `response`，说明这次响应的形态：缺省与 `"json"` 都按 JSON 解析 body；`"routerData"` 用于服务端渲染的页面——页面把同一份数据塞在脚本的 `_ROUTER_DATA = {...}` 赋值里下发，引擎按这个字面量定位，要求其后（允许空白）确实是 `=` 再跟 `{`，否则跳过——页面别处提到这个名字、或者只是读一下全局，都不能被当成载荷；从那个 `{` 起逐字节配平（跳过字符串字面量与转义，标题里的花括号不会提前结束对象），配平出的对象还要通过 JSON 校验才采用，否则继续找下一次出现。这样同一个源既能读 JSON 接口，也能读分类页，六个操作不必因为响应形态不同拆成两个源；决定与代价见 [ADR 0014](adr/0014-html-pages-as-rule-sources.md)。取值只有 `""`、`"json"`、`"routerData"` 三种，写错时加载规则即报 `unsupported response`。
 
@@ -155,6 +180,7 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 
 | 函数 | 参数 | 行为 |
 | --- | --- | --- |
+| `anonId` | 0 | 稳定的 `web_<uuid4>`，供 `session.request` 申领匿名会话；同一引擎实例内不变 |
 | `coalesce` | ≥1 | 返回第一个可解析且非空的值 |
 | `trimPrefix` / `trimSuffix` | 2 | 去前缀 / 后缀 |
 | `trim` | 1 | 去空白 |
@@ -317,6 +343,8 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 
 每个源最多 4 个并发请求（可配置），请求受块级超时与 `ctx` 约束，取消优先于重试。响应超过 8 MiB 视为无效响应。
 
+声明 `session` 的源在第一个出站请求前先申领会话（除非 `sessions.json` 里有未过期的）；申领失败按 `unauthorized` 报错，Detail 写 `session claim refused` 并附上游状态与响应片段，供规则作者排查，不作为界面文案。请求过程中遇到 401 时丢弃缓存、重领一次、重试一次，额度用完就报错。
+
 声明 `"response": "routerData"` 的请求，若整页都找不到能配平成合法 JSON 的 `_ROUTER_DATA` 对象，按 `invalid_response` 失败，诊断写 "response carries no router data"；对象抽出来了但内容不是规则以为的结构，错误会出现在后续选择器上（`from` 的候选全空、字段取不到），不在抽取这一步拦下。`when` 为假而跳过的步骤不会产生请求，也就没有错误可报。
 
 错误带分类码、源 ID、出错的块与步骤，上游文案只进诊断字段，界面按分类码取本地化文案：
@@ -326,7 +354,7 @@ query 的 `value` 是模板，常量也要写成普通文本（`"24"`、`"latest
 | `network` | 传输失败或 5xx |
 | `timeout` | 超过单次或整体时限 |
 | `canceled` | 调用方取消 |
-| `unauthorized` | 401 / 403，通常是密钥或签名过期 |
+| `unauthorized` | 401 / 403，通常是密钥或签名过期，也可能是上游拒绝发放匿名会话 |
 | `not_found` | 404，或请求的线路不存在 |
 | `rate_limited` | 429 |
 | `invalid_response` | 状态码异常、非 JSON、响应过大 |

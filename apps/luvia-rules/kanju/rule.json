@@ -39,7 +39,7 @@
       },
       {
         "name": "x-ai-movie-build-version",
-        "value": "dianyingtiantang-v2026.11.06.2-search-header-f6f73501a448-web"
+        "value": "dianyingtiantang-v2026.11.25.3-runtime-config-compat-2e8c58a6d998-web"
       },
       {
         "name": "x-ai-movie-protocol-version",
@@ -70,6 +70,19 @@
         "value": "{signature}"
       }
     ]
+  },
+  "session": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/users/anonymous",
+      "body": {
+        "anonymous_id": {
+          "fn": "anonId"
+        }
+      }
+    },
+    "cookie": "ai_movie_session",
+    "ttl": "session.expires_at"
   },
   "home": {
     "steps": [
@@ -393,7 +406,10 @@
             "provider_name"
           ]
         },
-        "urlKind": "url_kind",
+        "urlKind": {
+          "fn": "coalesce",
+          "args": ["url_kind", "url"]
+        },
         "url": "url",
         "ticket": "resolve_ticket",
         "default": "selected"

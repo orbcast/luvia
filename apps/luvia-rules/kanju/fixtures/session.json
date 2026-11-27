@@ -1,0 +1,13 @@
+{
+  "user": {
+    "id": "usr_anon_7f3c9a21",
+    "nickname": "林间来客8649",
+    "avatar": null,
+    "authenticated": false,
+    "anonymous": true
+  },
+  "session": {
+    "token": "ums_anon_fixture_token",
+    "expires_at": "2027-11-27T13:58:11.000Z"
+  }
+}

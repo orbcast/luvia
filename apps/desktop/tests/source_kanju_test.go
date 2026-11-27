@@ -33,6 +33,38 @@ func kanjuSource(t *testing.T, client *http.Client) source.Source {
 	return found
 }
 
+// kanjuClaims answers the anonymous session claim the checked-in rule makes
+// before its first request, so a test only has to describe the routes it is
+// about. Every other request is handed to next.
+func kanjuClaims(next func(recordedRequest) (int, string)) func(recordedRequest) (int, string) {
+	return func(record recordedRequest) (int, string) {
+		if record.Path == "/v1/users/anonymous" {
+			return http.StatusCreated, `{"user":{"authenticated":false}}`
+		}
+		return next(record)
+	}
+}
+
+// kanjuClaimHeaders attaches the cookie the claim answers with. Without it the
+// engine keeps looking for a session and every route answers as anonymous.
+func kanjuClaimHeaders() func(recordedRequest) http.Header {
+	return func(record recordedRequest) http.Header {
+		if record.Path != "/v1/users/anonymous" {
+			return nil
+		}
+		header := http.Header{}
+		header.Add("Set-Cookie", "ai_movie_session=ums_test_session; Path=/; HttpOnly; Max-Age=31535999; Secure")
+		return header
+	}
+}
+
+// newKanjuStub is the stub pair these tests use: the rule claims a session, so
+// every route handler is wrapped and every claim carries its cookie.
+func newKanjuStub(t *testing.T, next func(recordedRequest) (int, string)) (*stubUpstream, *http.Client) {
+	t.Helper()
+	return newStubUpstreamWithHeaders(t, kanjuClaims(next), kanjuClaimHeaders())
+}
+
 // kanjuFixturePath is where the rule's own fixtures live.
 var kanjuFixturePath = []string{rulesDir, "kanju", "fixtures"}
 
@@ -102,7 +134,7 @@ func kanjuSecret(t *testing.T) string {
 
 func TestKanjuHomeMapsSectionsAndCards(t *testing.T) {
 	body := kanjuFixture(t, "home.json")
-	stub, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(recordedRequest) (int, string) {
 		return http.StatusOK, body
 	})
 	kanju := kanjuSource(t, client)
@@ -141,7 +173,7 @@ func TestKanjuHomeMapsSectionsAndCards(t *testing.T) {
 		t.Fatalf("anime must stay anime, got %q", home.Sections[1].Cards[0].Kind)
 	}
 
-	requests := stub.Requests()
+	requests := stub.Steps()
 	if len(requests) != 1 {
 		t.Fatalf("want 1 request, got %d", len(requests))
 	}
@@ -160,7 +192,7 @@ func TestKanjuHomeMapsSectionsAndCards(t *testing.T) {
 
 func TestKanjuListSendsBrowseAndSearchQueries(t *testing.T) {
 	body := kanjuFixture(t, "list.json")
-	stub, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(recordedRequest) (int, string) {
 		return http.StatusOK, body
 	})
 	kanju := kanjuSource(t, client)
@@ -183,7 +215,7 @@ func TestKanjuListSendsBrowseAndSearchQueries(t *testing.T) {
 		t.Fatalf("search: %v", err)
 	}
 
-	requests := stub.Requests()
+	requests := stub.Steps()
 	if len(requests) != 2 {
 		t.Fatalf("want 2 requests, got %d", len(requests))
 	}
@@ -211,7 +243,7 @@ func TestKanjuListSendsBrowseAndSearchQueries(t *testing.T) {
 
 func TestKanjuUpdatesMapDayGroupsAndSendWeekday(t *testing.T) {
 	body := kanjuFixture(t, "updates.json")
-	stub, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(recordedRequest) (int, string) {
 		return http.StatusOK, body
 	})
 	kanju := kanjuSource(t, client)
@@ -236,7 +268,7 @@ func TestKanjuUpdatesMapDayGroupsAndSendWeekday(t *testing.T) {
 		t.Fatalf("poster = %q", first.PosterURL)
 	}
 
-	requests := stub.Requests()
+	requests := stub.Steps()
 	if len(requests) != 1 {
 		t.Fatalf("want 1 request, got %d", len(requests))
 	}
@@ -252,7 +284,7 @@ func TestKanjuUpdatesMapDayGroupsAndSendWeekday(t *testing.T) {
 
 func TestKanjuUpdatesKeepAnotherDaySeparate(t *testing.T) {
 	body := kanjuFixture(t, "updates.json")
-	_, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+	_, client := newKanjuStub(t, func(recordedRequest) (int, string) {
 		return http.StatusOK, body
 	})
 	kanju := kanjuSource(t, client)
@@ -267,7 +299,7 @@ func TestKanjuUpdatesKeepAnotherDaySeparate(t *testing.T) {
 }
 
 func TestKanjuUpdatesRejectAnImpossibleWeekday(t *testing.T) {
-	_, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+	_, client := newKanjuStub(t, func(recordedRequest) (int, string) {
 		return http.StatusOK, `{"days":[]}`
 	})
 	kanju := kanjuSource(t, client)
@@ -280,7 +312,7 @@ func TestKanjuUpdatesRejectAnImpossibleWeekday(t *testing.T) {
 
 func TestKanjuDetailMapsFields(t *testing.T) {
 	body := kanjuFixture(t, "detail.json")
-	stub, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(recordedRequest) (int, string) {
 		return http.StatusOK, body
 	})
 	kanju := kanjuSource(t, client)
@@ -309,13 +341,13 @@ func TestKanjuDetailMapsFields(t *testing.T) {
 	if detail.EpisodeCount != 3 {
 		t.Fatalf("episode count = %d", detail.EpisodeCount)
 	}
-	if !strings.HasSuffix(stub.Requests()[0].URL, "/v1/catalog/sample-series") {
-		t.Fatalf("detail request = %s", stub.Requests()[0].URL)
+	if !strings.HasSuffix(stub.Steps()[0].URL, "/v1/catalog/sample-series") {
+		t.Fatalf("detail request = %s", stub.Steps()[0].URL)
 	}
 }
 
 func TestKanjuEpisodesFollowOffsetPagination(t *testing.T) {
-	stub, client := newStubUpstream(t, func(record recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(record recordedRequest) (int, string) {
 		switch record.Query.Get("offset") {
 		case "0":
 			return http.StatusOK, kanjuFixture(t, "episodes-page-1.json")
@@ -348,7 +380,7 @@ func TestKanjuEpisodesFollowOffsetPagination(t *testing.T) {
 		t.Fatalf("missing title must stay empty, got %q", episodes[1].Title)
 	}
 
-	requests := stub.Requests()
+	requests := stub.Steps()
 	if len(requests) != 2 {
 		t.Fatalf("want 2 page requests, got %d", len(requests))
 	}
@@ -366,7 +398,7 @@ func TestKanjuResolvePrefersMP4AndExchangesTickets(t *testing.T) {
 	resolveBody := kanjuFixture(t, "resolve.json")
 	hlsBody := kanjuFixture(t, "resolve-line-hls.json")
 	mp4Body := kanjuFixture(t, "resolve-line-mp4.json")
-	stub, client := newStubUpstream(t, func(record recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(record recordedRequest) (int, string) {
 		switch {
 		case strings.HasSuffix(record.URL, "/v1/playback/resolve/token-1"):
 			return http.StatusOK, resolveBody
@@ -398,14 +430,19 @@ func TestKanjuResolvePrefersMP4AndExchangesTickets(t *testing.T) {
 	if playback.Line.ID != "line-mp4" || playback.Line.Label != "线路二" {
 		t.Fatalf("chosen line = %+v", playback.Line)
 	}
-	if len(playback.Lines) != 2 || playback.Lines[0].ID != "line-hls" || playback.Lines[1].Label != "线路二" {
+	if len(playback.Lines) != 4 || playback.Lines[0].ID != "line-hls" || playback.Lines[1].Label != "线路二" {
 		t.Fatalf("line menu = %+v", playback.Lines)
 	}
 	if playback.Lines[1].URLKind != "mp4" || !playback.Lines[0].Default {
 		t.Fatalf("line kinds = %+v", playback.Lines)
 	}
+	// The direct line declares url_kind "unknown" and the ticketed one
+	// "resolve_ticket"; both must still be named from their address.
+	if playback.Lines[2].URLKind != "hls" || playback.Lines[3].URLKind != "mp4" {
+		t.Fatalf("address must name the kind when the field does not: %+v", playback.Lines)
+	}
 
-	requests := stub.Requests()
+	requests := stub.Steps()
 	if len(requests) != 3 {
 		t.Fatalf("want resolve plus two exchanges, got %d", len(requests))
 	}
@@ -426,7 +463,7 @@ func TestKanjuResolvePrefersMP4AndExchangesTickets(t *testing.T) {
 func TestKanjuResolveHonoursRequestedLine(t *testing.T) {
 	resolveBody := kanjuFixture(t, "resolve.json")
 	hlsBody := kanjuFixture(t, "resolve-line-hls.json")
-	stub, client := newStubUpstream(t, func(record recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(record recordedRequest) (int, string) {
 		if strings.HasSuffix(record.URL, "/v1/playback/resolve/token-1") {
 			return http.StatusOK, resolveBody
 		}
@@ -445,14 +482,14 @@ func TestKanjuResolveHonoursRequestedLine(t *testing.T) {
 	if playback.URLKind != "hls" || playback.Line.ID != "line-hls" {
 		t.Fatalf("requested line not used: %+v", playback)
 	}
-	if len(stub.Requests()) != 2 {
-		t.Fatalf("want resolve plus one exchange, got %d", len(stub.Requests()))
+	if len(stub.Steps()) != 2 {
+		t.Fatalf("want resolve plus one exchange, got %d", len(stub.Steps()))
 	}
 }
 
 func TestKanjuResolveRejectsUnknownLine(t *testing.T) {
 	resolveBody := kanjuFixture(t, "resolve.json")
-	_, client := newStubUpstream(t, func(recordedRequest) (int, string) {
+	_, client := newKanjuStub(t, func(recordedRequest) (int, string) {
 		return http.StatusOK, resolveBody
 	})
 	kanju := kanjuSource(t, client)
@@ -472,9 +509,11 @@ func TestKanjuResolveRejectsUnknownLine(t *testing.T) {
 
 func TestKanjuResolveReportsWhenEveryLineFails(t *testing.T) {
 	resolveBody := kanjuFixture(t, "resolve.json")
-	stub, client := newStubUpstream(t, func(record recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(record recordedRequest) (int, string) {
 		if strings.HasSuffix(record.URL, "/v1/playback/resolve/token-1") {
-			return http.StatusOK, resolveBody
+			// The direct line names a host that answers nothing either.
+			return http.StatusOK, strings.ReplaceAll(resolveBody,
+				"https://play.example/direct/index.m3u8", "resolve://ticket-nowhere")
 		}
 		return http.StatusInternalServerError, `{"error":"upstream down"}`
 	})
@@ -494,8 +533,8 @@ func TestKanjuResolveReportsWhenEveryLineFails(t *testing.T) {
 	if !strings.Contains(err.Error(), "line-hls") {
 		t.Fatalf("error must name the failed lines: %v", err)
 	}
-	if len(stub.Requests()) != 3 {
-		t.Fatalf("each line must be tried once, got %d requests", len(stub.Requests()))
+	if len(stub.Steps()) != 5 {
+		t.Fatalf("each ticketed line must be tried once, got %d requests", len(stub.Steps()))
 	}
 }
 
@@ -523,7 +562,7 @@ func TestKanjuManifestPublishesItsOwnDanmaku(t *testing.T) {
 	manifestBody := kanjuFixture(t, "danmuku-manifest.json")
 	firstWindow := kanjuFixture(t, "danmuku-segment-1.json")
 	secondWindow := kanjuFixture(t, "danmuku-segment-2.json")
-	stub, client := newStubUpstream(t, func(request recordedRequest) (int, string) {
+	stub, client := newKanjuStub(t, func(request recordedRequest) (int, string) {
 		switch {
 		case strings.Contains(request.Path, "/v1/danmuku/episodes/"):
 			return http.StatusOK, sourceBody
@@ -572,7 +611,7 @@ func TestKanjuManifestPublishesItsOwnDanmaku(t *testing.T) {
 		t.Fatalf("comments must stay ordered, got %v", comments[3].At)
 	}
 
-	requests := stub.Requests()
+	requests := stub.Steps()
 	if len(requests) != 4 {
 		t.Fatalf("want 1 source, 1 manifest and 2 windows, got %d", len(requests))
 	}
@@ -592,7 +631,7 @@ func TestKanjuManifestKeepsReadingWhenAWindowFails(t *testing.T) {
 	sourceBody := kanjuFixture(t, "danmuku-source.json")
 	manifestBody := kanjuFixture(t, "danmuku-manifest.json")
 	firstWindow := kanjuFixture(t, "danmuku-segment-1.json")
-	_, client := newStubUpstream(t, func(request recordedRequest) (int, string) {
+	_, client := newKanjuStub(t, func(request recordedRequest) (int, string) {
 		switch {
 		case strings.Contains(request.Path, "/v1/danmuku/episodes/"):
 			return http.StatusOK, sourceBody

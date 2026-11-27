@@ -215,7 +215,13 @@ func openProfile(ctx context.Context, userData, cache, wanted string) profile {
 	}
 
 	rules := loader.DefaultDir(filepath.Join(userData, "rules"), filepath.Join(resourceDir(), "luvia-rules"))
-	set, err := loader.Load(rules, engine.Options{Client: http.DefaultClient})
+	set, err := loader.Load(rules, engine.Options{
+		Client: http.DefaultClient,
+		// A claimed upstream session lives beside the library and the
+		// reader's secrets: it is this installation's identity, not the
+		// cached response of this run.
+		SessionsDir: userData,
+	})
 	if err != nil {
 		log.Printf("rules %s: %v", rules, err)
 		return profile{library: store, images: images, video: video}

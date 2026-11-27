@@ -42,7 +42,7 @@ func (s *sourceImpl) fail(site callSite, kind source.ErrorKind, detail string, c
 
 // fetch performs one request described by the rule and returns decoded JSON.
 func (s *sourceImpl) fetch(ctx context.Context, site callSite, req rule.Request, sc scope) (any, error) {
-	body, err := s.fetchBody(ctx, site, req, sc)
+	body, _, err := s.sendBody(ctx, site, req, sc, true)
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +57,18 @@ func (s *sourceImpl) fetch(ctx context.Context, site callSite, req rule.Request,
 // itself — one that may or may not be compressed, such as a window of an
 // upstream's comments — goes through here instead of fetch.
 func (s *sourceImpl) fetchBody(ctx context.Context, site callSite, req rule.Request, sc scope) ([]byte, error) {
+	body, _, err := s.sendBody(ctx, site, req, sc, true)
+	return body, err
+}
+
+// sendBody is the request path every caller shares. wantSession decides whether
+// the rule's session travels with it: a rule request always does unless the rule
+// says otherwise, while the claim itself must not, since the session it is
+// asking for does not exist yet.
+func (s *sourceImpl) sendBody(ctx context.Context, site callSite, req rule.Request, sc scope, wantSession bool) ([]byte, wireResponse, error) {
 	path, ok := s.render(req.Path, sc)
 	if !ok || path == "" {
-		return nil, s.fail(site, source.ErrInvalidRule,
+		return nil, wireResponse{}, s.fail(site, source.ErrInvalidRule,
 			fmt.Sprintf("path %q did not resolve", req.Path), nil)
 	}
 	// `path` is the address the upstream knows as its own, and it is what a
@@ -79,7 +88,7 @@ func (s *sourceImpl) fetchBody(ctx context.Context, site callSite, req rule.Requ
 		ownPath = strings.HasPrefix(path, base+"/")
 		target = path
 	default:
-		return nil, s.fail(site, source.ErrInvalidRule,
+		return nil, wireResponse{}, s.fail(site, source.ErrInvalidRule,
 			fmt.Sprintf("path %q is neither rooted at the baseURL nor absolute", path), nil)
 	}
 	values := url.Values{}
@@ -125,7 +134,7 @@ func (s *sourceImpl) fetchBody(ctx context.Context, site callSite, req rule.Requ
 	}
 	payload, err := s.encodeBody(req.Body, sc, site)
 	if err != nil {
-		return nil, err
+		return nil, wireResponse{}, err
 	}
 
 	headers := map[string]string{}
@@ -144,14 +153,53 @@ func (s *sourceImpl) fetchBody(ctx context.Context, site callSite, req rule.Requ
 	if wantSign {
 		signed, err := s.signHeaders(site, method, pathWithQuery)
 		if err != nil {
-			return nil, err
+			return nil, wireResponse{}, err
 		}
 		for name, value := range signed {
 			headers[name] = value
 		}
 	}
+	// The session is attached here rather than inside every send, because this
+	// is where the rule has already said whether the request wants it.
+	if wantSession && s.session != nil && ownPath && (req.Cookie == nil || *req.Cookie) {
+		cookie, err := s.session.cookie(ctx, site)
+		if err != nil {
+			return nil, wireResponse{}, err
+		}
+		if cookie != "" {
+			headers["Cookie"] = s.session.spec.Cookie + "=" + cookie
+		}
+	}
 
-	return s.send(ctx, site, method, target, payload, headers)
+	answer, wire, err := s.send(ctx, site, method, target, payload, headers)
+	if err != nil {
+		// A session the upstream no longer accepts is worth one replacement:
+		// the ticket is still good, the identity expired early. Only a request
+		// that actually carried the session retries, and only once — a loop
+		// here would turn a rate limit into an outage.
+		if s.session != nil && headers["Cookie"] != "" && source.IsKind(err, source.ErrUnauthorized) {
+			cookie, claimErr := s.session.reclaim(ctx, site)
+			if claimErr != nil {
+				return nil, wireResponse{}, claimErr
+			}
+			fresh := make(map[string]string, len(headers))
+			for name, value := range headers {
+				fresh[name] = value
+			}
+			fresh["Cookie"] = s.session.spec.Cookie + "=" + cookie
+			return s.send(ctx, site, method, target, payload, fresh)
+		}
+		return nil, wire, err
+	}
+	return answer, wire, nil
+}
+
+// wireResponse is what the transport saw beyond the body. A rule describes a
+// request but not its answer's headers, and a session is read out of a
+// Set-Cookie the body never mentions, so the headers ride along with the body
+// they arrived with.
+type wireResponse struct {
+	setCookie []string
 }
 
 // decodeResponse reads the answer in the shape the request declared. A page
@@ -323,12 +371,12 @@ func (s *sourceImpl) signHeaders(site callSite, method, pathWithQuery string) (m
 
 // send executes the HTTP call with the source's timeout, concurrency limit and
 // retry policy, and maps transport and status failures onto error kinds.
-func (s *sourceImpl) send(ctx context.Context, site callSite, method, target string, payload []byte, headers map[string]string) ([]byte, error) {
+func (s *sourceImpl) send(ctx context.Context, site callSite, method, target string, payload []byte, headers map[string]string) ([]byte, wireResponse, error) {
 	select {
 	case s.sem <- struct{}{}:
 		defer func() { <-s.sem }()
 	case <-ctx.Done():
-		return nil, s.ctxError(site, ctx.Err())
+		return nil, wireResponse{}, s.ctxError(site, ctx.Err())
 	}
 
 	retryable := method == http.MethodGet || method == http.MethodHead
@@ -337,31 +385,33 @@ func (s *sourceImpl) send(ctx context.Context, site callSite, method, target str
 		attempts += s.retries
 	}
 	var lastErr error
+	var lastWire wireResponse
 	for attempt := 0; attempt < attempts; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(200*(1<<uint(attempt-1))) * time.Millisecond
 			select {
 			case <-time.After(backoff):
 			case <-ctx.Done():
-				return nil, s.ctxError(site, ctx.Err())
+				return nil, lastWire, s.ctxError(site, ctx.Err())
 			}
 		}
-		body, retry, err := s.attempt(ctx, site, method, target, payload, headers)
+		body, wire, retry, err := s.attempt(ctx, site, method, target, payload, headers)
+		lastWire = wire
 		if err == nil {
-			return body, nil
+			return body, wire, nil
 		}
 		lastErr = err
 		if !retry {
-			return nil, err
+			return nil, wire, err
 		}
 	}
 	if lastErr == nil {
 		lastErr = s.fail(site, source.ErrNetwork, "request failed", nil)
 	}
-	return nil, lastErr
+	return nil, lastWire, lastErr
 }
 
-func (s *sourceImpl) attempt(ctx context.Context, site callSite, method, target string, payload []byte, headers map[string]string) ([]byte, bool, error) {
+func (s *sourceImpl) attempt(ctx context.Context, site callSite, method, target string, payload []byte, headers map[string]string) ([]byte, wireResponse, bool, error) {
 	attemptCtx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -371,7 +421,7 @@ func (s *sourceImpl) attempt(ctx context.Context, site callSite, method, target 
 	}
 	req, err := http.NewRequestWithContext(attemptCtx, method, target, reader)
 	if err != nil {
-		return nil, false, s.fail(site, source.ErrInvalidRule, "cannot build request", err)
+		return nil, wireResponse{}, false, s.fail(site, source.ErrInvalidRule, "cannot build request", err)
 	}
 	if len(payload) > 0 {
 		req.Header.Set("Content-Type", "application/json")
@@ -382,14 +432,17 @@ func (s *sourceImpl) attempt(ctx context.Context, site callSite, method, target 
 	resp, err := s.client.Do(req)
 	if err != nil {
 		if ctxErr := attemptCtx.Err(); ctxErr != nil {
-			return nil, false, s.ctxError(site, ctxErr)
+			return nil, wireResponse{}, false, s.ctxError(site, ctxErr)
 		}
-		return nil, true, s.fail(site, source.ErrNetwork, "request failed", err)
+		return nil, wireResponse{}, true, s.fail(site, source.ErrNetwork, "request failed", err)
 	}
 	defer resp.Body.Close()
+	// The headers are read before the body so a session claim can see the
+	// identity the upstream issues in a Set-Cookie the body never mentions.
+	wire := wireResponse{setCookie: resp.Header.Values("Set-Cookie")}
 	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if readErr != nil {
-		return nil, true, s.fail(site, source.ErrNetwork, "response read failed", readErr)
+		return nil, wireResponse{}, true, s.fail(site, source.ErrNetwork, "response read failed", readErr)
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		// An upstream can answer 200 and mean it took nothing: kanju's
@@ -397,23 +450,23 @@ func (s *sourceImpl) attempt(ctx context.Context, site callSite, method, target 
 		// service is down. The rule names those answers, and they cost the
 		// same retry budget as a 5xx.
 		if s.retryableBody(resp.StatusCode, body) {
-			return nil, true, s.fail(site, source.ErrNetwork,
+			return nil, wireResponse{}, true, s.fail(site, source.ErrNetwork,
 				fmt.Sprintf("%s %s answered %d: %s", method, site.step, resp.StatusCode, excerpt(body)), nil)
 		}
-		return body, false, nil
+		return body, wire, false, nil
 	}
 	detail := fmt.Sprintf("%s %s returned %d: %s", method, site.step, resp.StatusCode, excerpt(body))
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, false, s.fail(site, source.ErrUnauthorized, detail, nil)
+		return nil, wire, false, s.fail(site, source.ErrUnauthorized, detail, nil)
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, false, s.fail(site, source.ErrNotFound, detail, nil)
+		return nil, wire, false, s.fail(site, source.ErrNotFound, detail, nil)
 	case resp.StatusCode == http.StatusTooManyRequests:
-		return nil, false, s.fail(site, source.ErrRateLimited, detail, nil)
+		return nil, wire, false, s.fail(site, source.ErrRateLimited, detail, nil)
 	case resp.StatusCode >= 500:
-		return nil, true, s.fail(site, source.ErrNetwork, detail, nil)
+		return nil, wire, true, s.fail(site, source.ErrNetwork, detail, nil)
 	default:
-		return nil, false, s.fail(site, source.ErrInvalidResponse, detail, nil)
+		return nil, wire, false, s.fail(site, source.ErrInvalidResponse, detail, nil)
 	}
 }
 

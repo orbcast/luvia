@@ -42,7 +42,10 @@ func (r recordedRequest) RequestURI() string {
 
 // stubUpstream answers requests with canned bodies and keeps the requests.
 type stubUpstream struct {
-	handle  func(recordedRequest) (int, string)
+	handle func(recordedRequest) (int, string)
+	// header, when set, adds response headers such as Set-Cookie beside the
+	// JSON content type every answer already carries.
+	header  func(recordedRequest) http.Header
 	mu      sync.Mutex
 	records []recordedRequest
 }
@@ -50,6 +53,18 @@ type stubUpstream struct {
 func newStubUpstream(t *testing.T, handle func(recordedRequest) (int, string)) (*stubUpstream, *http.Client) {
 	t.Helper()
 	stub := &stubUpstream{handle: handle}
+	return stubAttach(t, stub)
+}
+
+// newStubUpstreamWithHeaders is newStubUpstream for answers that carry headers
+// of their own, which is how a session can be handed out mid-conversation.
+func newStubUpstreamWithHeaders(t *testing.T, handle func(recordedRequest) (int, string), header func(recordedRequest) http.Header) (*stubUpstream, *http.Client) {
+	t.Helper()
+	stub := &stubUpstream{handle: handle, header: header}
+	return stubAttach(t, stub)
+}
+
+func stubAttach(t *testing.T, stub *stubUpstream) (*stubUpstream, *http.Client) {
 	client := &http.Client{Transport: stub}
 	t.Cleanup(client.CloseIdleConnections)
 	return stub, client
@@ -80,10 +95,18 @@ func (s *stubUpstream) RoundTrip(request *http.Request) (*http.Response, error) 
 	if status == 0 {
 		status = http.StatusOK
 	}
+	header := http.Header{"Content-Type": []string{"application/json"}}
+	if s.header != nil {
+		for name, values := range s.header(record) {
+			for _, value := range values {
+				header.Add(name, value)
+			}
+		}
+	}
 	return &http.Response{
 		StatusCode: status,
 		Status:     http.StatusText(status),
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Header:     header,
 		Body:       io.NopCloser(strings.NewReader(payload)),
 		Request:    request,
 	}, nil
@@ -95,6 +118,23 @@ func (s *stubUpstream) Requests() []recordedRequest {
 	defer s.mu.Unlock()
 	out := make([]recordedRequest, len(s.records))
 	copy(out, s.records)
+	return out
+}
+
+// sessionClaimPath is the route a rule claims its anonymous session on. It is
+// filtered out of Steps so a test counts the requests its own routes caused.
+const sessionClaimPath = "/v1/users/anonymous"
+
+// Steps returns the recorded requests without the session claim, which the
+// engine sends on its own before a rule's first request.
+func (s *stubUpstream) Steps() []recordedRequest {
+	out := make([]recordedRequest, 0, len(s.records))
+	for _, record := range s.Requests() {
+		if record.Path == sessionClaimPath {
+			continue
+		}
+		out = append(out, record)
+	}
 	return out
 }
 
@@ -112,7 +152,14 @@ func readFixture(t *testing.T, parts ...string) string {
 // loadSources loads a rule directory with the stub transport attached.
 func loadSources(t *testing.T, dir string, client *http.Client) *loader.Set {
 	t.Helper()
-	set, err := loader.Load(dir, engine.Options{Client: client})
+	return loadSourcesWith(t, dir, engine.Options{Client: client})
+}
+
+// loadSourcesWith loads a rule directory with the whole engine option set, so a
+// test can place the session cache in a directory of its own.
+func loadSourcesWith(t *testing.T, dir string, options engine.Options) *loader.Set {
+	t.Helper()
+	set, err := loader.Load(dir, options)
 	if err != nil {
 		t.Fatalf("load %s: %v", dir, err)
 	}

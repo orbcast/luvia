@@ -15,6 +15,10 @@ type Rule struct {
 	BaseURL       string `json:"baseURL"`
 	HTTP          HTTP   `json:"http,omitempty"`
 	Sign          *Sign  `json:"sign,omitempty"`
+	// Session describes how the engine obtains the anonymous identity some
+	// upstreams want before they hand out a playable address. A rule without
+	// one sends no session cookie at all.
+	Session *Session `json:"session,omitempty"`
 
 	Home     *Block        `json:"home,omitempty"`
 	List     *ListBlock    `json:"list,omitempty"`
@@ -90,8 +94,7 @@ type Sign struct {
 	Headers       []Header `json:"headers"`
 }
 
-// Block is one operation: a step pipeline plus the mapping of its result. A
-// segments block also carries the list its steps run over, one window at a
+// Block is one operation: a step pipeline plus the mapping of its result. A// segments block also carries the list its steps run over, one window at a
 // time, which is the only block that is not a single request.
 type Block struct {
 	Steps  []Step    `json:"steps"`
@@ -184,6 +187,24 @@ type Exchange struct {
 	URLKind Value   `json:"urlKind,omitempty"`
 }
 
+// Session is how an upstream hands out the identity its playback routes
+// require. The request is described the way a step is, and the answer's
+// Set-Cookie is kept under the declared name and sent with every later request
+// to the same source.
+type Session struct {
+	// Request claims the session. It may use templates and functions exactly
+	// as a step request does, and it is signed like one.
+	Request Request `json:"request"`
+	// Cookie is the cookie name to keep. An upstream that clears the same name
+	// at several scopes before setting it again leaves the last value as the
+	// only usable one.
+	Cookie string `json:"cookie"`
+	// TTL names the response field that says when the session expires, as RFC
+	// 3339. Without it the cookie's own Max-Age or Expires is used, and a
+	// cookie that states neither lives as long as the process.
+	TTL string `json:"ttl,omitempty"`
+}
+
 // Request describes one HTTP call. Path, query, headers and body values may use
 // templates over the variables bound by earlier steps.
 type Request struct {
@@ -193,6 +214,11 @@ type Request struct {
 	Headers []Header         `json:"headers,omitempty"`
 	Body    map[string]Value `json:"body,omitempty"`
 	Sign    *bool            `json:"sign,omitempty"`
+	// Cookie asks the engine to travel without the session cookie, which is
+	// what a route that rejects a signed-in caller needs. A rule that declares
+	// no session has nothing to leave out, so the field is only meaningful
+	// beside one.
+	Cookie *bool `json:"cookie,omitempty"`
 	// Response names the shape the answer arrives in. Empty and "json" read
 	// the body as JSON; "routerData" reads a page whose JSON sits in a
 	// `_ROUTER_DATA = {...}` assignment, which is how a server-rendered site

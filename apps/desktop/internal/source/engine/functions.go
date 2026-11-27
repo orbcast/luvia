@@ -103,6 +103,15 @@ func (s *sourceImpl) eval(value rule.Value, sc scope) (any, bool) {
 		if name == "each" {
 			return s.each(values, found, args, sc)
 		}
+		if name == "anonId" {
+			// The identity a session is claimed under has to be the same one
+			// after a reclaim, so it is held by the source rather than drawn
+			// per evaluation.
+			if s.session == nil {
+				return nil, false
+			}
+			return s.session.anonymousID(), true
+		}
 		return callFunction(name, values, found, value.ArgumentKeys())
 	}
 	if literal, ok := value.Literal(); ok {
