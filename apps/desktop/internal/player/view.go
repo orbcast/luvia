@@ -39,12 +39,28 @@ const (
 	// The marker's label sits on the capsule's centre line rather than its top:
 	// a 13px label at the capsule's top edge reads as hanging off the row.
 	stageMarkerTop float32 = stageLineTop + (stageTopBox-stageMarkerSize)/2
+	// bottomBarHeight is the height of the stage's bottom block from the stage's
+	// bottom edge: the title, the scrubber and the row of buttons with the
+	// padding they sit in.
+	bottomBarHeight float32 = 132
+	// The scrubber's band is the target a press lands on, the line inside it the
+	// track a viewer reads, and the knob the handle dragged along it. A four-unit
+	// line alone is not a target, so the band is what takes the press.
+	scrubBand float32 = 22
+	scrubLine float32 = 4
+	scrubKnob float32 = 10
 )
 
-var (
-	mediaInk   = ui.RGBA(255, 255, 255, 0.94)
-	mediaMuted = ui.RGBA(255, 255, 255, 0.62)
-)
+var ()
+
+// clockNow is the page's clock, the one the danmaku layer and the chrome both
+// time themselves by, so a test that walks time walks the bars too.
+func (p *Page) clockNow() time.Time {
+	if p.now != nil {
+		return p.now()
+	}
+	return time.Now()
+}
 
 // View builds the playback screen: the video stage with its overlay controls and
 // the now-playing side panel.
@@ -163,8 +179,41 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width, heig
 	// is the episode list now, so this line is the only place a viewer can read
 	// the reason the comments did not come.
 	p.stageDanmakuWhy(c, m)
-	p.stageTop(c, t, m)
-	p.stageControls(c, t, m)
+	// The bars' own clock: the pointer's place this frame, then the idle window
+	// it restarts. Hidden bars are not drawn at all, so nothing they would show
+	// can be clicked while the picture is what a viewer is looking at.
+	now := p.clockNow()
+	x, y := pointerPosition(c, width, height)
+	p.observePointer(now, x, y, width, height)
+	p.stageShade(c)
+	if p.showChrome(now) {
+		p.stageTop(c, t, m, true)
+		p.stageControls(c, t, m, true)
+		p.chromeFrame(c, now)
+	}
+}
+
+// pointerPosition reads the pointer in the stage's own coordinates, clamped to
+// it, so a pointer over the panel beside the stage is not a pointer over the
+// stage.
+func pointerPosition(c *ui.Context, width, height float32) (x, y float32) {
+	root := c.Root()
+	if x, y, over := root.PointerPosition(); over {
+		if x < 0 {
+			x = 0
+		}
+		if y < 0 {
+			y = 0
+		}
+		if x > width {
+			x = width
+		}
+		if y > height {
+			y = height
+		}
+		return x, y
+	}
+	return -1, -1
 }
 
 // stageDanmaku lays the comments over the picture. A scrolled one crosses a lane
@@ -275,7 +324,7 @@ func (p *Page) danmakuText(c *ui.Context, text string, fade float32) {
 // pill's own right edge, so opening it never moves the button that opened it.
 func (p *Page) danmakuControls(c *ui.Context, width float32) {
 	m := locales.In(c.Locale())
-	ui.Column(c).Absolute().Right(danmakuBoxMargin).Top(stageTopHeight+design.DanmakuLaneHeight+6).
+	ui.Column(c).Absolute().Right(danmakuBoxMargin).Top(stageTopHeight+danmakuBoxGap).
 		Width(danmakuBoxWidth(width)).Radius(18).Padding(16).Gap(14).Background(design.PlayerPanelGlassFill()).
 		Border(1, design.PlayerPanelGlassBorder()).Children(func() {
 		p.danmakuPresets(c, m)
@@ -314,17 +363,17 @@ func (p *Page) danmakuControls(c *ui.Context, width float32) {
 func (p *Page) danmakuPresets(c *ui.Context, m locales.Messages) {
 	labels := []string{m.DanmakuAreaFull(), m.DanmakuAreaTop(), m.DanmakuAreaMiddle(), m.DanmakuAreaBottom()}
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
-		ui.Text(c, m.DanmakuArea()).FontSize(11.5).TextColor(mediaMuted)
+		ui.Text(c, m.DanmakuArea()).FontSize(11.5).TextColor(design.PlayerMuted())
 		ui.Row(c).FillWidth().Gap(6).Children(func() {
 			for i, label := range labels {
 				index := i
 				on := index == p.danmakuSettings.Area
 				button := ui.ButtonBase(c).Key("dm-area:" + strconv.Itoa(i)).Grow(1).Height(50).Radius(9).
-					Label(label).Tooltip(label).Background(ui.RGBA(255, 255, 255, 0.06))
+					Label(label).Tooltip(label).Background(design.PlayerChipOff())
 				if on {
-					button.Background(ui.RGBA(255, 255, 255, 0.18))
+					button.Background(design.PlayerChipOn())
 				} else if button.Hovered() {
-					button.Background(ui.RGBA(255, 255, 255, 0.12))
+					button.Background(design.PlayerHover())
 				}
 				button.Children(func() {
 					// The miniature is the picture's own shape, 30 x 17, with
@@ -333,9 +382,9 @@ func (p *Page) danmakuPresets(c *ui.Context, m locales.Messages) {
 					// line wide.
 					const frameW, frameH float32 = 30, 17
 					top, bottom := design.DanmakuBand(index)
-					ink := ui.RGBA(255, 255, 255, 0.70)
+					ink := design.PlayerInkDim()
 					if on {
-						ink = ui.RGBA(255, 255, 255, 1)
+						ink = design.PlayerInkActive()
 					}
 					ui.Column(c).Fill().AlignItems(ui.Center).Justify(ui.Center).Gap(5).Children(func() {
 						// The miniature is the frame's own shape with the band laid
@@ -345,10 +394,10 @@ func (p *Page) danmakuPresets(c *ui.Context, m locales.Messages) {
 						// plainly four different spans of the same frame.
 						ui.Box(c).Width(frameW).Height(frameH).Radius(3).
 							Padding(frameH*top, 0, frameH*(1-bottom), 0).
-							Background(ui.RGBA(0, 0, 0, 0.45)).Children(func() {
+							Background(design.PlayerMiniatureVeil()).Children(func() {
 							ui.Box(c).Fill().Background(ink)
 						})
-						ui.Text(c, label).FontSize(10).TextColor(mediaInk).NoWrap()
+						ui.Text(c, label).FontSize(10).TextColor(design.PlayerInk()).NoWrap()
 					})
 				})
 				if button.Clicked() {
@@ -370,8 +419,8 @@ func (p *Page) danmakuSlider(c *ui.Context, key, label string, value, lo, hi flo
 	}
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Text(c, label).FontSize(11.5).TextColor(mediaMuted).Grow(1)
-			ui.Text(c, shown).FontSize(11).Bold().TextColor(mediaInk)
+			ui.Text(c, label).FontSize(11.5).TextColor(design.PlayerMuted()).Grow(1)
+			ui.Text(c, shown).FontSize(11).Bold().TextColor(design.PlayerInk())
 		})
 		// A plain slider, not a stepped one: the sites people know by heart
 		// sweep opacity and size smoothly rather than snapping to marks. Its
@@ -388,8 +437,8 @@ func (p *Page) danmakuSlider(c *ui.Context, key, label string, value, lo, hi flo
 			x := r.X + knob/2 + (r.W-knob)*frac
 			middle := r.Y + r.H/2
 			painter.Fill(ui.Rect{X: r.X + knob/2, Y: middle - 2, W: r.W - knob, H: 4}, design.PlayerTrack(), 2)
-			painter.Fill(ui.Rect{X: r.X + knob/2, Y: middle - 2, W: (r.W - knob) * frac, H: 4}, mediaInk, 2)
-			painter.Fill(ui.Rect{X: x - knob/2, Y: middle - knob/2, W: knob, H: knob}, mediaInk, knob/2)
+			painter.Fill(ui.Rect{X: r.X + knob/2, Y: middle - 2, W: (r.W - knob) * frac, H: 4}, design.PlayerInk(), 2)
+			painter.Fill(ui.Rect{X: x - knob/2, Y: middle - knob/2, W: knob, H: knob}, design.PlayerInk(), knob/2)
 		})
 		if slider.Changed() {
 			apply(value)
@@ -401,14 +450,14 @@ func (p *Page) danmakuSlider(c *ui.Context, key, label string, value, lo, hi flo
 // that kind flies.
 func (p *Page) danmakuToggle(c *ui.Context, key, label string, on bool, set func(bool)) {
 	chip := ui.ButtonBase(c).Key("dm-kind:" + key).Grow(1).Height(28).Radius(8).Label(label).Tooltip(label).
-		Background(ui.RGBA(255, 255, 255, 0.06))
-	ink := mediaMuted
+		Background(design.PlayerChipOff())
+	ink := design.PlayerMuted()
 	if on {
-		chip.Background(ui.RGBA(255, 255, 255, 0.20))
-		ink = mediaInk
+		chip.Background(design.PlayerChipOn())
+		ink = design.PlayerInk()
 	} else if chip.Hovered() {
-		chip.Background(ui.RGBA(255, 255, 255, 0.12))
-		ink = mediaInk
+		chip.Background(design.PlayerHover())
+		ink = design.PlayerInk()
 	}
 	chip.Children(func() { ui.Text(c, label).FontSize(11).TextColor(ink).MaxLines(1) })
 	if chip.Clicked() {
@@ -456,14 +505,14 @@ func (p *Page) stageWaiting(c *ui.Context, m locales.Messages, since time.Time, 
 	c.After(waitTick)
 	ui.Row(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-		ui.Row(c).Radius(999).Padding(8, 16).Background(ui.RGBA(0, 0, 0, 0.5)).
+		ui.Row(c).Radius(999).Padding(8, 16).Background(design.PlayerWaitingVeil()).
 			AlignItems(ui.Center).Gap(10).Children(func() {
 			// A ring that fades in and out: the wait is the engine's, so the
 			// only thing moving is the marker saying so.
 			spin := float32(0.5 + 0.5*math.Sin(float64(now.UnixMilli())/260))
-			ui.Box(c).Width(12).Height(12).Radius(6).Border(1.5, ui.RGBA(255, 255, 255, 0.35+0.5*spin))
-			ui.Text(c, label).FontSize(13).TextColor(mediaInk)
-			ui.Text(c, p.waitText(m, waited)).FontSize(12).TextColor(mediaMuted)
+			ui.Box(c).Width(12).Height(12).Radius(6).Border(1.5, design.PlayerWaitingRing(spin))
+			ui.Text(c, label).FontSize(13).TextColor(design.PlayerInk())
+			ui.Text(c, p.waitText(m, waited)).FontSize(12).TextColor(design.PlayerMuted())
 		})
 	})
 }
@@ -586,7 +635,7 @@ func stageBands(picture, stage ui.Rect) []stageBand {
 // player rather than a show nobody has commented on.
 func (p *Page) stageDanmakuWhy(c *ui.Context, m locales.Messages) {
 	ui.Row(c).Absolute().Left(0).Right(0).Bottom(stageEdge * 3).Justify(ui.Center).Children(func() {
-		ui.Text(c, p.danmakuWhyLine(m)).FontSize(12).TextColor(mediaMuted)
+		ui.Text(c, p.danmakuWhyLine(m)).FontSize(12).TextColor(design.PlayerMuted())
 	})
 }
 
@@ -596,14 +645,14 @@ func (p *Page) stageFallback(c *ui.Context, m locales.Messages) {
 	if message := p.noticeText(m); message != "" {
 		ui.Column(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 			Justify(ui.Center).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Icon(c, icons.Parse("full-screen-linear")).Size(34, 34).TextColor(mediaMuted)
-			ui.Text(c, message).FontSize(13).TextColor(mediaMuted)
+			ui.Icon(c, icons.Parse("full-screen-linear")).Size(34, 34).TextColor(design.PlayerMuted())
+			ui.Text(c, message).FontSize(13).TextColor(design.PlayerMuted())
 			// A stage the stream never filled is a dead end without a way out
 			// that does not depend on the panel being open.
 			leave := ui.ButtonBase(c).Key("s-leave").Width(112).Height(30).Radius(15).
 				Label(m.ClosePlayer()).Tooltip(m.ClosePlayer()).Background(ui.Transparent)
 			leave.Children(func() {
-				ui.Text(c, m.ClosePlayer()).FontSize(12).TextColor(mediaInk)
+				ui.Text(c, m.ClosePlayer()).FontSize(12).TextColor(design.PlayerInk())
 			})
 			if leave.Clicked() {
 				p.Back()
@@ -620,13 +669,23 @@ func (p *Page) stageFallback(c *ui.Context, m locales.Messages) {
 // the top-left corner a window's own close button would occupy: a stage that is
 // still opening draws nothing but this, so leaving never depends on the
 // controls below having been laid yet.
-func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	p.stageLeave(c, m)
+func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages, show bool) {
+	// A hidden pill keeps its place: the episode marker still names what is
+	// playing, and the controls fade to dimmed icons rather than disappear, so
+	// the picture is clean without the top row turning into a hole. Whether the
+	// bars show is the caller's word: showChrome carries the idle clock, and
+	// asking it once more inside the bars would be a second look at a state the
+	// frame has already decided.
+	opacity := float32(1)
+	if !show {
+		opacity = 0
+	}
+	p.stageLeave(c, m, opacity)
 	if episode, ok := p.current(); ok {
 		ui.Text(c, p.episodeLabel(m, episode)).Absolute().Left(stageMarkerLeft).Top(stageMarkerTop).
-			FontSize(13).Bold().TextColor(mediaInk)
+			FontSize(13).Bold().TextColor(design.PlayerInk()).Opacity(opacity)
 	}
-	p.playerPill(c, m, stageLineTop)
+	p.playerPill(c, m, stageLineTop, opacity)
 }
 
 // stageLeave is the stage's way out, laid at the top-left where a viewer looks
@@ -638,16 +697,16 @@ func (p *Page) stageTop(c *ui.Context, t *ui.Theme, m locales.Messages) {
 // to the one under it — rather than borrowing the cross the side panel uses to
 // put itself away. Two crosses a screen apart, one closing a panel and one
 // closing the player, ask a viewer to read a tooltip to tell them apart.
-func (p *Page) stageLeave(c *ui.Context, m locales.Messages) {
+func (p *Page) stageLeave(c *ui.Context, m locales.Messages, opacity float32) {
 	button := ui.ButtonBase(c).Key("leave-corner").Absolute()
 	button.Left(stageEdge).Top(stageLineTop).Height(stageTopBox).Width(stageTopBox).
 		Radius(stageTopBox / 2).Label(m.ClosePlayer()).Tooltip(m.ClosePlayer()).
-		Material(glass.Glass{})
+		Material(glass.Glass{}).Opacity(opacity)
 	if button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		button.Background(design.PlayerHover())
 	}
 	button.Children(func() {
-		ui.Icon(c, icons.Parse("alt-arrow-left-linear")).Size(18, 18).TextColor(mediaInk)
+		ui.Icon(c, icons.Parse("alt-arrow-left-linear")).Size(18, 18).TextColor(design.PlayerInk())
 	})
 	if button.Clicked() {
 		p.Back()
@@ -659,9 +718,13 @@ func (p *Page) stageLeave(c *ui.Context, m locales.Messages) {
 // panel goes away, so the cluster never breaks into two floating pieces, and
 // the level is the thin white track beside the speaker that the system's own
 // player shows, never a slider that folds out and back.
-func (p *Page) playerPill(c *ui.Context, m locales.Messages, top float32) {
+func (p *Page) playerPill(c *ui.Context, m locales.Messages, top, opacity float32) {
+	// The cluster keeps the desk's glass material, like the way out beside it:
+	// the two capsules on the top line are the same object, so they must be cut
+	// from the same material. Its fill alone, opaque over a dark stage, read as
+	// a black bar instead of a pane over the picture.
 	ui.Row(c).Absolute().Right(stageEdge).Top(top).AlignItems(ui.Center).Gap(2).Radius(999).
-		Padding(pillPadding).Material(glass.Glass{}).Children(func() {
+		Padding(pillPadding).Material(glass.Glass{}).Opacity(opacity).Children(func() {
 		p.volumeTrack(c, m)
 		p.speaker(c, m)
 		// One press turns the comments on and off, and a second, separate press
@@ -688,16 +751,16 @@ func (p *Page) danmakuButton(c *ui.Context, m locales.Messages) {
 	// press will do.
 	button := ui.ButtonBase(c).Key("p-danmaku").Size(stageButtonSize, stageButtonSize).Radius(999).
 		Label(m.DanmakuLabel()).Tooltip(m.DanmakuLabel()).Background(ui.Transparent)
-	ink := mediaMuted
+	ink := design.PlayerMuted()
 	switch {
 	case p.danmaku:
 		// On is a filled pill, the same figure the speaker and the panel
 		// toggle take when they are on.
-		button.Background(mediaInk)
-		ink = ui.RGBA(20, 20, 22, 1)
+		button.Background(design.PlayerInk())
+		ink = design.PlayerOnArtworkInk()
 	case button.Hovered():
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
-		ink = mediaInk
+		button.Background(design.PlayerHover())
+		ink = design.PlayerInk()
 	}
 	button.Children(func() { ui.Icon(c, icons.Parse("chat-round-linear")).Size(18, 18).TextColor(ink) })
 	if button.Clicked() {
@@ -715,15 +778,15 @@ func (p *Page) danmakuSettingsButton(c *ui.Context, m locales.Messages) {
 	}
 	button := ui.ButtonBase(c).Key("p-danmaku-settings").Size(stageButtonSize, stageButtonSize).Radius(999).
 		Label(m.DanmakuSettings()).Tooltip(tip).Background(ui.Transparent)
-	ink := mediaMuted
+	ink := design.PlayerMuted()
 	switch {
 	case p.danmakuOpen:
 		// Unfolded is a filled pill, the way the panel toggle reads open.
-		button.Background(mediaInk)
-		ink = ui.RGBA(20, 20, 22, 1)
+		button.Background(design.PlayerInk())
+		ink = design.PlayerOnArtworkInk()
 	case button.Hovered():
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
-		ink = mediaInk
+		button.Background(design.PlayerHover())
+		ink = design.PlayerInk()
 	}
 	button.Children(func() {
 		ui.Icon(c, icons.Parse("settings-minimalistic-linear")).Size(18, 18).TextColor(ink)
@@ -747,11 +810,11 @@ func (p *Page) volumeTrack(c *ui.Context, m locales.Messages) {
 		const barHeight, knob float32 = 4, 12
 		middle := (stageButtonSize - barHeight) / 2
 		ui.Box(c).Absolute().Left(volumeInset).Top(middle).Height(barHeight).Radius(barHeight / 2).
-			Width(volumeTrackWidth).Background(ui.RGBA(255, 255, 255, 0.28))
+			Width(volumeTrackWidth).Background(design.PlayerTrack())
 		ui.Box(c).Absolute().Left(volumeInset).Top(middle).Height(barHeight).Radius(barHeight / 2).
-			Background(mediaInk).Width(length*frac + knob/2)
+			Background(design.PlayerInk()).Width(length*frac + knob/2)
 		ui.Box(c).Absolute().Left(volumeInset+length*frac).Top((stageButtonSize-knob)/2).
-			Size(knob, knob).Radius(knob / 2).Background(mediaInk)
+			Size(knob, knob).Radius(knob / 2).Background(design.PlayerInk())
 	})
 	// Where the pointer is along the track is the level: a press sets it at
 	// once and every move of the drag follows it, so the level never lags
@@ -770,12 +833,12 @@ func (p *Page) speaker(c *ui.Context, m locales.Messages) {
 	}
 	button := ui.ButtonBase(c).Key("p-mute").Size(stageButtonSize, stageButtonSize).Radius(999).
 		Label(m.MuteLabel()).Tooltip(tip).Background(ui.Transparent)
-	ink := mediaMuted
+	ink := design.PlayerMuted()
 	if p.Audible() {
-		ink = mediaInk
+		ink = design.PlayerInk()
 	}
 	if button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		button.Background(design.PlayerHover())
 	}
 	icon := "volume-loud-linear"
 	if !p.Audible() {
@@ -807,10 +870,10 @@ func (p *Page) panelReveal(c *ui.Context, m locales.Messages) {
 	label := m.ExpandPanel()
 	button := ui.ButtonBase(c).Key("p-panel-reveal").Size(stageButtonSize, stageButtonSize).Radius(999).Label(label).
 		Tooltip(label).Background(ui.Transparent)
-	ink := mediaMuted
+	ink := design.PlayerMuted()
 	if button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
-		ink = mediaInk
+		button.Background(design.PlayerHover())
+		ink = design.PlayerInk()
 	}
 	button.Children(func() { ui.Icon(c, icons.Parse("widget-2-linear")).Size(18, 18).TextColor(ink) })
 	if button.Clicked() {
@@ -824,14 +887,14 @@ func (p *Page) pillButton(c *ui.Context, key, icon, tip string, active bool, fn 
 	// An active switch fills its pill: a translucent wash over a bright
 	// picture is indistinguishable from a button that does nothing, which is
 	// how a viewer reads an enabled danmaku layer as a dead one.
-	ink := mediaMuted
+	ink := design.PlayerMuted()
 	switch {
 	case active:
-		button.Background(mediaInk)
-		ink = ui.RGBA(20, 20, 22, 1)
+		button.Background(design.PlayerInk())
+		ink = design.PlayerOnArtworkInk()
 	case button.Hovered():
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
-		ink = mediaInk
+		button.Background(design.PlayerHover())
+		ink = design.PlayerInk()
 	}
 	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(18, 18).TextColor(ink) })
 	if button.Clicked() {
@@ -839,19 +902,24 @@ func (p *Page) pillButton(c *ui.Context, key, icon, tip string, active bool, fn 
 	}
 }
 
-func (p *Page) stageControls(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	ui.Column(c).Absolute().Left(0).Right(0).Bottom(0).Padding(0, 24, 16, 24).Gap(8).Children(func() {
+func (p *Page) stageControls(c *ui.Context, t *ui.Theme, m locales.Messages, show bool) {
+	opacity := float32(1)
+	if !show {
+		opacity = 0
+	}
+	ui.Column(c).Absolute().Left(0).Right(0).Bottom(0).Padding(0, 24, 16, 24).Gap(10).
+		Opacity(opacity).Children(func() {
 		if episode, ok := p.current(); ok {
-			ui.Text(c, p.detail.Title+"  "+p.episodeLabel(m, episode)).FontSize(14).Bold().TextColor(mediaInk)
+			ui.Text(c, p.detail.Title+"  "+p.episodeLabel(m, episode)).FontSize(14).Bold().TextColor(design.PlayerInk())
 		}
 
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(10).Children(func() {
-			ui.Text(c, clock(p.position())).FontSize(11).TextColor(mediaInk)
-			p.scrubber(c)
+			ui.Text(c, clock(p.position())).FontSize(11).TextColor(design.PlayerInk())
+			p.scrubber(c, t)
 			// Until the engine learns the stream's length both ends read 00:00,
 			// which looks like a film that cannot start; the mark says the
 			// length is unknown rather than pretending it is zero.
-			ui.Text(c, lengthLabel(p.duration())).FontSize(11).TextColor(mediaInk)
+			ui.Text(c, lengthLabel(p.duration())).FontSize(11).TextColor(design.PlayerInk())
 		})
 
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
@@ -880,17 +948,26 @@ func lengthLabel(total time.Duration) string {
 }
 
 // scrubber is the thin progress track; pressing it seeks.
-func (p *Page) scrubber(c *ui.Context) {
+func (p *Page) scrubber(c *ui.Context, t *ui.Theme) {
 	if b := p.scrubHandle.Bounds(c); b.W > 0 {
 		p.scrubW = b.W
 	}
 	frac := float32(p.fraction())
-	track := ui.ButtonBase(c).Key("scrub").Grow(1).Height(20).Label("seek").Bind(&p.scrubHandle)
+	// The hit band is taller than the line it draws: a four-pixel track is a
+	// target for a mouse that never lands on it, so the band around it takes the
+	// press and the line stays thin.
+	track := ui.ButtonBase(c).Key("scrub").Grow(1).Height(scrubBand).Label("seek").Bind(&p.scrubHandle)
 	track.Children(func() {
-		ui.Box(c).Absolute().Left(0).Right(0).Top(8).Height(4).Radius(2).Background(design.PlayerTrack())
-		ui.Box(c).Absolute().Left(0).Top(8).Height(4).Radius(2).Background(mediaInk).WidthPercent(frac * 100)
+		line := (scrubBand - scrubLine) / 2
+		ui.Box(c).Absolute().Left(0).Right(0).Top(line).Height(scrubLine).Radius(scrubLine / 2).
+			Background(design.PlayerTrack())
+		// The played part is the theme's accent, the one colour the player takes
+		// from the app: every other pixel on the stage is the picture's.
+		ui.Box(c).Absolute().Left(0).Top(line).Height(scrubLine).Radius(scrubLine / 2).
+			Background(t.Accent).WidthPercent(frac * 100)
 		if p.scrubW > 0 {
-			ui.Box(c).Absolute().Top(5).Left(frac*p.scrubW-4).Size(9, 9).Radius(5).Background(mediaInk)
+			ui.Box(c).Absolute().Top(line-(scrubKnob-scrubLine)/2).Left(frac*p.scrubW-scrubKnob/2).
+				Size(scrubKnob, scrubKnob).Radius(scrubKnob / 2).Background(t.Accent)
 		}
 	})
 	if x, _, over := track.PointerPosition(); over && track.Pressed() && p.scrubW > 0 {
@@ -907,9 +984,9 @@ func (p *Page) playButton(c *ui.Context, m locales.Messages) {
 	button := ui.ButtonBase(c).Key("play").Size(44, 44).Radius(22).Label(label).Tooltip(label).
 		Background(ui.Transparent)
 	if button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		button.Background(design.PlayerHover())
 	}
-	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(24, 24).TextColor(mediaInk) })
+	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(24, 24).TextColor(design.PlayerInk()) })
 	if button.Clicked() {
 		p.TogglePlay()
 	}
@@ -920,9 +997,9 @@ func (p *Page) rateButton(c *ui.Context, m locales.Messages) {
 	button := ui.ButtonBase(c).Key("rate").Size(34, 34).Radius(9).Label(m.PlaybackSpeed()).
 		Tooltip(m.PlaybackSpeed()).Background(ui.Transparent)
 	if button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		button.Background(design.PlayerHover())
 	}
-	button.Children(func() { ui.Text(c, label).FontSize(12).Bold().TextColor(mediaInk) })
+	button.Children(func() { ui.Text(c, label).FontSize(12).Bold().TextColor(design.PlayerInk()) })
 	if button.Clicked() {
 		p.CycleRate()
 	}
@@ -936,9 +1013,9 @@ func (p *Page) fullscreenButton(c *ui.Context, m locales.Messages) {
 	button := ui.ButtonBase(c).Key("fullscreen").Size(34, 34).Radius(9).Label(label).
 		Tooltip(label).Background(ui.Transparent)
 	if button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		button.Background(design.PlayerHover())
 	}
-	button.Children(func() { ui.Icon(c, icons.Parse("full-screen-linear")).Size(18, 18).TextColor(mediaInk) })
+	button.Children(func() { ui.Icon(c, icons.Parse("full-screen-linear")).Size(18, 18).TextColor(design.PlayerInk()) })
 	if button.Clicked() {
 		p.ToggleFullScreen()
 	}
@@ -948,17 +1025,23 @@ func (p *Page) iconButton(c *ui.Context, key, icon, tip string, fn func()) {
 	button := ui.ButtonBase(c).Key("p-"+key).Size(34, 34).Radius(9).Label(tip).Tooltip(tip).
 		Background(ui.Transparent)
 	if button.Hovered() {
-		button.Background(ui.RGBA(255, 255, 255, 0.12))
+		button.Background(design.PlayerHover())
 	}
-	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(18, 18).TextColor(mediaInk) })
+	button.Children(func() { ui.Icon(c, icons.Parse(icon)).Size(18, 18).TextColor(design.PlayerInk()) })
 	if button.Clicked() && fn != nil {
 		fn()
 	}
 }
 
 func (p *Page) panel(c *ui.Context, t *ui.Theme, m locales.Messages, height float32) {
-	bg, border := design.PlayerPanel(t)
-	box := ui.Box(c).Width(panelWidth).Height(height).Background(bg).Border(1, border)
+	bg, edge := design.PlayerPanel(t)
+	// The panel meets the stage along one line, and in the light theme that
+	// line is a black page against a pale one. A soft inner shade along the
+	// seam, plus the panel's own edge, turns the cut into a border: the stage
+	// stays the stage, the list stays readable, and the eye reads a division
+	// rather than a mistake.
+	box := ui.Box(c).Width(panelWidth).Height(height).Background(bg).
+		Border(1, edge)
 	box.Children(func() {
 		scroll := ui.Scroll(c).Fill()
 		scroll.Children(func() { p.panelBody(c, t, m, panelWidth) })
@@ -1209,7 +1292,7 @@ func rateLabel(rate float64) string {
 const (
 	danmakuBoxWidthMax float32 = 268
 	danmakuBoxMargin   float32 = 24
-	danmakuBoxGap      float32 = 12
+	danmakuBoxGap      float32 = 8
 	// danmakuBoxFade is how much of the crossing a line spends fading down as it
 	// nears the box: a short share, so a line is either plainly readable or
 	// plainly behind the box, not half of both.

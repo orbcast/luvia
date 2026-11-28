@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"luvia/apps/desktop/internal/design"
 	"luvia/apps/desktop/internal/icons"
 	"luvia/apps/desktop/locales"
 )
@@ -32,9 +33,9 @@ func (p *Page) stageOpening(c *ui.Context, m locales.Messages) {
 	c.After(waitTick)
 	ui.Column(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).
 		Justify(ui.Center).AlignItems(ui.Center).Gap(14).Children(func() {
-		ui.Icon(c, icons.Parse("full-screen-linear")).Size(30, 30).TextColor(mediaMuted)
-		ui.Text(c, m.Preparing()).FontSize(14).TextColor(mediaInk)
-		ui.Text(c, p.waitText(m, time.Since(p.opened))).FontSize(12).TextColor(mediaMuted)
+		ui.Icon(c, icons.Parse("full-screen-linear")).Size(30, 30).TextColor(design.PlayerMuted())
+		ui.Text(c, m.Preparing()).FontSize(14).TextColor(design.PlayerInk())
+		ui.Text(c, p.waitText(m, time.Since(p.opened))).FontSize(12).TextColor(design.PlayerMuted())
 	})
 }
 

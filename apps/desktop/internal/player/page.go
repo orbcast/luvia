@@ -181,9 +181,27 @@ type Page struct {
 	scrubW       float32
 	redrawMu     sync.Mutex
 	redraw       func()
+	// chromeHidden is the stage's chrome state: true while the bars are away.
+	// chromeAt is when they last had activity, and chromePlayed is the playhead
+	// they last saw move, so a stream still opening never counts its wait as
+	// idle viewing. The pointer fields are what the current frame saw, so bars
+	// hidden on one frame come back on the frame the pointer moves.
+	chromeHidden      bool
+	chromeAt          time.Time
+	chromePlayed      time.Duration
+	chromePlayedSet   bool
+	pointerMoved      bool
+	pointerOverChrome bool
+	pointerX          float32
+	pointerY          float32
+	pointerSeen       bool
 	// now reads the monotonic clock the layer is timed by; a test puts its own
 	// here so it can walk time frame by frame instead of sleeping.
 	now func() time.Time
+	// playhead is where the picture stands, when the stream that plays it cannot
+	// be asked: a test's own players hold their playhead still, and the bars hide
+	// by whether this one moves. A nil playhead reads the player's.
+	playhead func() time.Duration
 }
 
 var rates = []float64{1, 1.25, 1.5, 2, 0.75, 0.5}
@@ -1168,6 +1186,15 @@ func (p *Page) SetClock(now func() time.Time) {
 	p.now = now
 }
 
+// SetPlayhead stands the picture where read says, whatever the stream reports.
+// A test's player holds its playhead at zero, and the stage's bars hide by
+// whether the picture moves under them, so a test that walks a playing picture
+// has to own where it stands as well as the clock. A nil read gives the
+// player's own playhead back.
+func (p *Page) SetPlayhead(read func() time.Duration) {
+	p.playhead = read
+}
+
 // SetDanmakuSettings takes the settings the viewer just changed, fits them to
 // the range the controls offer, draws the layer with them and keeps them for
 // the next episode. Writing is small and happens on a change, not per frame.
@@ -1296,6 +1323,9 @@ func (p *Page) Back() {
 
 // position and duration read the player safely.
 func (p *Page) position() time.Duration {
+	if p.playhead != nil {
+		return p.playhead()
+	}
 	if p.player == nil {
 		return 0
 	}

@@ -91,10 +91,15 @@ func TestPlayerBandsStayClearOfThePicture(t *testing.T) {
 				}
 			}
 		}
-		// The picture's own bottom edge is picture, not band: a white frame row
-		// laid through it has to stay white at the picture's last row.
-		if got := sampleAt(t, shot, 640, 898); lumaOf(got) < 200 {
-			t.Fatalf("dark=%v: the frame's last row reads %v (luma %d): the picture was cut short", dark, got, lumaOf(got))
+		// The picture's own bottom edge is picture, not band: the frame's last
+		// rows have to reach the stage's bottom edge. They used to be sampled at
+		// the very last row, which the controls' capsule covers where it floats
+		// over the picture; the frame's rows just above it say the same thing and
+		// stay readable while the bar hides and shows.
+		for _, y := range []int{880, 884} {
+			if got := sampleAt(t, shot, 640, y); lumaOf(got) < 200 {
+				t.Fatalf("dark=%v: the frame's row %d reads %v (luma %d): the picture was cut short", dark, y, got, lumaOf(got))
+			}
 		}
 	}
 }
