@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -249,5 +250,174 @@ func TestCatalogSwitchesToList(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("Interstellar") {
 		t.Fatalf("list layout lost its titles in %v", tt.Texts())
+	}
+}
+
+type flakyCatalogSource struct {
+	catalogSource
+	fail bool
+}
+
+func (s *flakyCatalogSource) List(ctx context.Context, q source.ListQuery) (source.Page, error) {
+	if s.fail {
+		return source.Page{}, errors.New("upstream unavailable")
+	}
+	return s.catalogSource.List(ctx, q)
+}
+
+// TestCatalogNoSourceAndRetry covers the nil-source error state and recovery
+// after a failed List call via Retry.
+func TestCatalogNoSourceAndRetry(t *testing.T) {
+	run := make(chan func(), 8)
+	noSrc := catalog.New(catalog.Deps{Run: func(fn func()) { run <- fn }})
+	ttNoSrc := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(c.Theme())
+		c.SetTheme(&theme)
+		noSrc.View(c)
+	}, 1100, 720)
+	ttNoSrc.SetLocale("en")
+	ttNoSrc.Frame()
+	if !ttNoSrc.HasText(english.Retry()) {
+		t.Fatalf("nil source missing retry button in %v", ttNoSrc.Texts())
+	}
+
+	flaky := &flakyCatalogSource{catalogSource: catalogSource{cards: catalogCards()}, fail: true}
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := catalog.New(catalog.Deps{
+		Source:  flaky,
+		Library: store,
+		Run:     func(fn func()) { run <- fn },
+	})
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(c.Theme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+	apply(t, run)
+	tt.Frame()
+	if !tt.HasText(english.Retry()) {
+		t.Fatalf("failed load missing retry button in %v", tt.Texts())
+	}
+
+	flaky.fail = false
+	if err := tt.Click(english.Retry()); err != nil {
+		t.Fatalf("click retry: %v", err)
+	}
+	apply(t, run)
+	tt.Frame()
+	if !tt.HasText("Interstellar") {
+		t.Fatalf("retry did not load catalog in %v", tt.Texts())
+	}
+}
+
+// TestCatalogFavoritesAndFilters covers switching between all titles and
+// followed titles, plus opening a title via OnDetail.
+func TestCatalogFavoritesAndFilters(t *testing.T) {
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Follow(library.Follow{
+		Media: source.Ref{Source: "fake", ID: "interstellar"},
+		Title: "Interstellar",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	run := make(chan func(), 8)
+	var opened source.Ref
+	page := catalog.New(catalog.Deps{
+		Source:   &catalogSource{cards: catalogCards()},
+		Library:  store,
+		Run:      func(fn func()) { run <- fn },
+		OnDetail: func(ref source.Ref) { opened = ref },
+	})
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(c.Theme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+	apply(t, run)
+	tt.Frame()
+
+	if err := tt.Click(english.FilterFavorites()); err != nil {
+		t.Fatalf("click favorites: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("Interstellar") {
+		t.Fatalf("favorites lost followed title in %v", tt.Texts())
+	}
+	if tt.HasText("Severance") {
+		t.Fatalf("favorites still lists unfollowed title in %v", tt.Texts())
+	}
+
+	if err := tt.Click("Interstellar"); err != nil {
+		t.Fatalf("click card: %v", err)
+	}
+	if opened != (source.Ref{Source: "fake", ID: "interstellar"}) {
+		t.Fatalf("OnDetail got %v, want fake:interstellar", opened)
+	}
+
+	if err := tt.Click(english.FilterAllTitles()); err != nil {
+		t.Fatalf("click all titles: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("Severance") {
+		t.Fatalf("all titles did not restore Severance in %v", tt.Texts())
+	}
+
+	if err := tt.Click(english.FilterAllStatus()); err != nil {
+		t.Fatalf("open status dropdown: %v", err)
+	}
+	tt.Frame()
+	if err := tt.Click(english.StatusUpdating()); err != nil {
+		t.Fatalf("pick updating status: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("Severance") || tt.HasText("Interstellar") {
+		t.Fatalf("updating status did not narrow to series in %v", tt.Texts())
+	}
+
+	if err := tt.Click(english.StatusUpdating()); err != nil {
+		t.Fatalf("reopen status dropdown: %v", err)
+	}
+	tt.Frame()
+	if err := tt.Click(english.StatusCompleted()); err != nil {
+		t.Fatalf("pick completed status: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("Interstellar") || tt.HasText("Severance") {
+		t.Fatalf("completed status did not narrow to movies in %v", tt.Texts())
+	}
+
+	// Select type and sort dropdown options to verify client-side narrowing and sorting.
+	if err := tt.Click(english.FilterAllTypes()); err != nil {
+		t.Fatalf("open type dropdown: %v", err)
+	}
+	tt.Frame()
+	if err := tt.Click(english.CategoryMovie()); err != nil {
+		t.Fatalf("pick movie type: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("Interstellar") || tt.HasText("Severance") {
+		t.Fatalf("type filter did not narrow to movies in %v", tt.Texts())
+	}
+
+	if err := tt.Click(english.FilterDefaultSort()); err != nil {
+		t.Fatalf("open sort dropdown: %v", err)
+	}
+	tt.Frame()
+	if err := tt.Click(english.SortLatest()); err != nil {
+		t.Fatalf("pick latest sort: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("Interstellar") {
+		t.Fatalf("latest sort lost title in %v", tt.Texts())
 	}
 }

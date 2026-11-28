@@ -47,4 +47,40 @@ func TestControllerIdle(t *testing.T) {
 	if c.Active() {
 		t.Fatal("a fresh controller must be idle")
 	}
+	tt := ui.NewTester(c.View, 400, 300)
+	tt.Frame()
+}
+
+func TestControllerStartViewAndFinish(t *testing.T) {
+	invalidations := 0
+	c := New(func() { invalidations++ })
+
+	finished := 0
+	c.Start(func() { finished++ })
+	if !c.Active() {
+		t.Fatal("controller should be active after Start")
+	}
+	if invalidations != 1 {
+		t.Fatalf("invalidate count after Start = %d, want 1", invalidations)
+	}
+
+	// Starting again replaces the running player without invoking the old callback.
+	c.Start(func() { finished++ })
+	if !c.Active() || invalidations != 2 {
+		t.Fatalf("replacement Start active=%v invalidations=%d", c.Active(), invalidations)
+	}
+
+	tt := ui.NewTester(c.View, 800, 600)
+	tt.Frame()
+
+	c.finish()
+	if c.Active() {
+		t.Fatal("controller should be idle after finish")
+	}
+	if invalidations != 3 {
+		t.Fatalf("invalidate count after finish = %d, want 3", invalidations)
+	}
+	if finished != 1 {
+		t.Fatalf("after callback count = %d, want 1", finished)
+	}
 }
