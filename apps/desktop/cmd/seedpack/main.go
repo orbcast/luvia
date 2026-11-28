@@ -12,6 +12,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -19,40 +20,49 @@ import (
 )
 
 func main() {
-	out := flag.String("out", "", "where to write the sealed seed")
-	names := flag.String("names", preferences.SeedVariable(), "comma-separated variable names to seal")
-	flag.Parse()
+	os.Exit(run(os.Args[1:], os.Getenv, preferences.SeedSalt, os.Stdout, os.Stderr))
+}
+
+func run(args []string, getenv func(string) string, seedSalt func() []byte, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("seedpack", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	out := fs.String("out", "", "where to write the sealed seed")
+	names := fs.String("names", preferences.SeedVariable(), "comma-separated variable names to seal")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
 	if *out == "" {
-		fmt.Fprintln(os.Stderr, "seedpack: -out is required")
-		os.Exit(2)
+		fmt.Fprintln(stderr, "seedpack: -out is required")
+		return 2
 	}
 	values := map[string]string{}
 	for _, name := range strings.Split(*names, ",") {
 		if name == "" {
 			continue
 		}
-		value := os.Getenv(name)
+		value := getenv(name)
 		if value == "" {
 			// A release with no key would look packaged and fail on the reader's
 			// machine; stopping here keeps the failure where it was caused.
-			fmt.Fprintf(os.Stderr, "seedpack: %s is not set\n", name)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "seedpack: %s is not set\n", name)
+			return 1
 		}
 		values[name] = value
 	}
 	// The salt comes from the same place the app reads it: preferences owns the
 	// hex decoding, so the packer and the shipped binary cannot end up with two
 	// different keys for the same value.
-	salt := preferences.SeedSalt()
+	salt := seedSalt()
 	if len(salt) == 0 {
 		// Without a salt the packer would seal under a key the app cannot
 		// rebuild, and the failure would only show on a reader's machine.
-		fmt.Fprintln(os.Stderr, "seedpack: seed salt is not configured for this build")
-		os.Exit(1)
+		fmt.Fprintln(stderr, "seedpack: seed salt is not configured for this build")
+		return 1
 	}
 	if err := preferences.WriteSeedFile(*out, values, salt); err != nil {
-		fmt.Fprintf(os.Stderr, "seedpack: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "seedpack: %v\n", err)
+		return 1
 	}
-	fmt.Printf("seedpack: sealed %d value(s) into %s\n", len(values), *out)
+	fmt.Fprintf(stdout, "seedpack: sealed %d value(s) into %s\n", len(values), *out)
+	return 0
 }

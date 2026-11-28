@@ -14,30 +14,35 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"luvia/apps/desktop/internal/preferences"
 )
 
 func main() {
-	root := os.Getenv("LUVIA_SEED_ROOT")
+	os.Exit(run(os.Getenv, os.Stdout, os.Stderr))
+}
+
+func run(getenv func(string) string, stdout, stderr io.Writer) int {
+	root := getenv("LUVIA_SEED_ROOT")
 	if root == "" {
-		fmt.Fprintln(os.Stderr, "seedcheck: LUVIA_SEED_ROOT is required")
-		os.Exit(2)
+		fmt.Fprintln(stderr, "seedcheck: LUVIA_SEED_ROOT is required")
+		return 2
 	}
-	preferences.ApplyAccessKeys(os.Getenv("LUVIA_SCRATCH_HOME"), root)
+	preferences.ApplyAccessKeys(getenv("LUVIA_SCRATCH_HOME"), root)
 	name := preferences.SeedVariable()
 	if value := os.Getenv(name); value != "" {
-		fmt.Printf("seedcheck: %s reached the environment (%d bytes)\n", name, len(value))
-		return
+		fmt.Fprintf(stdout, "seedcheck: %s reached the environment (%d bytes)\n", name, len(value))
+		return 0
 	}
 	// ApplyAccessKeys only logs why a seed did not land, so ask it directly to
 	// name the fault.
 	_, problem := preferences.InspectSeed(root)
 	if problem == preferences.SeedMissing {
-		fmt.Fprintf(os.Stderr, "seedcheck: %s: no seed, and no %s in the environment\n", root, name)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "seedcheck: %s: no seed, and no %s in the environment\n", root, name)
+		return 1
 	}
-	fmt.Fprintf(os.Stderr, "seedcheck: %s: %s\n", root, problem)
-	os.Exit(1)
+	fmt.Fprintf(stderr, "seedcheck: %s: %s\n", root, problem)
+	return 1
 }
