@@ -132,6 +132,34 @@ func (msgs Messages) ViewMenu() string {
 	return Catalog.Format(msgs.locale, "viewMenu", nil)
 }
 
+// AppearanceAndLanguage says "Appearance and language"
+// in the language the app shows.
+//
+// Group title for the theme and language settings
+func AppearanceAndLanguage() string { return In(i18n.Locale()).AppearanceAndLanguage() }
+
+// AppearanceAndLanguage says "Appearance and language"
+// in the language of msgs.
+//
+// Group title for the theme and language settings
+func (msgs Messages) AppearanceAndLanguage() string {
+	return Catalog.Format(msgs.locale, "appearanceAndLanguage", nil)
+}
+
+// DataSourceAndKeys says "Source and access keys"
+// in the language the app shows.
+//
+// Group title for the source choice and its access keys
+func DataSourceAndKeys() string { return In(i18n.Locale()).DataSourceAndKeys() }
+
+// DataSourceAndKeys says "Source and access keys"
+// in the language of msgs.
+//
+// Group title for the source choice and its access keys
+func (msgs Messages) DataSourceAndKeys() string {
+	return Catalog.Format(msgs.locale, "dataSourceAndKeys", nil)
+}
+
 // Appearance says "Appearance"
 // in the language the app shows.
 //
@@ -692,6 +720,92 @@ func (msgs Messages) QualityHd() string {
 	return Catalog.Format(msgs.locale, "qualityHd", nil)
 }
 
+// Quality4kShort says "4K"
+// in the language the app shows.
+//
+// Short quality chip on a poster for a 4K print
+func Quality4kShort() string { return In(i18n.Locale()).Quality4kShort() }
+
+// Quality4kShort says "4K"
+// in the language of msgs.
+//
+// Short quality chip on a poster for a 4K print
+func (msgs Messages) Quality4kShort() string {
+	return Catalog.Format(msgs.locale, "quality4kShort", nil)
+}
+
+// QualityHdShort says "1080P"
+// in the language the app shows.
+//
+// Short quality chip on a poster for a non-4K print
+func QualityHdShort() string { return In(i18n.Locale()).QualityHdShort() }
+
+// QualityHdShort says "1080P"
+// in the language of msgs.
+//
+// Short quality chip on a poster for a non-4K print
+func (msgs Messages) QualityHdShort() string {
+	return Catalog.Format(msgs.locale, "qualityHdShort", nil)
+}
+
+// Unfollow says "Unfollow"
+// in the language the app shows.
+//
+// Follow switch on a card that is already followed; pressing it stops
+// following the title
+func Unfollow() string { return In(i18n.Locale()).Unfollow() }
+
+// Unfollow says "Unfollow"
+// in the language of msgs.
+//
+// Follow switch on a card that is already followed; pressing it stops
+// following the title
+func (msgs Messages) Unfollow() string {
+	return Catalog.Format(msgs.locale, "unfollow", nil)
+}
+
+// FollowingShows says "Followed shows"
+// in the language the app shows.
+//
+// Heading of the followed shows on the Following page
+func FollowingShows() string { return In(i18n.Locale()).FollowingShows() }
+
+// FollowingShows says "Followed shows"
+// in the language of msgs.
+//
+// Heading of the followed shows on the Following page
+func (msgs Messages) FollowingShows() string {
+	return Catalog.Format(msgs.locale, "followingShows", nil)
+}
+
+// FollowingEmpty says "No followed shows yet"
+// in the language the app shows.
+//
+// Empty state title on the Following page
+func FollowingEmpty() string { return In(i18n.Locale()).FollowingEmpty() }
+
+// FollowingEmpty says "No followed shows yet"
+// in the language of msgs.
+//
+// Empty state title on the Following page
+func (msgs Messages) FollowingEmpty() string {
+	return Catalog.Format(msgs.locale, "followingEmpty", nil)
+}
+
+// FollowingEmptyHint says "Follow a title from its page and it shows up here with its updates."
+// in the language the app shows.
+//
+// Empty state hint on the Following page
+func FollowingEmptyHint() string { return In(i18n.Locale()).FollowingEmptyHint() }
+
+// FollowingEmptyHint says "Follow a title from its page and it shows up here with its updates."
+// in the language of msgs.
+//
+// Empty state hint on the Following page
+func (msgs Messages) FollowingEmptyHint() string {
+	return Catalog.Format(msgs.locale, "followingEmptyHint", nil)
+}
+
 // DolbyVision says "Dolby Vision"
 // in the language the app shows.
 //
@@ -1134,16 +1248,6 @@ func (msgs Messages) LineLabel() string {
 	return Catalog.Format(msgs.locale, "lineLabel", nil)
 }
 
-// SeriesEpisodes says "Episodes"
-// in the language the app shows.
-func SeriesEpisodes() string { return In(i18n.Locale()).SeriesEpisodes() }
-
-// SeriesEpisodes says "Episodes"
-// in the language of msgs.
-func (msgs Messages) SeriesEpisodes() string {
-	return Catalog.Format(msgs.locale, "seriesEpisodes", nil)
-}
-
 // AboutEyebrow says "ABOUT"
 // in the language the app shows.
 func AboutEyebrow() string { return In(i18n.Locale()).AboutEyebrow() }
@@ -1192,6 +1296,34 @@ func Collection() string { return In(i18n.Locale()).Collection() }
 // in the language of msgs.
 func (msgs Messages) Collection() string {
 	return Catalog.Format(msgs.locale, "collection", nil)
+}
+
+// CollectionLeft says "Left"
+// in the language the app shows.
+//
+// Row label for the unwatched time of the current episode
+func CollectionLeft() string { return In(i18n.Locale()).CollectionLeft() }
+
+// CollectionLeft says "Left"
+// in the language of msgs.
+//
+// Row label for the unwatched time of the current episode
+func (msgs Messages) CollectionLeft() string {
+	return Catalog.Format(msgs.locale, "collectionLeft", nil)
+}
+
+// CollectionNothing says "Nothing watched yet"
+// in the language the app shows.
+//
+// Shown in the collection card when there is no progress
+func CollectionNothing() string { return In(i18n.Locale()).CollectionNothing() }
+
+// CollectionNothing says "Nothing watched yet"
+// in the language of msgs.
+//
+// Shown in the collection card when there is no progress
+func (msgs Messages) CollectionNothing() string {
+	return Catalog.Format(msgs.locale, "collectionNothing", nil)
 }
 
 // ProfileInfo says "Details"

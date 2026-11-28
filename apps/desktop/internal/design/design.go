@@ -2,7 +2,11 @@
 // so the AppShell and every page draw from one palette and one geometry.
 package design
 
-import "github.com/egoist/mygo/ui"
+import (
+	"time"
+
+	"github.com/egoist/mygo/ui"
+)
 
 // AppShell geometry in logical pixels; keep synchronized with DESIGN.md.
 const (
@@ -50,6 +54,11 @@ const (
 	NarrowGutter = 20
 	// DockHeight is the dock: one navigation row plus its padding.
 	DockHeight = NavigationHeight + 2*ShellPadding
+	// PageTop is the space a navigation page keeps between the chrome and its
+	// first line: the page's top rhythm, on top of ChromeTop. Every navigation
+	// page derives its top inset from PageTopInset, so switching destinations
+	// never moves the content up or down.
+	PageTop = 20
 )
 
 // NavigationTint is the grey wash the selected AppShell destination sits on.
@@ -177,6 +186,11 @@ type Artwork struct {
 	Veil, VeilHover, Border ui.Color
 	// Track is the unfilled part of a progress bar over the image.
 	Track ui.Color
+	// Foot shades the bottom of a piece of artwork, so a caption laid on it keeps
+	// its contrast over a bright still as well as a dark one.
+	Foot ui.Color
+	// InkDim is the quietest ink on artwork: a poster's footnote.
+	InkDim ui.Color
 	// SideMid and SideEnd place the side scrim's middle and clear stops;
 	// FadeStart and FadePage place where the bottom fade begins and where it
 	// has become the page background.
@@ -200,6 +214,8 @@ func OnArtwork(t *ui.Theme) Artwork {
 			VeilHover:  ui.RGBA(255, 255, 255, 0.26),
 			Border:     ui.RGBA(255, 255, 255, 0.22),
 			Track:      ui.RGBA(255, 255, 255, 0.30),
+			Foot:       ui.RGBA(0, 0, 0, 0.78),
+			InkDim:     ui.RGBA(255, 255, 255, 0.70),
 			SideMid:    0.55,
 			SideEnd:    0.92,
 			FadeStart:  0.52,
@@ -220,10 +236,12 @@ func OnArtwork(t *ui.Theme) Artwork {
 		VeilHover:  ui.RGBA(255, 255, 255, 0.75),
 		Border:     t.Border,
 		Track:      ui.RGBA(0, 0, 0, 0.16),
-		SideMid:    0.50,
-		SideEnd:    0.80,
-		FadeStart:  0.58,
-		FadePage:   0.86,
+		Foot:       ui.RGBA(0, 0, 0, 0.52),
+		InkDim:     ui.RGBA(255, 255, 255, 0.92),
+		SideMid:    0.48,
+		SideEnd:    0.74,
+		FadeStart:  0.66,
+		FadePage:   0.90,
 	}
 }
 
@@ -236,6 +254,14 @@ func TrackOnArtwork() ui.Color { return ui.RGBA(255, 255, 255, 0.30) }
 // hero backdrop and the detail page share it.
 func ArtworkBlur() float32 { return 40 }
 
+// PlayMarkShadow is the shadow under a small play mark laid on artwork: one
+// unit of black, enough to lift the white glyph off a pale frame.
+func PlayMarkShadow() ui.Color { return ui.RGBA(0, 0, 0, 0.55) }
+
+// PosterShadow is the drop shadow under a detail page's poster: black at half,
+// wide and low, so the artwork stands off the page instead of sitting in it.
+func PosterShadow() ui.Color { return ui.RGBA(0, 0, 0, 0.48) }
+
 // HeroCover dresses the banner's cover card, which floats beside the copy over
 // the blurred still: the shadow that lifts it off that wash, and the hairline
 // along its edge.
@@ -246,54 +272,174 @@ func HeroCover(t *ui.Theme) (shadow, border ui.Color) {
 	return ui.RGBA(0, 0, 0, 0.30), ui.RGBA(255, 255, 255, 0.50)
 }
 
+// PosterVeil dresses the follow switch laid on a poster's artwork: a wash dark
+// enough that the glyph reads on a white poster as on a black one, and darker
+// still once the title is followed, so the accent has something to sit on.
+func PosterVeil() ui.Color   { return ui.RGBA(10, 8, 14, 0.55) }
+func PosterVeilOn() ui.Color { return ui.RGBA(10, 8, 14, 0.72) }
+
+// PosterVeilInk is the glyph of a poster's unfollowed switch: white, because the
+// artwork under it can be any colour.
+func PosterVeilInk() ui.Color { return ui.RGBA(255, 255, 255, 0.90) }
+
+// PosterPlayDisc is the play mark that appears on a poster while the pointer is
+// on it: a white disc with a dark glyph, the one shape on the artwork that is not
+// the artwork's own colour.
+func PosterPlayDisc() ui.Color { return ui.RGBA(255, 255, 255, 0.92) }
+func PosterPlayInk() ui.Color  { return ui.RGBA(0, 0, 0, 0.72) }
+
 // CategoryTint is the pill color of one resource-library category. The tints
-// are fixed category colors, the same in both themes: the "all" tab is warm
-// paper with ink text, the saturated ones keep white text.
+// are dyed paper, not badges: the same hue in both themes, quiet enough to sit
+// on the page's canvas beside five more, and the selected one leans on the
+// theme's accent instead of a colour of its own.
 type CategoryTint struct {
 	Background ui.Color
 	Foreground ui.Color
 }
 
 // categoryTints maps the resource library's category order onto its tints:
-// all, movie, series, anime, variety, short.
+// all, movie, series, anime, variety, short. Each is one hue at a low alpha
+// over the surface, and its ink stays the theme's text, so a row of pills reads
+// as one family rather than six brands.
 var categoryTints = [6]CategoryTint{
-	{ui.Hex("#F0E1DA"), ui.Hex("#221B33")},
-	{ui.Hex("#971E39"), ui.RGBA(255, 255, 255, 0.98)},
-	{ui.Hex("#2C4A6E"), ui.RGBA(255, 255, 255, 0.98)},
-	{ui.Hex("#563A79"), ui.RGBA(255, 255, 255, 0.98)},
-	{ui.Hex("#23624F"), ui.RGBA(255, 255, 255, 0.98)},
-	{ui.Hex("#75452F"), ui.RGBA(255, 255, 255, 0.98)},
+	{ui.RGBA(230, 170, 90, 0.14), ui.RGBA(255, 255, 255, 0.92)},
+	{ui.RGBA(232, 128, 122, 0.14), ui.RGBA(255, 255, 255, 0.92)},
+	{ui.RGBA(122, 158, 230, 0.16), ui.RGBA(255, 255, 255, 0.92)},
+	{ui.RGBA(168, 136, 224, 0.16), ui.RGBA(255, 255, 255, 0.92)},
+	{ui.RGBA(112, 196, 160, 0.14), ui.RGBA(255, 255, 255, 0.92)},
+	{ui.RGBA(206, 160, 120, 0.14), ui.RGBA(255, 255, 255, 0.92)},
+}
+
+// lightCategoryTints is the same six hues over the light canvas: darker ink and
+// a touch more of the hue, or a pill on a pale page would wash out.
+var lightCategoryTints = [6]CategoryTint{
+	{ui.RGBA(150, 104, 40, 0.16), ui.Hex("#221B33")},
+	{ui.RGBA(150, 48, 44, 0.13), ui.Hex("#221B33")},
+	{ui.RGBA(44, 86, 158, 0.13), ui.Hex("#221B33")},
+	{ui.RGBA(88, 58, 150, 0.13), ui.Hex("#221B33")},
+	{ui.RGBA(26, 106, 78, 0.13), ui.Hex("#221B33")},
+	{ui.RGBA(126, 80, 44, 0.13), ui.Hex("#221B33")},
 }
 
 // CategoryTints returns the category pills' colors in display order.
-func CategoryTints() [6]CategoryTint { return categoryTints }
+func CategoryTints(t *ui.Theme) [6]CategoryTint {
+	if t.Dark {
+		return categoryTints
+	}
+	return lightCategoryTints
+}
 
-// CategoryRing is the ring the selected category tab wears. It is a cool blue
-// that stays distinct from every category tint and from the theme accent.
-func CategoryRing() ui.Color { return ui.Hex("#5B86E8") }
+// CategoryWash is the faint accent a selected control is filled with: the ring
+// carries the state, the wash only keeps the control from reading as an empty
+// outline. The week strip's selected day and the library's selected pill share
+// it, so "picked" means one thing across the app.
+func CategoryWash(t *ui.Theme) ui.Color {
+	return ui.RGBA(t.Accent.R, t.Accent.G, t.Accent.B, 0.14)
+}
 
-// QualityBadge is the hero's "4K" chip: it takes the theme's inverse pair, so
-// it reads light on the dark hero and dark on the washed light one.
-func QualityBadge(t *ui.Theme) (bg, fg ui.Color) { return t.Inverse, t.InverseText }
+// CategoryPill is the surface of one category pill: its fill, the ink on it, and
+// the hairline it wears when selected. An unselected pill carries no border; the
+// selected one takes the theme's accent as a ring and the faintest accent wash
+// as its fill, so the row keeps one highlight language with the rest of the app
+// and never competes with the posters under it.
+func CategoryPill(t *ui.Theme, index int, selected bool) (bg, ink, border ui.Color) {
+	tint := CategoryTints(t)[index]
+	if !selected {
+		return tint.Background, tint.Foreground, ui.Transparent
+	}
+	return CategoryWash(t), t.Text, ui.RGBA(t.Accent.R, t.Accent.G, t.Accent.B, 0.55)
+}
 
-// BrandBadge is the hero's Dolby-style chip: a violet pill with a lighter
-// brand mark and white label, legible and brand-like on both heroes.
-func BrandBadge() (bg, mark, fg ui.Color) {
+// ControlSurface is the ground of a form control — a dropdown's trigger, a
+// text field, the filter bar's buttons — so one page's controls share one body:
+// the theme's surface inside a hairline, rather than the glass material some
+// rows used and the flat surface others did.
+func ControlSurface(t *ui.Theme) (bg, border ui.Color) { return t.Surface, t.Border }
+
+// QualityBadge is the resolution mark a poster and a hero carry in the corner:
+// the theme's inverse pair, because it states a fact about the artwork the way
+// the page's main action is drawn, and must read over any frame.
+func QualityBadge(t *ui.Theme) (bg, ink ui.Color) { return t.Inverse, t.InverseText }
+
+// BrandBadge marks a brand the source itself named in the title's remarks — a
+// Dolby print, a studio's own line — with the violet the desk uses for press
+// marks, so it reads as the source's claim and not as the page's own accent.
+func BrandBadge() (bg, edge, ink ui.Color) {
 	return ui.Hex("#3E2E9E"), ui.Hex("#8E7BFF"), ui.RGBA(255, 255, 255, 0.96)
 }
 
-// PosterBadge is the small quality pill laid over a poster image.
-func PosterBadge() (bg, fg ui.Color) {
+// PosterBadge is the plate a poster's factual corner mark sits on: nearly black
+// and translucent, so it holds white type over any frame without becoming a
+// block of its own.
+func PosterBadge() (bg, ink ui.Color) {
 	return ui.RGBA(10, 8, 14, 0.62), ui.RGBA(255, 255, 255, 0.96)
 }
 
-// PosterStatus is the update-state pill over a poster: teal while updating,
-// neutral once it is complete.
-func PosterStatus(updating bool) (bg, fg ui.Color) {
+// PosterStatus is the top-right mark a poster carries: a show still updating is
+// named in the app's teal, because it is news rather than a quality, and a
+// finished one keeps the plain translucent plate.
+func PosterStatus(updating bool) (bg, ink ui.Color) {
 	if updating {
 		return ui.Hex("#2A6E63"), ui.RGBA(255, 255, 255, 0.98)
 	}
 	return ui.RGBA(10, 8, 14, 0.62), ui.RGBA(255, 255, 255, 0.96)
+}
+
+// PageTopInset is where a navigation page's content starts on the vertical, so
+// Discover, Library, Following, Search and Settings begin on one line. It is the
+// chrome's own height plus the top of the page's rhythm (PageTop), derived from
+// the title bar rather than picked per page: a page that starts at 24, 28 or 56
+// makes the whole window jump when the viewer switches destinations.
+func PageTopInset(barBottom float32) float32 { return ChromeTop(barBottom) + PageTop }
+
+// SettingCard is one group of settings on a page: its rows on the theme's own
+// surface inside a hairline. Settings read as a list of decisions, so the page
+// groups them by what they concern and draws each group as one body, instead of
+// scattering rows down the canvas.
+func SettingCard(t *ui.Theme) (bg, border ui.Color) { return t.Surface, t.Border }
+
+// SettingGroup is the box a group of rows sits in: the card's fill, its hairline
+// and its corner, named once so every card on the page is the same box.
+type SettingGroup struct {
+	Fill   ui.Color
+	Border ui.Color
+	Radius float32
+}
+
+// SettingCardSpec is SettingGroup filled from the theme.
+func SettingCardSpec(t *ui.Theme) SettingGroup {
+	return SettingGroup{Fill: t.Surface, Border: t.Border, Radius: 18}
+}
+
+// SettingRowHeight is one row of a settings card: the control's own 38 units
+// and the air above and below it, so a card with one row and a card with four
+// share their rhythm.
+const SettingRowHeight = 62
+
+// SegmentedPill dresses the two-way switch the filters use (all titles or the
+// viewer's own, grid or list): a quiet track, and the chosen segment lifted onto
+// the theme's surface with the accent as its ink. It matches the category pills'
+// radius and height so a filter bar reads as one row of controls.
+type Segmented struct {
+	Track, Selected   ui.Color
+	Ink, SelInk       ui.Color
+	Border, SelBorder ui.Color
+}
+
+// SegmentedPill returns the segmented switch's colors for this theme.
+func SegmentedPill(t *ui.Theme) Segmented {
+	if t.Dark {
+		return Segmented{
+			Track: ui.RGBA(255, 255, 255, 0.05), Selected: ui.RGBA(255, 255, 255, 0.12),
+			Ink: t.TextMuted, SelInk: t.Text,
+			Border: ui.Transparent, SelBorder: ui.RGBA(255, 255, 255, 0.16),
+		}
+	}
+	return Segmented{
+		Track: ui.RGBA(0, 0, 0, 0.04), Selected: t.Surface,
+		Ink: t.TextMuted, SelInk: t.Text,
+		Border: ui.Transparent, SelBorder: t.Border,
+	}
 }
 
 // Surfaces is the glass-and-chip dressing a title page (detail) draws over its
@@ -356,47 +502,17 @@ func PlayerStage(t *ui.Theme) ui.Color {
 	return ui.Hex("#0B0A0F")
 }
 
-// PlayerPanel is the now-playing side panel background and its separating edge.
+// PlayerPanel is the now-playing side panel background and the line where it
+// meets the stage. The dark theme keeps the panel almost black over a black
+// stage, so a faint lift is enough; the light theme puts a pale list against a
+// black stage, and there a sixth of black draws the border the seam needs — the
+// cutting line reads as an edge instead of two colors meeting by accident.
 func PlayerPanel(t *ui.Theme) (bg, border ui.Color) {
 	if t.Dark {
-		return ui.Hex("#1B1420"), ui.RGBA(255, 255, 255, 0.06)
+		return ui.Hex("#1B1420"), ui.RGBA(255, 255, 255, 0.08)
 	}
-	return ui.Hex("#F6F1F8"), ui.RGBA(0, 0, 0, 0.06)
+	return ui.Hex("#F6F1F8"), ui.RGBA(0, 0, 0, 0.20)
 }
-
-// ControlVeil dresses a control laid over the video: a dark translucent pill so
-// the icons read on any frame.
-func ControlVeil() ui.Color { return ui.RGBA(0, 0, 0, 0.38) }
-
-// PlayerPill is the glass the player's controls float in over the picture: its
-// fill and hairline, the light along its top rim, its drop shadow and how far
-// the backdrop behind it blurs. The values are the window controls' own, so a
-// pill over a frame and the capsule over a page read as one material.
-type PlayerPill struct {
-	Fill, Border, Highlight, Shadow ui.Color
-	Blur                            float32
-}
-
-// PlayerPillGlass returns the fill, border, highlight and shadow of the pill
-// the player's floating clusters sit in, and how far it blurs the backdrop.
-func PlayerPillGlass() PlayerPill {
-	return PlayerPill{
-		Fill:      ui.RGBA(20, 22, 27, 0.42),
-		Border:    ui.RGBA(255, 255, 255, 0.16),
-		Highlight: ui.RGBA(255, 255, 255, 0.10),
-		Shadow:    ui.RGBA(0, 0, 0, 0.85),
-		Blur:      26,
-	}
-}
-
-// The player's pill buttons: the figure at rest, the same figure under the
-// pointer, and the wash a button takes while it is on. The wash is stronger
-// than the hover so "on" reads through the pointer, and the ink goes full white
-// for both, as a lit control on glass.
-func PlayerControlInk() ui.Color       { return ui.RGBA(255, 255, 255, 0.80) }
-func PlayerControlActiveInk() ui.Color { return ui.RGBA(255, 255, 255, 1) }
-func PlayerControlHover() ui.Color     { return ui.RGBA(255, 255, 255, 0.13) }
-func PlayerControlOn() ui.Color        { return ui.RGBA(255, 255, 255, 0.16) }
 
 // PlayerPanelGlass is the floating now-playing panel's tint and hairline. It
 // keeps one deep tint at either theme, as a card laid over a frame does.
@@ -418,6 +534,61 @@ func PlayerChip(selected bool) (bg, ink ui.Color) {
 	}
 	return ui.RGBA(255, 255, 255, 0.07), ui.RGBA(255, 255, 255, 0.78)
 }
+
+// PlayerShade is the stage's one gradient: a strip of black under the top line —
+// the way out, the episode marker and the pill of controls — that walks to
+// nothing before the picture's mass, so white text and the capsules read on any
+// frame while the film keeps its own colors.
+//
+// There is deliberately no veil under the bottom bar. The picture fills the whole
+// stage, so a gradient there would be painted over the frame's own last rows,
+// which in a portrait episode are the picture (and where subtitles sit). The
+// bottom bar earns its contrast from its capsule, its shadowed glyphs and the
+// margins a fitted picture leaves instead.
+type PlayerShade struct {
+	Top       ui.Color
+	TopHeight float32
+	// Mid is where the strip is darkest. It is not at the top edge: the way out
+	// and the pill are capsules hung off it, and a hard band across the frame's
+	// first rows would read as a bar rather than as a shade.
+	Mid float32
+}
+
+// PlayerShadeSpec returns the stage's top strip: nothing at the top edge,
+// half-black some way down, gone by 132 units, which is one control row plus
+// the room its shadow needs.
+func PlayerShadeSpec() PlayerShade {
+	return PlayerShade{Top: ui.RGBA(0, 0, 0, 0.5), TopHeight: 132, Mid: 0.42}
+}
+
+// PlayerAutoHide is how long the stage's bars stay after the last input: long
+// enough to read the time or pick an episode, short enough that a viewer
+// watching a scene is not left with controls over it.
+const PlayerAutoHide = 2600 * time.Millisecond
+
+// The stage's own ink. A playing picture is the one place the theme's page
+// colors do not apply: the stage is black in both themes, and everything laid
+// on it is white or a share of white, because a frame can be any color.
+func PlayerInk() ui.Color          { return ui.RGBA(255, 255, 255, 0.94) }
+func PlayerMuted() ui.Color        { return ui.RGBA(255, 255, 255, 0.62) }
+func PlayerInkDim() ui.Color       { return ui.RGBA(255, 255, 255, 0.70) }
+func PlayerInkActive() ui.Color    { return ui.RGBA(255, 255, 255, 1) }
+func PlayerOnArtworkInk() ui.Color { return ui.RGBA(20, 20, 22, 1) }
+func PlayerHover() ui.Color        { return ui.RGBA(255, 255, 255, 0.12) }
+func PlayerChipOff() ui.Color      { return ui.RGBA(255, 255, 255, 0.06) }
+func PlayerChipOn() ui.Color       { return ui.RGBA(255, 255, 255, 0.18) }
+func PlayerChipHover() ui.Color    { return ui.RGBA(255, 255, 255, 0.12) }
+
+// PlayerWaitingVeil is the plate behind a wait's spinner and its label.
+func PlayerWaitingVeil() ui.Color { return ui.RGBA(0, 0, 0, 0.5) }
+
+// PlayerWaitingRing is the spinner's lit arc, given how far the wait has turned.
+func PlayerWaitingRing(turn float32) ui.Color {
+	return ui.RGBA(255, 255, 255, 0.35+0.5*turn)
+}
+
+// PlayerMiniatureVeil is the dark frame a danmaku area preset draws its band on.
+func PlayerMiniatureVeil() ui.Color { return ui.RGBA(0, 0, 0, 0.45) }
 
 // PlayerTrack is the unfilled part of the player's scrub track.
 func PlayerTrack() ui.Color { return ui.RGBA(255, 255, 255, 0.28) }

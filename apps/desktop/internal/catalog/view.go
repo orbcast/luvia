@@ -10,6 +10,7 @@ import (
 
 	"luvia/apps/desktop/internal/design"
 	"luvia/apps/desktop/internal/icons"
+	"luvia/apps/desktop/internal/poster"
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/locales"
 )
@@ -18,7 +19,6 @@ const (
 	tabHeight       = 52
 	tabHeightDocked = 44
 	tabGap          = 12
-	posterRatio     = 1.5 // height over width for a 2:3 poster
 	minPosterWidth  = 120
 	maxColumns      = 6
 	posterGap       = 20
@@ -63,7 +63,8 @@ func (p *Page) View(c *ui.Context) ui.Element {
 
 	scroll := ui.Scroll(c).Fill().Background(t.Background).ScrollbarAxes(false, true)
 	scroll.Children(func() {
-		ui.Column(c).FillWidth().Padding(28, right, 64+design.BottomClearance(width), left).
+		ui.Column(c).FillWidth().
+			Padding(design.PageTopInset(c.TitleBar().Bottom), right, 64+design.BottomClearance(width), left).
 			Gap(20).Children(func() {
 			p.header(c, t, m, width)
 			p.tabs(c, t, m, width)
@@ -110,33 +111,41 @@ func (p *Page) tabs(c *ui.Context, t *ui.Theme, m locales.Messages, width float3
 	})
 }
 
+// tab is one category pill. Six saturated blocks would shout over the posters
+// they filter, so each is a dyed paper at a low alpha: the row reads as one
+// family, the page keeps its purple canvas, and only the selected pill takes the
+// theme's accent — as a ring and the faintest wash, the same "picked" language
+// the week strip and the filters use.
 func (p *Page) tab(c *ui.Context, t *ui.Theme, m locales.Messages, index int, w, h, fontSize float32) {
-	tint := design.CategoryTints()[index]
 	label := categoryLabel(m, index)
+	selected := index == p.category
+	bg, ink, border := design.CategoryPill(t, index, selected)
 	button := ui.ButtonBase(c).Key("cat:" + strconv.Itoa(index)).Width(w).Height(h).
-		Radius(12).Label(label).Background(tint.Background).Transition(tabMotion)
-	if index == p.category {
-		button.Border(2, design.CategoryRing())
+		Radius(12).Label(label).Background(bg).TextColor(ink).Transition(tabMotion)
+	if selected {
+		button.Border(1.5, border)
 	}
 	button.Children(func() {
-		ui.Text(c, label).FontSize(fontSize).Bold().TextColor(tint.Foreground)
+		text := ui.Text(c, label).FontSize(fontSize).TextColor(ink)
+		if selected {
+			text.Bold()
+		}
 	})
 	if button.Clicked() {
 		p.selectCategory(index)
 	}
 }
 
-// filters draws the title/favorite toggles, the three drop-downs and the
-// grid/list switch on one line.
+// filters draws the title/favorite switch, the three drop-downs and the
+// grid/list switch on one line. Every control on it sits on the page's control
+// surface with the same border and the same radius, so the bar reads as one row
+// of instruments rather than a row of unrelated widgets.
 func (p *Page) filters(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
 	if design.Docked(width) {
-		// Narrow: the toggles keep their own row and the controls wrap below,
+		// Narrow: the switch keeps its own row and the controls wrap below,
 		// so nothing runs off the edge of a docked page.
 		ui.Column(c).FillWidth().Gap(10).Children(func() {
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
-				p.titleFilter(c, t, m)
-				p.favoriteFilter(c, t, m)
-			})
+			p.titleSwitch(c, t, m)
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Wrap().Children(func() {
 				p.selectField(c, t, &p.typeMode, typeLabels(m), width)
 				p.selectField(c, t, &p.status, statusLabels(m), width)
@@ -147,8 +156,7 @@ func (p *Page) filters(c *ui.Context, t *ui.Theme, m locales.Messages, width flo
 		return
 	}
 	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(14).Children(func() {
-		p.titleFilter(c, t, m)
-		p.favoriteFilter(c, t, m)
+		p.titleSwitch(c, t, m)
 		ui.Spacer(c)
 		p.selectField(c, t, &p.typeMode, typeLabels(m), width)
 		p.selectField(c, t, &p.status, statusLabels(m), width)
@@ -157,62 +165,80 @@ func (p *Page) filters(c *ui.Context, t *ui.Theme, m locales.Messages, width flo
 	})
 }
 
-// titleFilter shows every title; picking it clears the favorite filter.
-func (p *Page) titleFilter(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	active := !p.favorites
-	label := m.FilterAllTitles()
-	ink := t.TextMuted
-	if active {
-		ink = t.Text
-	}
-	button := ui.ButtonBase(c).Key("filter:all").Height(30).Radius(8).Padding(8, 4).
-		Label(label).Background(ui.Transparent).TextColor(ink)
-	button.Children(func() {
-		text := ui.Text(c, label).FontSize(13).TextColor(ink)
-		if active {
-			text.Bold()
-		}
+// segHeight and segRadius are the size of every control on the filter bar: the
+// segmented switch, the drop-downs and the view toggle share them, so a row of
+// them lines up on both edges without a per-control fudge.
+const (
+	segHeight = 36
+	segRadius = 11
+	segInset  = 3
+)
+
+// titleSwitch shows the two ways to read the library: every title the source
+// lists, or only the viewer's own. It is one segmented control on a track, so
+// the pair cannot be read as two separate buttons, and the chosen side is the
+// theme surface with the theme text — the ids "filter:all" and "filter:fav" are
+// what the pages and the tests press.
+func (p *Page) titleSwitch(c *ui.Context, t *ui.Theme, m locales.Messages) {
+	seg := design.SegmentedPill(t)
+	track := ui.Row(c).Height(segHeight).Radius(segRadius).Padding(segInset).
+		Background(seg.Track).Gap(segInset)
+	track.Children(func() {
+		p.segment(c, t, m, "filter:all", m.FilterAllTitles(), "bookmark-linear", !p.favorites, func() {
+			if p.favorites {
+				p.favorites = false
+				p.invalidate()
+			}
+		})
+		p.segment(c, t, m, "filter:fav", m.FilterFavorites(), "bookmark-linear", p.favorites, func() {
+			if !p.favorites {
+				p.favorites = true
+				p.invalidate()
+			}
+		})
 	})
-	if button.Clicked() && p.favorites {
-		p.favorites = false
-		p.invalidate()
-	}
 }
 
-// favoriteFilter narrows to the followed titles; picking it turns it on.
-func (p *Page) favoriteFilter(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	active := p.favorites
-	label := m.FilterFavorites()
-	ink := t.TextMuted
-	if active {
-		ink = t.Accent
+// segment is one half of the title switch.
+func (p *Page) segment(c *ui.Context, t *ui.Theme, m locales.Messages, key, label, icon string,
+	on bool, choose func()) {
+	seg := design.SegmentedPill(t)
+	ink := seg.Ink
+	button := ui.ButtonBase(c).Key(key).Height(segHeight - 2*segInset).Radius(segRadius - segInset).
+		PaddingX(12).Label(label).TextColor(ink).Transition(tabMotion)
+	if on {
+		button.Background(seg.Selected).Border(1, seg.SelBorder).TextColor(seg.SelInk)
+		ink = seg.SelInk
+	} else if button.Hovered() {
+		button.Background(t.SurfaceHover)
+		ink = t.Text
 	}
-	button := ui.ButtonBase(c).Key("filter:fav").Height(30).Radius(8).Padding(8, 4).
-		Label(label).Background(ui.Transparent).TextColor(ink)
 	button.Children(func() {
-		ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, icons.Parse("bookmark-linear")).Size(13, 13).TextColor(ink)
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, icons.Parse(icon)).Size(13, 13).TextColor(ink)
 			text := ui.Text(c, label).FontSize(13).TextColor(ink)
-			if active {
+			if on {
 				text.Bold()
 			}
 		})
 	})
-	if button.Clicked() && !p.favorites {
-		p.favorites = true
-		p.invalidate()
+	if button.Clicked() {
+		choose()
 	}
 }
 
-// selectField is one surface drop-down over a list of labels.
+// selectField is one surface drop-down over a list of labels. Its trigger takes
+// the bar's control surface: the theme surface, a one-pixel border and the same
+// radius and height as the switch beside it.
 func (p *Page) selectField(c *ui.Context, t *ui.Theme, value *int, labels []string, width float32) {
 	w := float32(132)
 	if design.Docked(width) {
 		w = 104
 	}
+	bg, border := design.ControlSurface(t)
 	sel := ui.SelectBase(c, value)
-	sel.Trigger.Width(w).Height(36).Radius(10).PaddingX(12).
-		AlignItems(ui.Center).Gap(8).Background(t.Surface).Label(labels[*value])
+	sel.Trigger.Width(w).Height(segHeight).Radius(segRadius).PaddingX(12).
+		AlignItems(ui.Center).Gap(8).Background(bg).Border(1, border).Label(labels[*value])
 	sel.Trigger.Children(func() {
 		ui.Text(c, labels[*value]).FontSize(13).TextColor(t.Text).Grow(1)
 		ui.Icon(c, icons.Parse("alt-arrow-down-linear")).Size(13, 13).TextColor(t.TextMuted)
@@ -231,27 +257,33 @@ func (p *Page) selectField(c *ui.Context, t *ui.Theme, value *int, labels []stri
 	})
 }
 
-// viewToggle shows the grid/list pair, the active layout highlighted.
+// viewToggle shows the grid/list pair as one segmented switch, the active layout
+// lifted onto the surface, so the bar's second control pair matches its first.
 func (p *Page) viewToggle(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+	seg := design.SegmentedPill(t)
+	track := ui.Row(c).Height(segHeight).Radius(segRadius).Padding(segInset).
+		Background(seg.Track).Border(1, seg.SelBorder).Gap(segInset)
+	track.Children(func() {
 		p.viewButton(c, t, true, "widget-2-linear", m.GridView())
 		p.viewButton(c, t, false, "list-linear", m.ListView())
 	})
 }
 
 func (p *Page) viewButton(c *ui.Context, t *ui.Theme, grid bool, name, label string) {
+	seg := design.SegmentedPill(t)
 	on := p.grid == grid
-	ink := t.TextMuted
-	button := ui.ButtonBase(c).Key("view:"+name).Size(34, 34).Radius(9).Label(label).Tooltip(label).
-		Transition(tabMotion)
+	ink := seg.Ink
+	button := ui.ButtonBase(c).Key("view:"+name).Size(segHeight-2*segInset, segHeight-2*segInset).
+		Radius(segRadius - segInset).Label(label).Tooltip(label).Transition(tabMotion)
 	if on {
-		button.Background(t.Surface).Border(1, t.Border)
+		button.Background(seg.Selected).Border(1, seg.SelBorder)
+		ink = seg.SelInk
+	} else if button.Hovered() {
+		button.Background(t.SurfaceHover)
 		ink = t.Text
-	} else {
-		button.Background(ui.Transparent)
 	}
 	button.Children(func() {
-		ui.Icon(c, icons.Parse(name)).Size(18, 18).TextColor(ink)
+		ui.Icon(c, icons.Parse(name)).Size(17, 17).TextColor(ink)
 	})
 	if button.Clicked() && !on {
 		p.grid = grid
@@ -329,54 +361,51 @@ func (p *Page) gridView(c *ui.Context, t *ui.Theme, m locales.Messages, width fl
 	})
 }
 
-// posterCard is one 2:3 poster with its badges, title, bookmark and metadata.
+// posterCard is one 2:3 poster: the shared card from the poster package, with
+// the library's own quality chip and its update state on it.
 func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card, w float32, index int) {
-	// A small per-index delay staggers the posters in as they arrive, so a new
-	// category flows onto the page instead of all popping at once.
-	motion := ui.Snappy
-	motion.Delay = time.Duration(index%12) * 22 * time.Millisecond
-	column := ui.Column(c).Key("card:" + card.Ref.String()).Width(w).Gap(8).
-		Transition(ui.ElementTransition{Animation: &motion, Enter: &ui.Motion{Y: 10}})
-	column.Children(func() {
-		frame := ui.ButtonBase(c).Key("poster:" + card.Ref.String()).Width(w).Height(w * posterRatio).
-			Radius(12).Clip().Background(t.Surface).Label(card.Title)
-		frame.Children(func() {
-			p.posterPlaceholder(c, t)
-			if p.deps.Images != nil {
-				if bitmap := p.deps.Images.Bitmap(card.PosterURL); bitmap != nil {
-					ui.Image(c, bitmap).Fill().Fit(ui.Cover).Transition(imageIn)
-				}
-			}
-			p.qualityBadge(c, card)
-			p.statusBadge(c, m, card)
-		})
-		if frame.Clicked() {
-			p.detail(card)
-		}
-		// Hover lifts the poster a touch; this pose only paints, so a wall of
-		// posters stays smooth.
-		pose := ui.Pose{}
-		if frame.Hovered() {
-			pose = ui.Pose{Y: -4, Scale: 1.012}
-		}
-		frame.AnimatePose(pose, ui.Snappy)
-
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
-			title := ui.ButtonBase(c).Grow(1).Height(20).Radius(4).
-				Label(card.Title).Background(ui.Transparent)
-			title.Children(func() {
-				ui.Text(c, card.Title).FontSize(13).Bold().TextColor(t.Text).MaxLines(1)
-			})
-			if title.Clicked() {
-				p.detail(card)
-			}
-			p.bookmark(c, t, m, card)
-		})
-
-		if meta := p.metaLine(m, card); meta != "" {
-			ui.Text(c, meta).FontSize(11).TextColor(t.TextMuted).MaxLines(1)
-		}
+	updating := isUpdating(card)
+	status := m.StatusCompleted()
+	if updating {
+		status = m.StatusUpdating()
+	}
+	statusBg, statusInk := design.PosterStatus(updating)
+	qualityBg, qualityInk := design.PosterBadge()
+	followLabel := m.Follow()
+	following := p.isFollowing(card.Ref)
+	if following {
+		followLabel = m.FollowingShow()
+	}
+	p.poster.View(c, t, m, poster.Card{
+		Ref:       card.Ref,
+		Title:     card.Title,
+		Year:      card.Year,
+		Area:      card.Area,
+		PosterURL: card.PosterURL,
+		Badges: []poster.Badge{
+			{Label: qualityLabel(m, card), Background: qualityBg, Ink: qualityInk},
+			{Label: status, Background: statusBg, Ink: statusInk},
+		},
+		Subtitle: p.metaLine(m, card),
+	}, w, index, poster.Actions{
+		Open: func() { p.detail(card) },
+		Follow: &poster.Follow{
+			Ref:    card.Ref,
+			Label:  followLabel,
+			On:     following,
+			Toggle: func() { p.toggleFollow(card) },
+		},
 	})
+}
+
+// qualityLabel states the print's resolution in the language of the page: the
+// chip is interface copy, not the source's raw remark, so it is translated like
+// every other label.
+func qualityLabel(m locales.Messages, card source.Card) string {
+	if has4K(card) {
+		return m.Quality4kShort()
+	}
+	return m.QualityHdShort()
 }
 
 // posterPlaceholder fills a poster frame that has no artwork yet (loading or
@@ -387,49 +416,6 @@ func (p *Page) posterPlaceholder(c *ui.Context, t *ui.Theme) {
 		Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 		ui.Icon(c, icons.Parse("clapperboard-linear")).Size(30, 30).TextColor(t.TextMuted).Opacity(0.45)
 	})
-}
-
-// qualityBadge is the small 4K/1080P chip at a poster's top left.
-func (p *Page) qualityBadge(c *ui.Context, card source.Card) {
-	label := "1080P"
-	if has4K(card) {
-		label = "4K"
-	}
-	bg, fg := design.PosterBadge()
-	ui.Box(c).Absolute().Left(8).Top(8).Radius(5).Padding(2, 6).Background(bg).Children(func() {
-		ui.Text(c, label).FontSize(9).Bold().TextColor(fg)
-	})
-}
-
-// statusBadge is the updating/completed chip at a poster's top right.
-func (p *Page) statusBadge(c *ui.Context, m locales.Messages, card source.Card) {
-	updating := isUpdating(card)
-	label := m.StatusCompleted()
-	if updating {
-		label = m.StatusUpdating()
-	}
-	bg, fg := design.PosterStatus(updating)
-	ui.Box(c).Absolute().Right(8).Top(8).Radius(5).Padding(2, 6).Background(bg).Children(func() {
-		ui.Text(c, label).FontSize(9).Bold().TextColor(fg)
-	})
-}
-
-// bookmark is the per-card follow switch.
-func (p *Page) bookmark(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
-	following := p.isFollowing(card.Ref)
-	label := m.FilterFavorites()
-	ink := t.TextMuted
-	if following {
-		ink = t.Accent
-	}
-	button := ui.ButtonBase(c).Key("mark:"+card.Ref.String()).Size(22, 22).Radius(6).
-		Label(label).Tooltip(label).Background(ui.Transparent)
-	button.Children(func() {
-		ui.Icon(c, icons.Parse("bookmark-linear")).Size(15, 15).TextColor(ink)
-	})
-	if button.Clicked() {
-		p.toggleFollow(card)
-	}
 }
 
 // listView draws the compact rows the list toggle chooses.
@@ -449,6 +435,9 @@ func (p *Page) listRow(c *ui.Context, t *ui.Theme, m locales.Messages, card sour
 	row.Children(func() {
 		main := ui.ButtonBase(c).Key("row:"+card.Ref.String()).Grow(1).Radius(10).
 			Padding(8, 10).Label(card.Title).Background(t.Surface)
+		if main.Hovered() {
+			main.Background(t.SurfaceHover)
+		}
 		main.Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(14).Children(func() {
 				thumb := ui.Box(c).Width(44).Height(66).Radius(8).Clip().Background(t.Background)
@@ -473,6 +462,38 @@ func (p *Page) listRow(c *ui.Context, t *ui.Theme, m locales.Messages, card sour
 		}
 		p.bookmark(c, t, m, card)
 	})
+}
+
+// bookmark is the per-row follow switch: the same disc and bookmark the poster
+// cards carry, so the list and the grid offer the same switch in the same place.
+func (p *Page) bookmark(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
+	following := p.isFollowing(card.Ref)
+	label := m.Follow()
+	if following {
+		label = m.FollowingShow()
+	}
+	button := ui.ButtonBase(c).Key("mark:"+card.Ref.String()).Size(30, 30).Radius(15).
+		Label(label).Tooltip(label).Background(t.Surface)
+	switch {
+	case following:
+		button.Background(t.Accent)
+	case button.Hovered():
+		button.Background(t.SurfaceHover)
+	}
+	ink := t.TextMuted
+	if following {
+		ink = t.AccentText
+	}
+	button.Children(func() {
+		name := "bookmark-linear"
+		if following {
+			name = "bookmark-bold"
+		}
+		ui.Icon(c, icons.Parse(name)).Size(15, 15).TextColor(ink)
+	})
+	if button.Clicked() {
+		p.toggleFollow(card)
+	}
 }
 
 // metaLine joins the year, kind and a place or first tag under a poster.

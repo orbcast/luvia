@@ -14,6 +14,7 @@ import (
 
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
+	"luvia/apps/desktop/internal/poster"
 	"luvia/apps/desktop/internal/source"
 )
 
@@ -68,6 +69,9 @@ type Page struct {
 	started bool
 	gen     uint64 // bumped per request so a late answer can be dropped
 	redraw  func()
+	// poster draws every wall of titles on the page: one card shared with
+	// Discover, Following and the search results.
+	poster poster.Deps
 }
 
 // New prepares the page with the defaults the reference lays out: the "all"
@@ -76,7 +80,8 @@ func New(deps Deps) *Page {
 	if deps.Run == nil {
 		deps.Run = mygo.RunOnMain
 	}
-	p := &Page{deps: deps, category: catAll, grid: true}
+	p := &Page{deps: deps, category: catAll, grid: true, poster: poster.Deps{Images: deps.Images}}
+	p.poster.Invalidate = p.invalidate
 	if deps.Images != nil {
 		deps.Images.SetChanged(func() { p.invalidate() })
 	}

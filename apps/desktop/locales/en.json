@@ -28,6 +28,14 @@
   "@viewMenu": {
     "description": "System menu containing navigation and display preferences"
   },
+  "appearanceAndLanguage": "Appearance and language",
+  "@appearanceAndLanguage": {
+    "description": "Group title for the theme and language settings"
+  },
+  "dataSourceAndKeys": "Source and access keys",
+  "@dataSourceAndKeys": {
+    "description": "Group title for the source choice and its access keys"
+  },
   "appearance": "Appearance",
   "@appearance": {
     "description": "Theme preference submenu"
@@ -198,6 +206,30 @@
   "@qualityHd": {
     "description": "Hero quality badge for a non-4K title"
   },
+  "quality4kShort": "4K",
+  "@quality4kShort": {
+    "description": "Short quality chip on a poster for a 4K print"
+  },
+  "qualityHdShort": "1080P",
+  "@qualityHdShort": {
+    "description": "Short quality chip on a poster for a non-4K print"
+  },
+  "unfollow": "Unfollow",
+  "@unfollow": {
+    "description": "Follow switch on a card that is already followed; pressing it stops following the title"
+  },
+  "followingShows": "Followed shows",
+  "@followingShows": {
+    "description": "Heading of the followed shows on the Following page"
+  },
+  "followingEmpty": "No followed shows yet",
+  "@followingEmpty": {
+    "description": "Empty state title on the Following page"
+  },
+  "followingEmptyHint": "Follow a title from its page and it shows up here with its updates.",
+  "@followingEmptyHint": {
+    "description": "Empty state hint on the Following page"
+  },
   "dolbyVision": "Dolby Vision",
   "@dolbyVision": {
     "description": "Hero brand badge for Dolby Vision titles"
@@ -307,12 +339,20 @@
   "episodeCount": "{count, plural, one {# episode} other {# episodes}}",
   "selectedSource": "Selected source",
   "lineLabel": "Line",
-  "seriesEpisodes": "Episodes",
+
   "aboutEyebrow": "ABOUT",
   "aboutTitle": "Synopsis",
   "expandAll": "Show all",
   "collapseAll": "Show less",
   "collection": "Collection",
+  "collectionLeft": "Left",
+  "@collectionLeft": {
+    "description": "Row label for the unwatched time of the current episode"
+  },
+  "collectionNothing": "Nothing watched yet",
+  "@collectionNothing": {
+    "description": "Shown in the collection card when there is no progress"
+  },
   "profileInfo": "Details",
   "tagsLabel": "Tags",
   "fieldType": "Type",
