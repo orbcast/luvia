@@ -4,8 +4,10 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -123,6 +125,7 @@ func main() {
 			// built again without a restart.
 			SecretNames: func() []string { return profile.secretNames },
 			Secrets:     func() map[string]string { return preferences.LoadSecrets(userData) },
+			HasEnv:      func(name string) bool { return strings.TrimSpace(os.Getenv(name)) != "" },
 			SetSecrets: func(values map[string]string) {
 				if err := preferences.SaveSecrets(userData, values); err != nil {
 					log.Printf("secrets %s: %v", userData, err)

@@ -18,6 +18,7 @@ type fakePreferences struct {
 	source  string
 	names   []string
 	secrets map[string]string
+	env     map[string]bool
 }
 
 func (p *fakePreferences) deps() settings.Deps {
@@ -32,6 +33,7 @@ func (p *fakePreferences) deps() settings.Deps {
 		SecretNames: func() []string { return p.names },
 		Secrets:     func() map[string]string { return p.secrets },
 		SetSecrets:  func(values map[string]string) { p.secrets = values },
+		HasEnv:      func(name string) bool { return p.env[name] },
 	}
 }
 
@@ -262,5 +264,48 @@ func TestFieldCentreFindsTheInput(t *testing.T) {
 	}
 	if x < 0 || y < 0 {
 		t.Fatalf("field at (%v, %v)", x, y)
+	}
+}
+
+// TestSettingsHidesBundledAccessKeyWhenSatisfiedByEnv ensures a key already
+// provided by the process environment (such as a release's bundled seed) is
+// hidden from the settings page, and the group title narrows to DataSource
+// when multiple sources remain.
+func TestSettingsHidesBundledAccessKeyWhenSatisfiedByEnv(t *testing.T) {
+	prefs := newPreferences()
+	prefs.names = []string{"KANJU_SECRET"}
+	prefs.env = map[string]bool{"KANJU_SECRET": true}
+	page := settings.New(prefs.deps())
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
+	tt.SetLocale("zh-Hans")
+	tt.Frame()
+	if tt.HasText("访问密钥") || tt.HasText("KANJU_SECRET") || tt.HasText("数据源与访问密钥") {
+		t.Fatalf("satisfied key section should be hidden: %v", tt.Texts())
+	}
+
+	prefs.sources = []string{"hongguo", "other"}
+	prefs.source = "hongguo"
+	tt.Frame()
+	if tt.HasText("访问密钥") || tt.HasText("KANJU_SECRET") || tt.HasText("数据源与访问密钥") {
+		t.Fatalf("satisfied key section should stay hidden with multiple sources: %v", tt.Texts())
+	}
+	if !tt.HasText("数据源") || !tt.HasText("hongguo") {
+		t.Fatalf("data source row missing: %v", tt.Texts())
+	}
+}
+
+// TestSettingsKeepsStoredAccessKeyEvenWhenEnvSet keeps a manually saved
+// override visible so the user can edit or clear it.
+func TestSettingsKeepsStoredAccessKeyEvenWhenEnvSet(t *testing.T) {
+	prefs := newPreferences()
+	prefs.names = []string{"KANJU_SECRET"}
+	prefs.env = map[string]bool{"KANJU_SECRET": true}
+	prefs.secrets = map[string]string{"KANJU_SECRET": "override"}
+	page := settings.New(prefs.deps())
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
+	tt.SetLocale("zh-Hans")
+	tt.Frame()
+	if !tt.HasText("访问密钥") || !tt.HasText("KANJU_SECRET") {
+		t.Fatalf("stored override should remain visible: %v", tt.Texts())
 	}
 }

@@ -33,6 +33,12 @@ type Deps struct {
 	SecretNames func() []string
 	Secrets     func() map[string]string
 	SetSecrets  func(map[string]string)
+	// HasEnv reports whether a variable is already set in the process
+	// environment (for example by the release's bundled seed). Variables that
+	// are already satisfied by the environment and not overridden in Secrets
+	// are hidden so a release user does not see an empty prompt for a key the
+	// package already carries.
+	HasEnv func(string) bool
 }
 
 // settingControlRadius and settingControlPaddingX are the shape every control
@@ -202,13 +208,17 @@ func (p *Page) View(c *ui.Context) ui.Element {
 			// A second source is the first moment choosing one means
 			// anything, so the row appears with it. The ids are the rule
 			// directory names, which is also what a viewer recognises.
-			names := p.secretNames()
+			names, stored := p.visibleSecrets()
 			if len(ids) > 1 || len(names) > 0 {
 				ui.Column(c).FillWidth().Radius(card.Radius).Background(card.Fill).Border(1, card.Border).
 					Padding(22, 22, 14, 22).Gap(2).Children(func() {
-					p.group(c, &theme, m.DataSourceAndKeys(), func() {
+					title := m.DataSourceAndKeys()
+					if len(names) == 0 {
+						title = m.DataSource()
+					}
+					p.group(c, &theme, title, func() {
 						if len(names) > 0 {
-							p.keysRow(c, &theme, m)
+							p.keysRow(c, &theme, m, names, stored)
 							if len(ids) > 1 {
 								p.rule(c, &theme)
 							}
@@ -268,10 +278,35 @@ func (p *Page) commitKeys() {
 
 // secretNames is the list the fields are built from.
 func (p *Page) secretNames() []string {
+	names, _ := p.visibleSecrets()
+	return names
+}
+
+// visibleSecrets filters SecretNames to the variables a viewer still needs to
+// supply or has explicitly saved: a variable already satisfied by the process
+// environment (such as the bundled seed) and not stored in Secrets is hidden.
+func (p *Page) visibleSecrets() ([]string, map[string]string) {
 	if p.deps.SecretNames == nil {
-		return nil
+		return nil, nil
 	}
-	return p.deps.SecretNames()
+	all := p.deps.SecretNames()
+	if len(all) == 0 {
+		return nil, nil
+	}
+	var stored map[string]string
+	if p.deps.Secrets != nil {
+		stored = p.deps.Secrets()
+	}
+	if p.deps.HasEnv == nil {
+		return all, stored
+	}
+	visible := make([]string, 0, len(all))
+	for _, name := range all {
+		if strings.TrimSpace(stored[name]) != "" || !p.deps.HasEnv(name) {
+			visible = append(visible, name)
+		}
+	}
+	return visible, stored
 }
 
 // changed reports whether two lists differ.
@@ -306,15 +341,13 @@ func (p *Page) rule(c *ui.Context, theme *ui.Theme) {
 
 // keysRow draws one field per variable the loaded rules ask for. A source
 // without such a variable adds nothing to its card.
-func (p *Page) keysRow(c *ui.Context, theme *ui.Theme, m locales.Messages) {
-	names := p.secretNames()
+func (p *Page) keysRow(c *ui.Context, theme *ui.Theme, m locales.Messages, names []string, stored map[string]string) {
 	if len(names) == 0 || p.deps.Secrets == nil {
 		p.keys = nil
 		p.keysSynced = nil
 		return
 	}
 	p.focusedField = -1
-	stored := p.deps.Secrets()
 	fresh := make([]string, len(names))
 	for i, name := range names {
 		fresh[i] = stored[name]
