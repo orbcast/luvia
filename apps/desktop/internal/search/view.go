@@ -25,15 +25,15 @@ const (
 	// of them.
 	narrowPoster = 128
 	maxColumns   = 8
-	// keywordSize is the field's type size, sized so the field's own line box
-	// lands near 46 and reads as the page's one loud element; the narrow one
-	// keeps a long keyword inside a docked window.
-	keywordSize       = 34
-	narrowKeywordSize = 24
-	// keywordLine is the field's height: its own line box plus the padding the
+	// keywordSize is the field's type size: the page's one loud element, but a
+	// search box, not a headline — it is read at a glance and typed in. The
+	// narrow size keeps a long keyword inside a docked window.
+	keywordSize       = 26
+	narrowKeywordSize = 19
+	// keywordLine is the field's height: its line box plus the padding the
 	// stock control keeps, so the row under it is a hairline and not a band.
-	keywordLine       = 52
-	narrowKeywordLine = 40
+	keywordLine       = 42
+	narrowKeywordLine = 34
 	// accentRun is the length of the accent segment that ends the rule under
 	// the keyword.
 	accentRun = 28
@@ -117,9 +117,9 @@ func (p *Page) View(c *ui.Context) ui.Element {
 // settles into a search of its own after the debounce, so the page never
 // needs a separate action.
 func (p *Page) queryLine(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	ui.Column(c).FillWidth().Padding(28, 0, 0, 0).Children(func() {
-		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			ui.Row(c).FillWidth().Wrap().AlignItems(ui.End).Gap(16).Children(func() {
+	ui.Column(c).FillWidth().Padding(24, 0, 0, 0).Children(func() {
+		ui.Column(c).FillWidth().Gap(10).Children(func() {
+			ui.Row(c).FillWidth().Wrap().AlignItems(ui.Center).Gap(16).Children(func() {
 				p.field(c, t, m, width)
 				p.recent(c, t, m)
 			})
@@ -129,10 +129,9 @@ func (p *Page) queryLine(c *ui.Context, t *ui.Theme, m locales.Messages, width f
 }
 
 // field is the keyword itself: the stock search field, in the page's inks and
-// with no plate or border of its own, at a size that keeps its line box near
-// the page's one loud element. Its magnifier and its placeholder are the
-// widget's own drawing, on a Solar icon, so the page draws neither; only the
-// words typed are the field's.
+// with no plate or border of its own. Its magnifier and its placeholder are
+// the widget's own drawing, on a Solar icon, so the page draws neither; only
+// the words typed are the field's.
 //
 // The field keeps its internal paddings (the icon gap and the text inset), so
 // the words start where the widget places them rather than at a guessed
