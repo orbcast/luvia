@@ -93,7 +93,7 @@ make skills   # 更新 .agents/skills
 
 ## 桌面框架
 
-主窗口提供发现、资源库、追剧、搜索、设置五个导航入口，点击、菜单和 `⌘1`～`⌘5` 同步选中状态，`⌘,` 进入设置；发现、资源库、详情与播放为已实现页面，追剧、搜索仍为占位。显示菜单可切换主题和语言并记住选择，系统菜单和窗口行为复用 MyGo。框架代码按 `internal/` 下的导航、窗口与偏好职责划分，`main.go` 只做组装，详见 [桌面说明](apps/desktop/README.md) 与 [ADR 0007](docs/adr/0007-desktop-shell.md)。
+主窗口提供发现、资源库、追剧、搜索、设置五个导航入口，点击、菜单和 `⌘1`～`⌘5` 同步选中状态，`⌘,` 进入设置；发现、资源库、追剧、搜索、设置、详情与播放七个页面均已实现。显示菜单可切换主题和语言并记住选择，系统菜单和窗口行为复用 MyGo。框架代码按 `internal/` 下的导航、窗口与偏好职责划分，`main.go` 只做组装，详见 [桌面说明](apps/desktop/README.md) 与 [ADR 0007](docs/adr/0007-desktop-shell.md)。
 
 界面文案来自 `apps/desktop/locales/`（英文源语言加简体中文），品牌名 `Luvia` 除外。新增或修改文案时改 catalogs 后跑 `make i18n` 与 `go tool mygo generate`，流程见 [ADR 0005](docs/adr/0005-localized-messages.md)。`apps/desktop/tests/` 在独立目录验证导航、菜单、语言、布局、偏好和窗口重开，测试不启动原生窗口。
 
@@ -101,7 +101,7 @@ make skills   # 更新 .agents/skills
 
 `make check` 是提交前唯一需要记住的入口：MyGo vet、Go vet、测试、gofmt、仓库规则（`scripts/check-rules.py` 的 16 项可判定检查）与 catalogs 校验。仓库规则不只查文档，还查文档代码块里的命令是否真实存在、apps 之间是否互相导入、有没有引入前端工程文件或 WebView 绑定、有没有私钥与本机路径、入口 `main.go` 是否超过 300 行。`.githooks/pre-commit` 调用 `make check`，`.githooks/commit-msg` 校验 `type(scope): 简述` 与 scope 白名单，首次克隆后执行一次 `make hooks` 同时启用两者。CI 分三个作业：Linux 跑仓库规则与 Windows/Linux 交叉 vet，macOS 跑 `make check`、覆盖率门槛（`make cover`，生成代码不计，门槛 80%）、竞态检测（`make race`）、生成物同步（`make check-gen`）与真实打包（`make build`）。检查失败时修代码或修脚本，不用 `--no-verify` 绕过。设计取向与检查边界见 [ADR 0006](docs/adr/0006-verification-gates.md)，决策清单见 [docs/adr/](docs/adr/README.md)。
 
-仓库目前没有配置 remote，CI 定义尚未在远端真正运行过；本地能验证的是 `make check` 与钩子本身。
+仓库已配置 `origin` 远端，但 CI 流水线（特别是 macOS 构建与交叉检查）仍需在远端实际触发验证；本地日常验证以 `make check` 与 Git 钩子为准。
 
 ## 写自己的界面
 
