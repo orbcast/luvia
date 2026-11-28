@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
@@ -19,6 +20,7 @@ const (
 	railWidth      = 340
 	episodeRatio   = 1.55
 	minEpisodeWide = 96
+	backButtonSize = 40
 )
 
 // View builds the title page on top of a blurred copy of its own artwork.
@@ -37,7 +39,7 @@ func (p *Page) View(c *ui.Context) ui.Element {
 		case p.err != nil:
 			p.errorView(c, t, m)
 		default:
-			p.scroll(c, t, m, width)
+			p.scroll(c, t, m, width, c.TitleBar().Bottom)
 		}
 		p.backButton(c, t, m, width, c.TitleBar().Bottom)
 	})
@@ -76,7 +78,8 @@ func (p *Page) backdrop(c *ui.Context, t *ui.Theme) {
 // a number of its own.
 func (p *Page) backButton(c *ui.Context, t *ui.Theme, m locales.Messages, width float32, barBottom float32) {
 	back := ui.ButtonBase(c).Key("detail-back").Absolute().Left(pageInset(width)).Top(design.ChromeTop(barBottom)).
-		Size(40, 40).Radius(20).Material(glass.Glass{}).Label(m.Back()).Tooltip(m.Back()).ZIndex(30)
+		Size(backButtonSize, backButtonSize).Radius(backButtonSize / 2).Material(glass.Glass{}).
+		Label(m.Back()).Tooltip(m.Back()).ZIndex(30)
 	if back.Hovered() {
 		back.Material(glass.Glass{Interactive: true})
 	}
@@ -88,14 +91,17 @@ func (p *Page) backButton(c *ui.Context, t *ui.Theme, m locales.Messages, width 
 	}
 }
 
-func (p *Page) scroll(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
+func (p *Page) scroll(c *ui.Context, t *ui.Theme, m locales.Messages, width float32, barBottom float32) {
 	inset := pageInset(width)
+	// The copy starts below the floating back button rather than at a number of
+	// its own: the button hangs from the chrome line, and the copy clears it by
+	// one control, so the two line up on every platform and window state.
+	top := design.ChromeTop(barBottom) + float32(backButtonSize) + design.PageTop
 	scroll := ui.Scroll(c).Fill().ScrollbarAxes(false, true)
 	scroll.Children(func() {
-		ui.Column(c).FillWidth().Padding(88, inset, 48+design.BottomClearance(width), inset).
+		ui.Column(c).FillWidth().Padding(top, inset, 48+design.BottomClearance(width), inset).
 			Gap(26).Children(func() {
 			p.hero(c, t, m, width)
-			p.tabRail(c, t, m)
 			p.mainAndRail(c, t, m, width)
 		})
 	})
@@ -120,7 +126,7 @@ func (p *Page) hero(c *ui.Context, t *ui.Theme, m locales.Messages, width float3
 
 func (p *Page) poster(c *ui.Context, t *ui.Theme, w float32) {
 	frame := ui.Box(c).Width(w).Height(w*posterRatio).Radius(16).Clip().
-		Background(t.Surface).Shadow(0, 20, 44, 0, ui.RGBA(0, 0, 0, 0.48))
+		Background(t.Surface).Shadow(0, 20, 44, 0, design.PosterShadow())
 	frame.Children(func() {
 		if p.deps.Images != nil {
 			if bitmap := p.deps.Images.Bitmap(p.detail.PosterURL); bitmap != nil {
@@ -147,16 +153,45 @@ func (p *Page) titleBlock(c *ui.Context, t *ui.Theme, m locales.Messages, width 
 		p.metaChips(c, t, m, s)
 
 		if p.detail.Overview != "" {
-			overview := ui.Text(c, p.detail.Overview).FontSize(13.5).LineHeight(1.7).TextColor(t.TextMuted)
-			if !p.expanded {
-				overview.MaxLines(3)
-			}
+			// The synopsis is cut to a few lines here, and the switch that gives
+			// the rest sits at the end of the copy it expands, so the reader
+			// never has to hunt for it further down the page.
+			ui.Column(c).FillWidth().Gap(4).Children(func() {
+				overview := ui.Text(c, p.detail.Overview).FillWidth().FontSize(13.5).LineHeight(1.7).
+					TextColor(t.TextMuted)
+				if !p.expanded {
+					overview.MaxLines(3)
+				}
+				// The switch sits on the copy's own line, at its left, so it
+				// reads as the end of the text instead of a link pushed aside.
+				p.expandToggle(c, t, m)
+			})
 		}
 
 		p.actions(c, t, m)
-
-		p.sourceLine(c, t, m)
 	})
+}
+
+// expandToggle shows the rest of the synopsis, or puts it away again. It reads
+// as a link at the end of the copy, not as a button of its own: the switch is
+// about the text above it.
+func (p *Page) expandToggle(c *ui.Context, t *ui.Theme, m locales.Messages) {
+	label := m.ExpandAll()
+	if p.expanded {
+		label = m.CollapseAll()
+	}
+	toggle := ui.ButtonBase(c).Key("detail-expand").Height(24).Radius(8).PaddingX(0).
+		Label(label).Background(ui.Transparent).AlignSelf(ui.Start)
+	ink := t.Accent
+	if toggle.Hovered() {
+		ink = t.Accent.Mix(t.Text, 0.25)
+	}
+	toggle.Children(func() {
+		ui.Text(c, label).FontSize(12).Bold().TextColor(ink)
+	})
+	if toggle.Clicked() {
+		p.ToggleExpanded()
+	}
 }
 
 // tagRow lays the leading tags out as outlined pills.
@@ -249,23 +284,6 @@ func (p *Page) actions(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	})
 }
 
-// sourceLine is the small "selected source · episodes" caption under the actions.
-func (p *Page) sourceLine(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(18).Wrap().Children(func() {
-		p.captionPair(c, t, m.SelectedSource(), sourceName(p.deps.Source))
-		if p.detail.EpisodeCount > 0 {
-			p.captionPair(c, t, m.SeriesEpisodes(), strconv.Itoa(p.detail.EpisodeCount))
-		}
-	})
-}
-
-func (p *Page) captionPair(c *ui.Context, t *ui.Theme, label, value string) {
-	ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-		ui.Text(c, label).FontSize(12).TextColor(t.TextMuted)
-		ui.Text(c, value).FontSize(12).Bold().TextColor(t.Text)
-	})
-}
-
 func (p *Page) tabRail(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	s := design.DetailSurfaces(t)
 	labels := []string{m.TabOverview(), m.TabCast(), m.TabCrew()}
@@ -311,14 +329,22 @@ func (p *Page) mainAndRail(c *ui.Context, t *ui.Theme, m locales.Messages, width
 	})
 }
 
+// leftColumn is the watching half of the page: the episodes, then the tab rail
+// and the body it switches. The rail sits at the foot of the episode grid and
+// touches the body, so a switch changes the text immediately below it instead of
+// far above it.
 func (p *Page) leftColumn(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	p.watchSection(c, t, m, width)
-	p.tabContent(c, t, m)
+	ui.Column(c).FillWidth().Gap(22).Children(func() {
+		p.watchSection(c, t, m, width)
+		p.tabRail(c, t, m)
+		p.tabContent(c, t, m)
+	})
 }
 
-// watchSection is the source pills, the now-playing caption and the episode grid.
+// watchSection is the episodes and the one line that says where they come
+// from. The source is named once, here, beside the episodes it serves; the copy
+// above the episodes no longer repeats it.
 func (p *Page) watchSection(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	s := design.DetailSurfaces(t)
 	ui.Column(c).FillWidth().Gap(16).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.End).Children(func() {
 			ui.Column(c).Gap(3).Children(func() {
@@ -331,21 +357,27 @@ func (p *Page) watchSection(c *ui.Context, t *ui.Theme, m locales.Messages, widt
 			}
 		})
 
-		ui.Column(c).FillWidth().Gap(8).Children(func() {
-			ui.Text(c, m.PlaybackSource()).FontSize(12).TextColor(t.TextMuted)
-			ui.Row(c).FillWidth().Wrap().Gap(8).Children(func() {
-				ui.Row(c).Radius(8).Padding(5, 12).Background(s.Chip).Border(1, s.ChipBorder).Children(func() {
-					ui.Text(c, sourceName(p.deps.Source)).FontSize(12).Bold().TextColor(t.Text)
-				})
-			})
-			ui.Text(c, m.CurrentPlaying(p.detail.Title)).FontSize(12).TextColor(t.TextMuted)
-		})
+		p.sourceRow(c, t, m)
 
 		if len(p.episodes) == 0 {
 			ui.Text(c, m.EmptyTab()).FontSize(13).TextColor(t.TextMuted)
 			return
 		}
 		p.episodeGrid(c, t, m, width)
+	})
+}
+
+// sourceRow names the source serving these episodes and, under it, the title
+// the player would open. It is the page's only source line, so the name and its
+// caption read as one statement about the episode grid beside them.
+func (p *Page) sourceRow(c *ui.Context, t *ui.Theme, m locales.Messages) {
+	s := design.DetailSurfaces(t)
+	ui.Row(c).FillWidth().Wrap().AlignItems(ui.Center).Gap(10).Children(func() {
+		ui.Text(c, m.PlaybackSource()).FontSize(12).TextColor(t.TextMuted)
+		ui.Row(c).Radius(8).Padding(5, 12).Background(s.Chip).Border(1, s.ChipBorder).Children(func() {
+			ui.Text(c, sourceName(p.deps.Source)).FontSize(12).Bold().TextColor(t.Text)
+		})
+		ui.Text(c, m.CurrentPlaying(p.detail.Title)).FontSize(12).TextColor(t.TextMuted)
 	})
 }
 
@@ -390,8 +422,8 @@ func (p *Page) episodeChip(c *ui.Context, t *ui.Theme, m locales.Messages, episo
 	}
 }
 
-// tabContent is the body under the episode grid; the overview tab shows the
-// full synopsis, the others list cast, comments or crew.
+// tabContent is the body under the tab rail; the overview tab shows the full
+// synopsis, the others list cast or crew.
 func (p *Page) tabContent(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	switch p.tab {
 	case tabOverview:
@@ -403,6 +435,10 @@ func (p *Page) tabContent(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	}
 }
 
+// synopsis is the overview tab's body: the long text the title's short blurb
+// cuts off. The switch at the end of that blurb already sets how much of it the
+// page shows, so this section prints the text without offering the switch again,
+// and the page never shows one copy truncated beside another one whole.
 func (p *Page) synopsis(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		ui.Text(c, m.AboutEyebrow()).FontSize(10).LetterSpacing(2).TextColor(t.TextMuted)
@@ -412,18 +448,6 @@ func (p *Page) synopsis(c *ui.Context, t *ui.Theme, m locales.Messages) {
 			return
 		}
 		ui.Text(c, p.detail.Overview).FontSize(13.5).LineHeight(1.75).TextColor(t.TextMuted)
-		toggle := ui.ButtonBase(c).Key("detail-expand").Height(26).Radius(8).PaddingX(2).
-			Label(m.ExpandAll()).Background(ui.Transparent)
-		toggle.Children(func() {
-			label := m.ExpandAll()
-			if p.expanded {
-				label = m.CollapseAll()
-			}
-			ui.Text(c, label).FontSize(12).Bold().TextColor(t.Accent)
-		})
-		if toggle.Clicked() {
-			p.ToggleExpanded()
-		}
 	})
 }
 
@@ -503,40 +527,26 @@ func (p *Page) card(c *ui.Context, t *ui.Theme) ui.Element {
 	return box
 }
 
+// collectionCard is the rail's account of the title in the viewer's own
+// collection: how many episodes it has and where they left off. Following is
+// the page's decision, taken once in the action row above, so this card does
+// not offer it a second time.
 func (p *Page) collectionCard(c *ui.Context, t *ui.Theme, m locales.Messages) {
 	p.card(c, t).Children(func() {
 		ui.Text(c, m.Collection()).FontSize(14).Bold().TextColor(t.Text)
-		following := p.IsFollowing()
-		label := m.Follow()
-		if following {
-			label = m.FollowingShow()
-		}
-		button := ui.ButtonBase(c).Key("rail-follow").FillWidth().Height(40).Radius(10).
-			Background(t.Inverse).TextColor(t.InverseText).Label(label)
-		if button.Hovered() {
-			button.Background(t.Inverse.Mix(t.InverseText, 0.08))
-		}
-		button.Children(func() {
-			icon := "bookmark-linear"
-			if following {
-				icon = "bookmark-bold"
-			}
-			ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-				ui.Icon(c, icons.Parse(icon)).Size(15, 15).TextColor(t.InverseText)
-				ui.Text(c, label).FontSize(13).Bold().TextColor(t.InverseText)
-			})
-		})
-		if button.Clicked() {
-			p.ToggleFollow()
-		}
 		if p.detail.EpisodeCount > 0 {
 			p.fieldRow(c, t, m.FieldEpisodes(), strconv.Itoa(p.detail.EpisodeCount))
 		}
 		if p.deps.Library != nil {
 			if progress, ok := p.deps.Library.ProgressOf(p.ref); ok && progress.Episode.Number > 0 {
 				p.fieldRow(c, t, m.TabOverview(), m.EpisodeNumber(strconv.Itoa(progress.Episode.Number)))
+				if left := progress.Remaining(); left > 0 {
+					p.fieldRow(c, t, m.CollectionLeft(), clock(m, left))
+				}
+				return
 			}
 		}
+		ui.Text(c, m.CollectionNothing()).FontSize(12).TextColor(t.TextMuted)
 	})
 }
 
@@ -650,4 +660,19 @@ func clamp(value, low, high float32) float32 {
 		return high
 	}
 	return value
+}
+
+// clock writes a duration in the page's own units: "42 minutes", "1 hour 5
+// minutes", as the library measures it.
+func clock(m locales.Messages, d time.Duration) string {
+	hours := int(d / time.Hour)
+	minutes := int(d/time.Minute) % 60
+	var parts []string
+	if hours > 0 {
+		parts = append(parts, strconv.Itoa(hours)+" "+m.HoursShort())
+	}
+	if minutes > 0 || hours == 0 {
+		parts = append(parts, strconv.Itoa(minutes)+" "+m.MinutesShort())
+	}
+	return strings.Join(parts, m.ListSeparator())
 }

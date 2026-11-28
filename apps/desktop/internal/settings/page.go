@@ -35,6 +35,17 @@ type Deps struct {
 	SetSecrets  func(map[string]string)
 }
 
+// settingControlRadius and settingControlPaddingX are the shape every control
+// on the page shares, whatever it changes.
+const (
+	settingControlRadius   float32 = 11
+	settingControlPaddingX float32 = 14
+	settingControlHeight   float32 = 38
+	// settingControlWidth is the value column, shared by the drop-downs and the
+	// access key fields so a card's right edge is one line.
+	settingControlWidth float32 = 200
+)
+
 // themeSources is the order of the appearance drop-down's choices.
 var themeSources = [...]mygo.ThemeSource{mygo.ThemeSystem, mygo.ThemeLight, mygo.ThemeDark}
 
@@ -143,8 +154,10 @@ func localeIndex(tag string) int {
 	return 0
 }
 
-// View draws the page: a title and one drop-down row per preference, set
-// on the page's background with room around them rather than in a card.
+// View draws the page: its title above the preferences. The page is itself the
+// card — the theme's surface inside a hairline, one body for a few decisions —
+// and the groups are told apart by their names and the air between them, not by
+// a stack of smaller cards inside a card.
 func (p *Page) View(c *ui.Context) ui.Element {
 	theme := design.Theme(c.Theme())
 	theme = *theme.WithPreferences(c.Preferences())
@@ -171,19 +184,40 @@ func (p *Page) View(c *ui.Context) ui.Element {
 
 	width, _ := c.Size()
 	inset := design.Inset(width)
+	card := design.SettingCardSpec(&theme)
 	column := ui.Column(c).Fill().Background(theme.Background).
-		Padding(56, inset, 40+design.BottomClearance(width), inset).Gap(34)
+		Padding(design.PageTopInset(c.TitleBar().Bottom), inset, 40+design.BottomClearance(width), inset).
+		Gap(24)
 	column.Children(func() {
-		ui.Column(c).MaxWidth(560).Gap(30).Children(func() {
+		ui.Column(c).MaxWidth(560).Gap(20).Children(func() {
 			ui.Text(c, m.Settings()).FontSize(26).Bold().TextColor(theme.Text)
-			p.row(c, &theme, m.Appearance(), []string{m.FollowSystem(), m.Light(), m.Dark()}, &p.theme)
-			p.row(c, &theme, m.Language(), localeNames(m), &p.locale)
-			p.keysRow(c, &theme, m)
+			ui.Column(c).FillWidth().Radius(card.Radius).Background(card.Fill).Border(1, card.Border).
+				Padding(22, 22, 14, 22).Gap(2).Children(func() {
+				p.group(c, &theme, m.AppearanceAndLanguage(), func() {
+					p.row(c, &theme, m.Appearance(), []string{m.FollowSystem(), m.Light(), m.Dark()}, &p.theme)
+					p.rule(c, &theme)
+					p.row(c, &theme, m.Language(), localeNames(m), &p.locale)
+				})
+			})
 			// A second source is the first moment choosing one means
 			// anything, so the row appears with it. The ids are the rule
 			// directory names, which is also what a viewer recognises.
-			if len(ids) > 1 {
-				p.row(c, &theme, m.DataSource(), ids, &p.source)
+			names := p.secretNames()
+			if len(ids) > 1 || len(names) > 0 {
+				ui.Column(c).FillWidth().Radius(card.Radius).Background(card.Fill).Border(1, card.Border).
+					Padding(22, 22, 14, 22).Gap(2).Children(func() {
+					p.group(c, &theme, m.DataSourceAndKeys(), func() {
+						if len(names) > 0 {
+							p.keysRow(c, &theme, m)
+							if len(ids) > 1 {
+								p.rule(c, &theme)
+							}
+						}
+						if len(ids) > 1 {
+							p.row(c, &theme, m.DataSource(), ids, &p.source)
+						}
+					})
+				})
 			}
 		})
 	})
@@ -253,8 +287,25 @@ func changed(a, b []string) bool {
 	return false
 }
 
+// group is one group of settings: its name over the rows it holds. Its name is
+// small and quiet, and the space above it separates it from the group before,
+// so a card of several groups reads as a card of several topics.
+func (p *Page) group(c *ui.Context, theme *ui.Theme, title string, body func()) {
+	ui.Column(c).FillWidth().Gap(0).Children(func() {
+		ui.Text(c, title).FontSize(12).Bold().LetterSpacing(0.4).TextColor(theme.TextMuted).
+			Height(34).Padding(8, 0, 0, 0)
+		body()
+	})
+}
+
+// rule separates two rows inside a card, inset to the card's padding so it
+// reads as a division between rows and not as the card's own edge.
+func (p *Page) rule(c *ui.Context, theme *ui.Theme) {
+	ui.Box(c).FillWidth().Height(1).Background(theme.Border)
+}
+
 // keysRow draws one field per variable the loaded rules ask for. A source
-// without such a variable adds no section at all.
+// without such a variable adds nothing to its card.
 func (p *Page) keysRow(c *ui.Context, theme *ui.Theme, m locales.Messages) {
 	names := p.secretNames()
 	if len(names) == 0 || p.deps.Secrets == nil {
@@ -285,14 +336,24 @@ func (p *Page) keysRow(c *ui.Context, theme *ui.Theme, m locales.Messages) {
 		p.keysSynced = append([]string{}, fresh...)
 	}
 
-	ui.Column(c).MaxWidth(560).Gap(12).Children(func() {
-		ui.Text(c, m.AccessKeys()).FontSize(15).TextColor(theme.Text)
-		ui.Text(c, m.AccessKeyHint()).FontSize(13).TextColor(theme.TextMuted)
+	ui.Column(c).FillWidth().Gap(0).Children(func() {
+		ui.Column(c).Gap(2).Padding(0, 0, 10, 0).Children(func() {
+			ui.Text(c, m.AccessKeys()).FontSize(15).Bold().TextColor(theme.Text)
+			ui.Text(c, m.AccessKeyHint()).FontSize(12.5).TextColor(theme.TextMuted)
+		})
 		for i, name := range names {
 			i := i
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(20).Children(func() {
-				ui.Text(c, name).FontSize(14).TextColor(theme.Text).Grow(1)
-				input := ui.TextInputBase(c, &p.keys[i]).Password().Width(200).Height(38).
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(20).Height(design.SettingRowHeight).Children(func() {
+				ui.Text(c, name).FontSize(14).TextColor(theme.Text).Grow(1).
+					Height(settingControlHeight).AlignSelf(ui.Center)
+				// The field is dressed like the drop-downs beside it: the same
+				// height, radius and body, with the hairline that turns into
+				// the accent while it is being typed in. Two kinds of control
+				// on one page should not read as two design languages.
+				input := ui.TextInputBase(c, &p.keys[i]).Password().Width(settingControlWidth).
+					Height(settingControlHeight).Radius(settingControlRadius).PaddingX(settingControlPaddingX).
+					Background(theme.Surface).Border(1, theme.Border).
+					TextColor(theme.Text).PlaceholderColor(theme.TextMuted).
 					Placeholder(m.AccessKeyMissing()).Label(name)
 				// The field keeps what was typed in its own value, so the
 				// frame that follows typing draws the text rather than the
@@ -300,7 +361,7 @@ func (p *Page) keysRow(c *ui.Context, theme *ui.Theme, m locales.Messages) {
 				if input.Focused() {
 					p.editing = i
 					p.focusedField = i
-					input.TextColor(theme.Text)
+					input.Border(1, theme.Accent)
 				}
 			})
 		}
@@ -309,13 +370,20 @@ func (p *Page) keysRow(c *ui.Context, theme *ui.Theme, m locales.Messages) {
 
 // row is a setting: its name, and the drop-down choosing it, on one line.
 func (p *Page) row(c *ui.Context, theme *ui.Theme, label string, options []string, selected *int) {
-	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(20).Children(func() {
-		ui.Text(c, label).FontSize(15).TextColor(theme.Text).Grow(1)
+	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(20).Height(design.SettingRowHeight).Children(func() {
+		ui.Text(c, label).FontSize(14).TextColor(theme.Text).Grow(1)
+		// The drop-down and the key fields share one shape: the theme's surface
+		// inside a hairline, the same radius and height, so a settings card is
+		// cut from one set of controls.
 		selectBase := ui.SelectBase(c, selected)
-		selectBase.Trigger.Width(200).Height(38).Radius(12).PaddingX(14).
-			AlignItems(ui.Center).Gap(10).Material(glass.Glass{}).Label(label)
+		selectBase.Trigger.Width(settingControlWidth).Height(settingControlHeight).Radius(settingControlRadius).
+			PaddingX(settingControlPaddingX).Background(theme.Surface).Border(1, theme.Border).
+			AlignItems(ui.Center).Gap(10).Label(label)
 		selectBase.Trigger.Children(func() {
-			ui.Text(c, options[*selected]).FontSize(14).TextColor(theme.Text).Grow(1)
+			// The name gets the row, the value control keeps its own width and
+			// takes only what it needs: a long label in the narrow window wraps
+			// instead of squeezing the drop-down to its text.
+			ui.Text(c, options[*selected]).FontSize(14).TextColor(theme.Text).Grow(1).MaxLines(1)
 			ui.Icon(c, icons.Parse("alt-arrow-down-linear")).Size(14, 14).TextColor(theme.TextMuted)
 		})
 		selectBase.Popup(func(panel ui.Element) {
