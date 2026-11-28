@@ -1074,16 +1074,6 @@ func (msgs Messages) TabCast() string {
 	return Catalog.Format(msgs.locale, "tabCast", nil)
 }
 
-// DanmakuTab says "Danmaku"
-// in the language the app shows.
-func DanmakuTab() string { return In(i18n.Locale()).DanmakuTab() }
-
-// DanmakuTab says "Danmaku"
-// in the language of msgs.
-func (msgs Messages) DanmakuTab() string {
-	return Catalog.Format(msgs.locale, "danmakuTab", nil)
-}
-
 // TabCrew says "Crew"
 // in the language the app shows.
 func TabCrew() string { return In(i18n.Locale()).TabCrew() }
@@ -1832,16 +1822,6 @@ func Forward10() string { return In(i18n.Locale()).Forward10() }
 // in the language of msgs.
 func (msgs Messages) Forward10() string {
 	return Catalog.Format(msgs.locale, "forward10", nil)
-}
-
-// EpisodesTab says "Episodes"
-// in the language the app shows.
-func EpisodesTab() string { return In(i18n.Locale()).EpisodesTab() }
-
-// EpisodesTab says "Episodes"
-// in the language of msgs.
-func (msgs Messages) EpisodesTab() string {
-	return Catalog.Format(msgs.locale, "episodesTab", nil)
 }
 
 // PlaybackSource says "Source"

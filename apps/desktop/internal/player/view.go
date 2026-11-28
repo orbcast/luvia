@@ -159,6 +159,10 @@ func (p *Page) stage(c *ui.Context, t *ui.Theme, m locales.Messages, width, heig
 		}
 	}
 	p.stageDanmaku(c, width)
+	// A layer asked for and carrying nothing says why on the picture: the panel
+	// is the episode list now, so this line is the only place a viewer can read
+	// the reason the comments did not come.
+	p.stageDanmakuWhy(c, m)
 	p.stageTop(c, t, m)
 	p.stageControls(c, t, m)
 }
@@ -577,6 +581,15 @@ func stageBands(picture, stage ui.Rect) []stageBand {
 	return bands
 }
 
+// stageDanmakuWhy says why the layer carries nothing, on the picture and only
+// while the viewer has it on: an empty layer with no reason reads like a broken
+// player rather than a show nobody has commented on.
+func (p *Page) stageDanmakuWhy(c *ui.Context, m locales.Messages) {
+	ui.Row(c).Absolute().Left(0).Right(0).Bottom(stageEdge * 3).Justify(ui.Center).Children(func() {
+		ui.Text(c, p.danmakuWhyLine(m)).FontSize(12).TextColor(mediaMuted)
+	})
+}
+
 // stageFallback covers a stage the stream did not fill: it says why, and it
 // offers the way out that does not depend on the panel being open.
 func (p *Page) stageFallback(c *ui.Context, m locales.Messages) {
@@ -976,17 +989,11 @@ func (p *Page) panelBody(c *ui.Context, t *ui.Theme, m locales.Messages, width f
 			}
 		}
 
-		p.panelTabs(c, t, m)
 		p.sourceSelector(c, t, m, width)
-		ui.Text(c, m.CurrentPlaying(p.detail.Title)).FontSize(11.5).TextColor(t.TextMuted)
-
-		switch p.tab {
-		case tabDanmaku:
-			p.panelDanmaku(c, t, m)
-		default:
-			ui.Text(c, m.EpisodesTitle()).FontSize(12).TextColor(t.TextMuted)
-			p.panelEpisodes(c, t, m, width)
-		}
+		// The episode list is the only panel the player keeps: the comments are
+		// read on the picture, so they need no tab of their own beside it.
+		ui.Text(c, m.EpisodesTitle()).FontSize(12).TextColor(t.TextMuted)
+		p.panelEpisodes(c, t, m, width)
 	})
 }
 
@@ -1036,28 +1043,6 @@ func joinMeta(parts []string) string {
 	return out
 }
 
-func (p *Page) panelTabs(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	labels := []string{m.EpisodesTab(), m.DanmakuTab()}
-	ui.Row(c).FillWidth().Children(func() {
-		ui.Row(c).Radius(999).Padding(3).Gap(2).Background(t.Surface).Children(func() {
-			for i, label := range labels {
-				index := i
-				button := ui.ButtonBase(c).Key("p-tab:" + strconv.Itoa(i)).Height(30).Radius(999).
-					PaddingX(14).Label(label).Background(ui.Transparent)
-				ink := t.TextMuted
-				if index == p.tab {
-					button.Background(t.SurfaceHover)
-					ink = t.Text
-				}
-				button.Children(func() { ui.Text(c, label).FontSize(12).TextColor(ink) })
-				if button.Clicked() {
-					p.SelectTab(index)
-				}
-			}
-		})
-	})
-}
-
 // sourceSelector is the playback-line dropdown; it resolves another line when
 // the viewer picks one.
 func (p *Page) sourceSelector(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
@@ -1088,29 +1073,32 @@ func (p *Page) sourceSelector(c *ui.Context, t *ui.Theme, m locales.Messages, wi
 	})
 }
 
-// panelDanmaku lists the danmaku the episode carries. The same entries fly over
-// the picture, so this tab is the readable copy of that layer.
-func (p *Page) panelDanmaku(c *ui.Context, t *ui.Theme, m locales.Messages) {
-	if len(p.comments) == 0 {
-		ui.Text(c, p.commentWhyText(m)).FontSize(13).TextColor(t.TextMuted)
-		return
+// danmakuWhyLine is what the layer says about itself, or nothing when it has
+// nothing to explain: a layer holding comments speaks for itself, and one the
+// source never carries at all is silence the viewer already expects.
+func (p *Page) danmakuWhyLine(m locales.Messages) string {
+	if len(p.comments) > 0 {
+		return ""
 	}
-	ui.Column(c).FillWidth().Gap(10).Children(func() {
-		for _, comment := range p.comments {
-			ui.Column(c).FillWidth().Gap(3).Children(func() {
-				if comment.Author != "" {
-					ui.Text(c, comment.Author).FontSize(11.5).Bold().TextColor(t.TextMuted).MaxLines(1)
-				}
-				ui.Text(c, comment.Text).FontSize(12.5).LineHeight(1.5).TextColor(t.Text)
-			})
+	switch {
+	case p.commentWhy == commentUnsupported:
+		// A source without comments says so once the viewer asks for the layer,
+		// and not before: a player that greets a viewer with what it lacks is
+		// noise about a feature they may not have wanted.
+		if p.danmaku {
+			return m.DanmakuUnsupported()
 		}
-	})
+		return ""
+	case p.commentWhy == commentLoading || !p.danmakuTried:
+		if p.danmaku {
+			return m.DanmakuLoading()
+		}
+		return ""
+	default:
+		return p.commentWhyText(m)
+	}
 }
 
-// commentWhyText says, in the viewer's language, why the layer over the
-// picture carries what it carries. An empty list with no reason reads like a
-// broken player, which is exactly what a viewer cannot tell apart from a source
-// that simply has no comments.
 func (p *Page) commentWhyText(m locales.Messages) string {
 	switch p.commentWhy {
 	case commentNoMatch:
@@ -1130,6 +1118,9 @@ func (p *Page) commentWhyText(m locales.Messages) string {
 	}
 }
 
+// Episode chips are two to a row: the titles a source gives its episodes carry
+// the date and what happened in it, which one line of a three-across row cut
+// down to nothing but the date.
 func (p *Page) panelEpisodes(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
 	if len(p.episodes) == 0 {
 		ui.Text(c, m.EmptyTab()).FontSize(13).TextColor(t.TextMuted)
@@ -1137,27 +1128,23 @@ func (p *Page) panelEpisodes(c *ui.Context, t *ui.Theme, m locales.Messages, wid
 	}
 	gap := float32(8)
 	body := width - 40
-	columns := float32(3)
+	columns := float32(2)
 	chipW := (body-gap*(columns-1))/columns - 1.5
 	ui.Row(c).FillWidth().Wrap().Gap(gap).Children(func() {
 		for i, episode := range p.episodes {
 			index := i
-			label := episode.Title
-			if label == "" {
-				label = m.EpisodeNumber(strconv.Itoa(episode.Number))
+			title := episode.Title
+			if title == "" {
+				title = m.EpisodeNumber(strconv.Itoa(episode.Number))
 			}
 			selected := index == p.index
-			button := ui.ButtonBase(c).Key("panel-ep:" + episode.ID).Width(chipW).Height(44).Radius(9).
-				Background(t.Surface).Label(label)
+			button := ui.ButtonBase(c).Key("panel-ep:"+episode.ID).Width(chipW).Height(56).Radius(9).
+				Padding(0, 10).AlignItems(ui.Center).Background(t.Surface).Label(title).Tooltip(title)
 			if selected {
 				button.Background(t.SurfaceHover).Border(1, t.Text)
 			}
 			button.Children(func() {
-				ink := t.TextMuted
-				if selected {
-					ink = t.Text
-				}
-				ui.Text(c, label).FontSize(12).TextColor(ink).MaxLines(1)
+				ui.Text(c, title).FontSize(12.5).TextColor(t.Text).LineHeight(1.35).MaxLines(2)
 			})
 			if button.Clicked() {
 				p.SelectEpisode(index)

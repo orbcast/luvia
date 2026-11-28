@@ -69,16 +69,6 @@ const (
 	commentUnsupported
 )
 
-// Tab under the now-playing header.
-const (
-	tabEpisodes = iota
-	// tabDanmaku is the readable copy of the layer that flies over the
-	// picture: the same entries, listed, for a viewer who would rather read
-	// them. The tab says danmaku because that is what the list holds, a
-	// danmaku feed, not the source's review section.
-	tabDanmaku
-)
-
 // Deps are the collaborators the player reads and calls. OpenVideo is injectable
 // so tests can run without a system media framework; production uses video.OpenURL.
 type Deps struct {
@@ -175,19 +165,22 @@ type Page struct {
 	// frame instead of stepping on each one. It is set aside while the picture
 	// is paused or the layer off, because neither is a straight run of time.
 	layer layerClock
-	// commentWhy says why the layer over the picture is empty, so the panel
-	// can name the reason instead of showing an empty list.
-	commentWhy  commentWhy
-	panelHidden bool
-	cinema      bool
-	expanded    bool
-	tab         int
-	scrub       float64 // 0..1 while the viewer drags the track
-	scrubbing   bool
-	scrubHandle ui.Handle
-	scrubW      float32
-	redrawMu    sync.Mutex
-	redraw      func()
+	// commentWhy says why the layer over the picture is empty, so the layer
+	// can name the reason instead of reading as a broken player.
+	commentWhy commentWhy
+	// danmakuTried says the lookup for this episode has come back: before that
+	// the layer is not empty, it is still being filled, and a viewer who asked
+	// for it early is owed a wait rather than an answer.
+	danmakuTried bool
+	panelHidden  bool
+	cinema       bool
+	expanded     bool
+	scrub        float64 // 0..1 while the viewer drags the track
+	scrubbing    bool
+	scrubHandle  ui.Handle
+	scrubW       float32
+	redrawMu     sync.Mutex
+	redraw       func()
 	// now reads the monotonic clock the layer is timed by; a test puts its own
 	// here so it can walk time frame by frame instead of sleeping.
 	now func() time.Time
@@ -229,7 +222,7 @@ func (p *Page) Open(detail source.Detail, episodes []source.Episode, index int) 
 	p.passed, p.lastFailure = nil, nil
 	p.loading, p.err, p.notice, p.started = false, nil, noticeNone, false
 	p.playing, p.muted, p.showSubtitle, p.danmaku, p.panelHidden, p.cinema = true, true, false, false, true, false
-	p.expanded, p.tab, p.scrub, p.scrubbing = false, tabEpisodes, 0, false
+	p.expanded, p.scrub, p.scrubbing = false, 0, false
 	p.Start()
 }
 
@@ -416,6 +409,7 @@ func (p *Page) loadComments(episode source.Episode, gen uint64) {
 	p.commentGen++
 	epoch := p.commentGen
 	p.comments, p.commentWhy = nil, commentLoading
+	p.danmakuTried = false
 	run := p.deps.Run
 	title := p.detail.Title
 	// The source's own answers are taken here rather than in the callback, so
@@ -441,6 +435,7 @@ func (p *Page) loadComments(episode source.Episode, gen uint64) {
 				return
 			}
 			p.comments, p.commentWhy = items, why
+			p.danmakuTried = true
 			p.invalidate()
 		})
 	}()
@@ -1286,14 +1281,6 @@ func (p *Page) setCinema(on bool) {
 	p.invalidate()
 }
 func (p *Page) ToggleExpanded() { p.expanded = !p.expanded; p.invalidate() }
-
-func (p *Page) SelectTab(i int) {
-	if i != tabEpisodes && i != tabDanmaku {
-		return
-	}
-	p.tab = i
-	p.invalidate()
-}
 
 // Back leaves the player and returns what it opened. Leaving full screen is
 // part of leaving the player: the pages behind it want the window back.

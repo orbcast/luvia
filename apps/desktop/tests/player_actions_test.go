@@ -197,9 +197,6 @@ func TestPlayerControlsWithVideo(t *testing.T) {
 	page.ToggleFullScreen()
 	tt.Frame()
 	page.ToggleFullScreen()
-	page.SelectTab(1)
-	tt.Frame()
-	page.SelectTab(0)
 
 	page.Next()
 	apply(t, run)

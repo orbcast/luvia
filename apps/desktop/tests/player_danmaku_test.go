@@ -152,18 +152,65 @@ func TestPlayerSpreadsUntimedComments(t *testing.T) {
 		t.Fatal("a review far into the episode must not show at the start")
 	}
 
-	page.SelectTab(1)
+	// The panel keeps the episode list alone: the comments are read where they
+	// fly, so nothing lists them a second time beside the picture. The pill's
+	// own switch keeps its name, which is a control's label, not a list's.
 	page.RevealPanel()
 	tt.Frame()
-	// The tab lists the danmaku the episode carries, and it says so: a tab
-	// called Comments over a danmaku feed reads as a review section the source
-	// does not have.
-	if !tt.HasText(english.DanmakuTab()) || tt.HasText("Comments") {
-		t.Fatalf("the tab is not named for what it lists: %v", tt.Texts())
+	// "Danmaku" is still the name of the pill's switch, so the copy the panel
+	// must not carry is the tab's own pair: two pills side by side, one of them
+	// listing what the layer already shows. The comments themselves still fly,
+	// which is where the viewer reads them.
+	for _, unwanted := range []string{"Danmaku Episodes", "Episodes Danmaku", "Comments",
+		"ann " + "Second review"} {
+		if tt.HasText(unwanted) {
+			t.Fatalf("the panel still offers %q: %v", unwanted, tt.Texts())
+		}
 	}
-	for _, want := range []string{"First review", "Second review", "Third review", "ann", "cy"} {
+	if !tt.HasText(english.EpisodesTitle()) {
+		t.Fatalf("the panel has no name for the episode list it keeps: %v", tt.Texts())
+	}
+}
+
+// TestPlayerEpisodeTitleKeepsItsWords covers how an episode is labelled in the
+// panel's grid: a source titles its episodes with the date and what happened in
+// them, so the chip lets the title run onto a second line instead of cutting it
+// down to the date alone.
+func TestPlayerEpisodeTitleKeepsItsWords(t *testing.T) {
+	base, _ := sampleTitle()
+	titled := make([]source.Episode, len(base.episodes))
+	copy(titled, base.episodes)
+	// The titles the app was complained about carry far more than one chip line
+	// of a three-across grid held.
+	titled[0].Title = "2026-09-05 回顾 第三期 上"
+	titled[1].Title = "2026-09-06 回顾 第三期 下"
+	src := &commentingSource{detail: base.detail, episodes: titled}
+	store, err := library.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := make(chan func(), 8)
+	page := player.New(player.Deps{
+		Source: src, Library: store, Run: func(fn func()) { run <- fn },
+		OpenVideo: func(string) (*ui.VideoPlayer, error) { return newGIFPlayer(t), nil },
+	})
+	page.Open(src.detail, titled, 0)
+	apply(t, run)
+	apply(t, run)
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme := design.Theme(ui.DarkTheme())
+		c.SetTheme(&theme)
+		page.View(c)
+	}, 1280, 900)
+	tt.SetLocale("en")
+	page.RevealPanel()
+	tt.Frame()
+
+	// The whole title is in the chip's text: a chip that had to cut it says so
+	// by ending in an ellipsis, which the label never carries.
+	for _, want := range []string{titled[0].Title, titled[1].Title} {
 		if !pumpUntil(t, run, tt, want) {
-			t.Fatalf("the danmaku tab is missing %q: %v", want, tt.Texts())
+			t.Fatalf("the episode chip does not carry %q: %v", want, tt.Texts())
 		}
 	}
 }

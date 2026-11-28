@@ -176,7 +176,8 @@ func TestPlayerPrefersTheLookupOverTheRulesReviews(t *testing.T) {
 	if tt.HasText("A review with no moment") {
 		t.Fatal("the rule's review showed instead of the lookup's comment")
 	}
-	page2.SelectTab(1)
+	// The panel lists episodes, not comments: a review the lookup outranked must
+	// not be sitting anywhere the viewer can read it.
 	page2.RevealPanel()
 	tt.Frame()
 	if tt.HasText("A review with no moment") {
@@ -221,11 +222,10 @@ func TestPlayerSaysWhyTheLayerIsEmpty(t *testing.T) {
 			base, _ := sampleTitle()
 			src := &commentingSource{detail: base.detail, episodes: base.episodes}
 			page, run, tt := newDanmakuPage(t, src, c.lookup)
-			page.SelectTab(1)
 			page.RevealPanel()
 			tt.Frame()
 			if !pumpUntil(t, run, tt, c.want) {
-				t.Fatalf("the panel does not say %q: %v", c.want, tt.Texts())
+				t.Fatalf("the stage does not say %q: %v", c.want, tt.Texts())
 			}
 		})
 	}
@@ -255,11 +255,16 @@ func TestPlayerSaysWhenTheSourceHasNoComments(t *testing.T) {
 		page.View(c)
 	}, 1280, 900)
 	tt.SetLocale("en")
-	page.SelectTab(1)
 	page.RevealPanel()
 	tt.Frame()
+	// A source without comments says nothing until the layer is asked for: the
+	// stage is not a place to list what a source lacks before the viewer wants it.
+	if pumpUntil(t, run, tt, "This source carries no danmaku") {
+		t.Fatalf("the stage named a missing capability nobody asked for: %v", tt.Texts())
+	}
+	showDanmaku(t, page, tt)
 	if !pumpUntil(t, run, tt, "This source carries no danmaku") {
-		t.Fatalf("the panel does not name the missing capability: %v", tt.Texts())
+		t.Fatalf("the stage does not name the missing capability: %v", tt.Texts())
 	}
 }
 
@@ -345,7 +350,6 @@ func TestPlayerPrefersTheSourcesOwnDanmakuOverTheLookup(t *testing.T) {
 	if episodes[0].ID == "" {
 		t.Fatal("the source must be asked about the episode, not the show")
 	}
-	page.SelectTab(1)
 	page.RevealPanel()
 	tt.Frame()
 	if tt.HasText("A review with no moment") {
