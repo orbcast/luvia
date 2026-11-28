@@ -11,6 +11,7 @@ import (
 	"luvia/apps/desktop/internal/appwindow"
 	"luvia/apps/desktop/internal/catalog"
 	"luvia/apps/desktop/internal/danmaku"
+	"luvia/apps/desktop/internal/following"
 	"luvia/apps/desktop/internal/home"
 	"luvia/apps/desktop/internal/playintro"
 	"luvia/apps/desktop/internal/screens"
@@ -25,11 +26,12 @@ import (
 // from the source that answered it, and an answer still in flight lands in the
 // set that is no longer drawn.
 type pageSet struct {
-	discover *home.Page
-	catalog  *catalog.Page
-	search   *search.Page
-	settings *settings.Page
-	router   *screens.Router
+	discover  *home.Page
+	following *following.Page
+	catalog   *catalog.Page
+	search    *search.Page
+	settings  *settings.Page
+	router    *screens.Router
 }
 
 // pageDeps is what a set is built from: the profile holding the chosen source,
@@ -60,6 +62,15 @@ func newPageSet(deps pageDeps) *pageSet {
 		OnPlay:   openTitle,
 		OnDetail: openTitle,
 		OnAll:    func() { deps.shell.Navigate(appshell.Library) },
+	})
+	// The Following page reads the library the other pages write, so it needs
+	// no source of its own: following a title anywhere shows up here.
+	set.following = following.New(following.Deps{
+		Library:    deps.profile.library,
+		Images:     deps.profile.images,
+		OnPlay:     openTitle,
+		OnDetail:   openTitle,
+		Invalidate: deps.window.Refresh,
 	})
 	set.catalog = catalog.New(catalog.Deps{
 		Source:   deps.profile.source,
@@ -119,12 +130,14 @@ func (s *pageSet) navView(c *ui.Context, page appshell.Page) ui.Element {
 		return s.discover.View(c)
 	case appshell.Library:
 		return s.catalog.View(c)
+	case appshell.Following:
+		return s.following.View(c)
 	case appshell.Search:
 		return s.search.View(c)
 	case appshell.Settings:
 		return s.settings.View(c)
 	}
-	return placeholder(c, page)
+	return s.settings.View(c)
 }
 
 // sourceID is the id of the source in force, or "" when none loaded.

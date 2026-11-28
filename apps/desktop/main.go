@@ -13,7 +13,6 @@ import (
 
 	"luvia/apps/desktop/internal/appshell"
 	"luvia/apps/desktop/internal/appwindow"
-	"luvia/apps/desktop/internal/design"
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
 	"luvia/apps/desktop/internal/playintro"
@@ -269,18 +268,4 @@ func resourceDir() string {
 		return ""
 	}
 	return dir
-}
-
-func placeholder(c *ui.Context, page appshell.Page) ui.Element {
-	t := c.Theme()
-	m := locales.In(c.Locale())
-	width, _ := c.Size()
-	inset := design.Inset(width)
-	column := ui.Column(c).Fill().Background(t.Background).
-		Padding(56, inset, 40+design.BottomClearance(width), inset).Gap(6)
-	column.Children(func() {
-		ui.Text(c, page.Label(m)).FontSize(20).Bold().TextColor(t.Text)
-		ui.Text(c, m.PageComing()).FontSize(13).TextColor(t.TextMuted)
-	})
-	return column
 }
