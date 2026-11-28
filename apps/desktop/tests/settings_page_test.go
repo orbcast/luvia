@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"luvia/apps/desktop/internal/preferences"
 	"luvia/apps/desktop/internal/settings"
 )
 
@@ -35,7 +36,7 @@ func (p *fakePreferences) deps() settings.Deps {
 }
 
 func newPreferences() *fakePreferences {
-	return &fakePreferences{theme: mygo.ThemeSystem, locale: "en"}
+	return &fakePreferences{theme: preferences.DefaultTheme(), locale: "en"}
 }
 
 // choose opens the drop-down that shows trigger and picks option in it.
@@ -57,16 +58,17 @@ func TestSettingsOffersAppearanceAndLanguage(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
 	tt.SetLocale("en")
 	tt.Frame()
-	for _, want := range []string{"Settings", "Appearance", "Follow System", "Language", "English"} {
+	// The app opens dark, so the closed drop-down shows that choice.
+	for _, want := range []string{"Settings", "Appearance", "Dark", "Language", "English"} {
 		if !tt.HasText(want) {
 			t.Fatalf("missing %q in %v", want, tt.Texts())
 		}
 	}
-	if err := tt.Click("Follow System"); err != nil {
+	if err := tt.Click("Dark"); err != nil {
 		t.Fatalf("open appearance: %v", err)
 	}
 	tt.Frame()
-	for _, want := range []string{"Light", "Dark"} {
+	for _, want := range []string{"Follow System", "Light"} {
 		if !tt.HasText(want) {
 			t.Fatalf("missing %q among %v", want, tt.Texts())
 		}
@@ -79,11 +81,11 @@ func TestSettingsThemeChoiceIsSaved(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
 	tt.SetLocale("en")
 	tt.Frame()
-	choose(t, tt, "Follow System", "Dark")
-	if prefs.theme != mygo.ThemeDark {
-		t.Fatalf("theme = %q, want dark", prefs.theme)
+	choose(t, tt, "Dark", "Follow System")
+	if prefs.theme != mygo.ThemeSystem {
+		t.Fatalf("theme = %q, want system", prefs.theme)
 	}
-	choose(t, tt, "Dark", "Light")
+	choose(t, tt, "Follow System", "Light")
 	if prefs.theme != mygo.ThemeLight {
 		t.Fatalf("theme = %q, want light", prefs.theme)
 	}
@@ -94,13 +96,23 @@ func TestSettingsShowsExternalThemeChange(t *testing.T) {
 	page := settings.New(prefs.deps())
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 900, 600)
 	tt.SetLocale("en")
-	tt.Frame()
-	// The menu changes the preference behind the page's back.
 	prefs.theme = mygo.ThemeDark
 	tt.Frame()
-	choose(t, tt, "Dark", "Light")
-	if prefs.theme != mygo.ThemeLight {
-		t.Fatalf("page did not adopt the stored theme: %q", prefs.theme)
+	// The menu changes the preference behind the page's back, and the page
+	// shows it before the next frame draws the drop-down.
+	prefs.theme = mygo.ThemeLight
+	tt.Frame()
+	tt.Frame()
+	for _, want := range []string{"Light"} {
+		if !tt.HasText(want) {
+			t.Fatalf("page did not adopt the stored theme, missing %q in %v", want, tt.Texts())
+		}
+	}
+	// Choosing the theme in the page keeps it.
+	prefs.theme = mygo.ThemeDark
+	tt.Frame()
+	if !tt.HasText("Dark") {
+		t.Fatalf("page kept %v", tt.Texts())
 	}
 }
 

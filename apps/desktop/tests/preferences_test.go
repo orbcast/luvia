@@ -13,8 +13,8 @@ import (
 func TestThemePreferenceRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "preferences", "theme.json")
 	source, err := preferences.LoadTheme(path)
-	if err != nil || source != mygo.ThemeSystem {
-		t.Fatalf("first launch: %v %v", source, err)
+	if err != nil || source != mygo.ThemeDark {
+		t.Fatalf("first launch must open dark: %v %v", source, err)
 	}
 	for _, want := range []mygo.ThemeSource{mygo.ThemeDark, mygo.ThemeLight, mygo.ThemeSystem} {
 		if err := preferences.SaveTheme(path, want); err != nil {
@@ -38,8 +38,8 @@ func TestThemePreferenceFailures(t *testing.T) {
 			t.Fatal(err)
 		}
 		source, err := preferences.LoadTheme(path)
-		if err == nil || source != mygo.ThemeSystem {
-			t.Fatalf("bad file did not fall back: %s %v %v", data, source, err)
+		if err == nil || source != mygo.ThemeDark {
+			t.Fatalf("bad file did not fall back to dark: %s %v %v", data, source, err)
 		}
 	}
 	if _, err := preferences.LoadTheme(dir); err == nil {

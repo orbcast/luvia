@@ -13,8 +13,8 @@ func TestThemePlatformAdapter(t *testing.T) {
 	apply := func(value mygo.ThemeSource) { source = value }
 	path := filepath.Join(t.TempDir(), "theme.json")
 	preferences.RestoreTheme(path, apply)
-	if source != mygo.ThemeSystem {
-		t.Fatal("missing preference must follow system")
+	if source != mygo.ThemeDark {
+		t.Fatal("missing preference must open dark")
 	}
 	preferences.ChangeTheme(path, mygo.ThemeDark, apply)
 	if source != mygo.ThemeDark {
@@ -29,8 +29,8 @@ func TestThemePlatformAdapter(t *testing.T) {
 		t.Fatal(err)
 	}
 	preferences.RestoreTheme(path, apply)
-	if source != mygo.ThemeSystem {
-		t.Fatal("corrupt preference did not fall back")
+	if source != mygo.ThemeDark {
+		t.Fatal("corrupt preference did not fall back to dark")
 	}
 	preferences.ChangeTheme(filepath.Join(path, "blocked.json"), mygo.ThemeLight, apply)
 	if source != mygo.ThemeLight {

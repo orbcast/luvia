@@ -5,7 +5,8 @@ import (
 	"log"
 )
 
-// RestoreTheme applies a saved preference, falling back to the system on failure.
+// RestoreTheme applies a saved preference, falling back to the default theme
+// (dark) when none is stored or the file cannot be read.
 func RestoreTheme(path string, apply func(mygo.ThemeSource)) {
 	source, err := LoadTheme(path)
 	if err != nil {

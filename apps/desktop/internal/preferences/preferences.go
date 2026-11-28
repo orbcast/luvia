@@ -11,6 +11,13 @@ import (
 )
 
 // Only the theme preference is app-owned. MyGo owns locale and window state.
+// Dark is the theme of a first launch: the app is designed dark first, and a
+// reader can still choose to follow the system in the settings page or menu.
+const defaultTheme = mygo.ThemeDark
+
+// DefaultTheme is the theme used before any preference is stored.
+func DefaultTheme() mygo.ThemeSource { return defaultTheme }
+
 type themePreference struct {
 	Source mygo.ThemeSource `json:"source"`
 }
@@ -18,17 +25,17 @@ type themePreference struct {
 func LoadTheme(path string) (mygo.ThemeSource, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return mygo.ThemeSystem, nil
+		return defaultTheme, nil
 	}
 	if err != nil {
-		return mygo.ThemeSystem, err
+		return defaultTheme, err
 	}
 	var pref themePreference
 	if err := json.Unmarshal(data, &pref); err != nil {
-		return mygo.ThemeSystem, err
+		return defaultTheme, err
 	}
 	if !validTheme(pref.Source) {
-		return mygo.ThemeSystem, fmt.Errorf("invalid theme source %q", pref.Source)
+		return defaultTheme, fmt.Errorf("invalid theme source %q", pref.Source)
 	}
 	return pref.Source, nil
 }
