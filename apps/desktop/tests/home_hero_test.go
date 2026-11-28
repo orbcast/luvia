@@ -252,7 +252,11 @@ func TestHeroCoverLeadsWithThePoster(t *testing.T) {
 			if !(top[0] > 140 && top[2] < 110) {
 				t.Fatalf("cover top is %v at the chrome line, want the poster's red", top)
 			}
-			ground := sampleAt(t, canvas, width-20, y)
+			// The ground is the backdrop itself, still blue behind the copy: the
+			// side scrim's own ramp ends at SideEnd and the small colour left
+			// out there is the page fade's business, which TestHeroBlendsIntoThePage
+			// measures along the banner's foot.
+			ground := sampleAt(t, canvas, width-int(design.Inset(width))+24, y)
 			if ground[2] < 90 || ground[2] < ground[0]+60 {
 				t.Fatalf("banner ground is %v, want the backdrop's blue", ground)
 			}

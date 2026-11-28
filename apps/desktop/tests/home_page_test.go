@@ -9,10 +9,10 @@ import (
 
 	"luvia/apps/desktop/internal/appshell"
 	"luvia/apps/desktop/internal/design"
+	"luvia/apps/desktop/internal/following"
 	"luvia/apps/desktop/internal/home"
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/source"
-	"luvia/apps/desktop/locales"
 )
 
 // homeSource answers Home with a small document and nothing else.
@@ -126,12 +126,16 @@ func TestDiscoverShowsDetailsHint(t *testing.T) {
 	}
 }
 
-func TestShellShowsDiscoverAndPlaceholder(t *testing.T) {
+// TestShellShowsDiscoverAndFollowing mirrors the window wiring: the shell's
+// content follows the selected destination, so Discover hands over to the
+// Following page and comes back.
+func TestShellShowsDiscoverAndFollowing(t *testing.T) {
 	shell := appshell.New()
-	page, _, _, finished := newDiscoverPage(t)
+	page, store, _, finished := newDiscoverPage(t)
+	follows := following.New(following.Deps{Library: store})
 	shell.SetContent(func(c *ui.Context) ui.Element {
-		if shell.Selected() != appshell.Discover {
-			return placeholderLike(c, shell.Selected())
+		if shell.Selected() == appshell.Following {
+			return follows.View(c)
 		}
 		return page.View(c)
 	})
@@ -147,8 +151,8 @@ func TestShellShowsDiscoverAndPlaceholder(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText(english.PageComing()) {
-		t.Fatalf("placeholder missing in %v", tt.Texts())
+	if !tt.HasText(english.FollowingEmpty()) {
+		t.Fatalf("following page missing in %v", tt.Texts())
 	}
 	if err := tt.Click(appshell.Discover.Label(english)); err != nil {
 		t.Fatal(err)
@@ -157,19 +161,6 @@ func TestShellShowsDiscoverAndPlaceholder(t *testing.T) {
 	if !tt.HasText("Dune") {
 		t.Fatalf("discover content did not come back in %v", tt.Texts())
 	}
-}
-
-// placeholderLike mirrors the window's placeholder page without pulling the
-// main package into a test binary.
-func placeholderLike(c *ui.Context, page appshell.Page) ui.Element {
-	t := c.Theme()
-	m := locales.In(c.Locale())
-	column := ui.Column(c).Fill().Background(t.Background)
-	column.Children(func() {
-		ui.Text(c, page.Label(m)).FontSize(20)
-		ui.Text(c, m.PageComing()).FontSize(13)
-	})
-	return column
 }
 
 func TestHeroActionsShareOneHeight(t *testing.T) {

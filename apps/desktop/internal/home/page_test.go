@@ -348,18 +348,41 @@ func TestSplitBadgeSeparatesHeadline(t *testing.T) {
 }
 
 func TestHeroShowsQualityAndBrandBadges(t *testing.T) {
+	home := sampleHome()
+	home.Sections[1].Cards[0].Remarks = "4K HDR · Dolby Vision"
+	page, finished := newPage(t, Deps{Source: &fakeSource{home: home}})
+	load(t, page, finished)
+	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
+	tt.SetLocale("en")
+	tt.Frame()
+
+	// The print's own remarks state the brand, so the hero wears both chips:
+	// the resolution and the brand the source named.
+	for _, want := range []string{"4K", "Dolby Vision"} {
+		if !tt.HasText(want) {
+			t.Fatalf("missing %q in %v", want, tt.Texts())
+		}
+	}
+}
+
+func TestHeroBrandBadgeNeedsTheSourcesWord(t *testing.T) {
+	// The sample's Dune states neither brand nor an unusual resolution, so the
+	// hero wears the standard HD chip and no brand pill at all: a brand the
+	// source never named is a claim about the print, not a decoration.
 	page, finished := newPage(t, Deps{Source: &fakeSource{home: sampleHome()}})
 	load(t, page, finished)
 	tt := ui.NewTester(func(c *ui.Context) { page.View(c) }, 1100, 720)
 	tt.SetLocale("en")
 	tt.Frame()
 
-	// Dune is not flagged 4K, so the hero wears the HD quality chip beside the
-	// Dolby Vision brand chip.
-	for _, want := range []string{"1080P", "Dolby Vision"} {
-		if !tt.HasText(want) {
-			t.Fatalf("missing %q in %v", want, tt.Texts())
-		}
+	if tt.HasText("Dolby Vision") {
+		t.Fatalf("brand pill without the source's word: %v", tt.Texts())
+	}
+	if !tt.HasText("1080P") {
+		t.Fatalf("missing the HD chip in %v", tt.Texts())
+	}
+	if hasBrand(source.Card{Tags: []string{"Dolby Vision"}}) != true {
+		t.Fatal("a tag naming the brand did not flag it")
 	}
 }
 

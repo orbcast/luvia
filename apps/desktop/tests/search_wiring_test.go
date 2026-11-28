@@ -81,9 +81,6 @@ func TestSearchDestinationReplacesThePlaceholder(t *testing.T) {
 	if !tt.HasText(m.SearchIdle()) {
 		t.Fatalf("search destination did not draw its page: %v", tt.Texts())
 	}
-	if tt.HasText(m.PageComing()) {
-		t.Fatalf("search still shows the placeholder: %v", tt.Texts())
-	}
 
 	page.Search("dune")
 	select {

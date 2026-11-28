@@ -12,6 +12,7 @@ import (
 	"luvia/apps/desktop/internal/design"
 	"luvia/apps/desktop/internal/icons"
 	"luvia/apps/desktop/internal/library"
+	"luvia/apps/desktop/internal/poster"
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/locales"
 )
@@ -21,17 +22,21 @@ const (
 	// narrows; the column count follows from it.
 	minCardWidth  = 150
 	heroMinHeight = 320
-	heroMaxHeight = 620
+	heroMaxHeight = 430
 	// heroCoverShare is how much of the window's height the banner's cover
 	// takes in the wide layout, and heroBreath the room the banner leaves below
 	// the cover and its copy. A docked page sizes its banner by heroDockedShare
 	// instead, because its copy sits beside a smaller cover.
-	heroCoverShare  = 0.38
-	heroBreath      = 48
-	heroDockedShare = 0.52
+	heroCoverShare  = 0.36
+	heroBreath      = 40
+	heroDockedShare = 0.48
+	// heroShortHeight is the window height under which the banner stops
+	// following the window and moves to its floor, because a banner that
+	// tracks a 400-pixel window would push its own copy off the bottom.
+	heroShortHeight = 560
 	captionWidth    = 760
 	actionHeight    = 46
-	sectionGap      = 44
+	sectionGap      = 40
 	cardGap         = 12
 	slideWidth      = 66
 	slideHeight     = 38
@@ -45,14 +50,22 @@ const (
 	dayPosterMinWidth = 110
 
 	// coverGap separates the banner's cover from its copy, coverRadius rounds
-	// that cover, and heroSynopsisLines is how much of a title's synopsis the
-	// banner shows before an ellipsis.
-	coverGap          = 28
-	coverRadius       = 16
-	heroSynopsisLines = 3
-	// coverRatio is a poster's height over its width, so the hero cover keeps
-	// the artwork's own shape instead of a hero-sized crop.
-	coverRatio = 1.5
+	// that cover, and coverRatio is a poster's height over its width, so the
+	// hero cover keeps the artwork's own shape instead of a hero-sized crop.
+	coverGap    = 28
+	coverRadius = 16
+	coverRatio  = poster.Ratio
+
+	// continueScrim is how tall the shading under a continue-watching frame's
+	// track and play mark is, in share of the frame's height and in pixels.
+	continueScrimShare = 0.55
+	continueScrimMin   = 56
+
+	// dayDot is the mark a day with updates wears in a window too narrow for
+	// its count: the count is dropped, the news is not.
+	dayDot = 5
+	// dayCountWidth is the width under which the day drops its count.
+	dayCountWidth = 76
 )
 
 // View builds the Discover page inside the AppShell's content area.
@@ -63,20 +76,27 @@ func (p *Page) View(c *ui.Context) ui.Element {
 	m := locales.In(c.Locale())
 	width, height := c.Size()
 	snap := p.snapshot()
+	// One frame, one banner: the sections and the slide the picture shows are
+	// read together, so a source answer that lands mid-frame cannot leave the
+	// frame a slide index its cards no longer have.
+	featured, _ := p.banner()
+	_, err := p.state()
 
 	scroll := ui.Scroll(c).Fill().Background(t.Background).ScrollbarAxes(false, true)
 	scroll.Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			switch {
-			case len(p.featured) > 0:
+			case len(featured) > 0:
 				p.heroView(c, t, m, width, height)
 				p.sectionView(c, t, m, snap, width)
-			case p.err != nil:
-				p.errorView(c, t, m)
+			case err != nil:
+				p.errorView(c, t, m, err)
 			default:
-				ui.Column(c).FillWidth().Padding(60, design.Inset(width)).Gap(8).Children(func() {
-					ui.Text(c, m.HomeLoading()).FontSize(14).TextColor(t.TextMuted)
-				})
+				ui.Column(c).FillWidth().
+					Padding(design.PageTopInset(c.TitleBar().Bottom), design.Inset(width)).Gap(8).
+					Children(func() {
+						ui.Text(c, m.HomeLoading()).FontSize(14).TextColor(t.TextMuted)
+					})
 			}
 		})
 	})
@@ -85,7 +105,11 @@ func (p *Page) View(c *ui.Context) ui.Element {
 
 func (p *Page) heroView(c *ui.Context, t *ui.Theme, m locales.Messages, width, height float32) {
 	art := design.OnArtwork(t)
-	card := p.featured[p.hero]
+	featured, slide := p.banner()
+	if slide >= len(featured) {
+		return
+	}
+	card := featured[slide]
 	heroHeight, coverHeight := heroBand(c.TitleBar().Bottom, width, height)
 	hero := ui.Box(c).FillWidth().Height(heroHeight).Clip()
 	hero.Children(func() {
@@ -101,8 +125,9 @@ func (p *Page) heroView(c *ui.Context, t *ui.Theme, m locales.Messages, width, h
 			Angle: 90,
 			Stops: []ui.GradientStop{
 				{Color: art.ScrimSides, At: 0},
-				{Color: art.Deep, At: art.SideMid},
-				{Color: ui.Transparent, At: art.SideEnd},
+				{Color: art.ScrimSides.Mix(art.Deep, art.SideMid), At: art.SideMid},
+				{Color: art.Deep.Mix(ui.Transparent, art.SideEnd), At: art.SideEnd},
+				{Color: ui.Transparent, At: 1},
 			},
 		})
 		ui.Box(c).Absolute().Left(0).Right(0).Top(0).Bottom(0).LinearGradient(ui.LinearGradient{
@@ -133,16 +158,21 @@ func (p *Page) heroView(c *ui.Context, t *ui.Theme, m locales.Messages, width, h
 // heroBand returns the banner's height and its cover's height. The cover follows
 // the window's height, and the banner hugs it: the cover hangs from the chrome
 // line, the copy sits on its bottom edge, and heroBreath is the room the banner
-// leaves below that band before the page's sections begin. A docked page stacks
-// the copy beside the cover instead, so its banner keeps to a share of the window
-// and the cover stays a thumbnail.
+// leaves below that band before the page's sections begin. A short window stops
+// the banner from growing, so the copy keeps its lines instead of being clipped;
+// a docked page stacks the copy beside the cover and keeps to a share of the
+// window, with the cover a thumbnail.
 func heroBand(barBottom, width, height float32) (heroHeight, coverHeight float32) {
 	if design.Docked(width) {
-		heroHeight = clamp(height*heroDockedShare, 300, heroMaxHeight)
-		coverHeight = clamp(heroHeight*0.5, 138, 200)
+		heroHeight = clamp(height*heroDockedShare, 280, heroMaxHeight)
+		coverHeight = clamp(heroHeight*0.5, 132, 190)
 		return heroHeight, coverHeight
 	}
-	coverHeight = clamp(height*heroCoverShare, 200, 380)
+	window := height
+	if window < heroShortHeight {
+		window = heroShortHeight
+	}
+	coverHeight = clamp(window*heroCoverShare, 192, 330)
 	heroHeight = design.ChromeTop(barBottom) + coverHeight + heroBreath
 	if heroHeight < heroMinHeight {
 		heroHeight = heroMinHeight
@@ -154,10 +184,10 @@ func heroBand(barBottom, width, height float32) (heroHeight, coverHeight float32
 // the hero's ground, a wash of its own colors, while the cover card and the
 // copy carry the details. It stays opaque long enough to meet the page, so the
 // banner still ends without a line.
-func (p *Page) artwork(c *ui.Context, t *ui.Theme, backdrop, poster string) {
+func (p *Page) artwork(c *ui.Context, t *ui.Theme, backdrop, posterURL string) {
 	url := backdrop
 	if url == "" {
-		url = poster
+		url = posterURL
 	}
 	if p.deps.Images != nil {
 		if bitmap := p.deps.Images.Bitmap(url); bitmap != nil {
@@ -186,23 +216,23 @@ func (p *Page) artwork(c *ui.Context, t *ui.Theme, backdrop, poster string) {
 func (p *Page) heroCaption(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card, heroHeight, coverHeight, width float32) float32 {
 	art := design.OnArtwork(t)
 	inset := design.Inset(width)
-	titleSize := clamp(heroHeight*0.135, 32, 54)
+	titleSize := clamp(heroHeight*0.13, 30, 50)
 	available := width - 2*inset
 	copyWidth := clamp(width*0.52, 420, captionWidth)
-	bottom, gap := float32(36), float32(coverGap)
+	bottom, gap := float32(32), float32(coverGap)
 	chromeTop := design.ChromeTop(c.TitleBar().Bottom)
 	coverWidth := coverHeight / coverRatio
 	docked := design.Docked(width)
 	if docked {
 		// Narrow: the copy owns what the cover leaves and keeps clear of the
 		// dock.
-		titleSize = clamp(heroHeight*0.12, 24, 34)
+		titleSize = clamp(heroHeight*0.11, 22, 32)
 		copyWidth = available
-		bottom, gap = 20, 14
+		bottom, gap = 18, 14
 	}
 	// A poster never takes more than its share of the line, and the copy keeps
 	// its own room beside it.
-	coverWidth = clamp(coverWidth, 120, available*0.38)
+	coverWidth = clamp(coverWidth, 112, available*0.38)
 	if room := available - coverWidth - gap; copyWidth > room {
 		copyWidth = room
 	}
@@ -220,9 +250,9 @@ func (p *Page) heroCaption(c *ui.Context, t *ui.Theme, m locales.Messages, card 
 			cover.AlignSelf(ui.Start)
 		}
 
-		column := ui.Column(c).Width(copyWidth).Gap(14)
+		column := ui.Column(c).Width(copyWidth).Gap(12)
 		if docked {
-			column.Gap(10)
+			column.Gap(9)
 		}
 		column.Children(func() {
 			title := ui.Text(c, card.Title).FontSize(titleSize).Bold().TextColor(art.Ink)
@@ -235,10 +265,10 @@ func (p *Page) heroCaption(c *ui.Context, t *ui.Theme, m locales.Messages, card 
 			p.heroMeta(c, t, m, card)
 
 			if card.Overview != "" {
-				// Three lines of synopsis, cut with an ellipsis: enough to place
-				// the title without turning the banner into a page of text.
-				ui.Text(c, card.Overview).FontSize(13).LineHeight(1.6).
-					TextColor(art.Muted).MaxLines(heroSynopsisLines)
+				// Two lines of synopsis: enough to place the title, short
+				// enough that a 400-pixel window still shows the actions.
+				ui.Text(c, card.Overview).FontSize(13).LineHeight(1.55).
+					TextColor(art.Muted).MaxLines(2)
 			}
 
 			p.heroActions(c, t, m, card)
@@ -295,10 +325,10 @@ func (p *Page) heroMeta(c *ui.Context, t *ui.Theme, m locales.Messages, card sou
 	}
 	ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
 		if len(parts) > 0 {
-			ui.Text(c, strings.Join(parts, " · ")).FontSize(12).TextColor(art.Muted)
+			ui.Text(c, strings.Join(parts, m.ListSeparator())).FontSize(12).TextColor(art.Muted)
 		}
 		p.qualityBadge(c, t, m, card)
-		p.brandBadge(c, m)
+		p.brandBadge(c, t, m, card)
 	})
 }
 
@@ -320,9 +350,14 @@ func (p *Page) qualityBadge(c *ui.Context, t *ui.Theme, m locales.Messages, card
 	})
 }
 
-// brandBadge tags a Dolby Vision title with its brand pill: a small purple
-// mark beside the pale label over a near-black chip, legible on both heroes.
-func (p *Page) brandBadge(c *ui.Context, m locales.Messages) {
+// brandBadge tags a title with its brand pill, and only when the source itself
+// states the brand: a print's remarks or tags carry the mark, so a title that
+// says nothing gets no chip. An unconditional badge would put a brand on every
+// slide, which is a claim about the print that no source made.
+func (p *Page) brandBadge(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
+	if !hasBrand(card) {
+		return
+	}
 	bg, mark, fg := design.BrandBadge()
 	ui.Row(c).AlignItems(ui.Center).Gap(6).Radius(6).Padding(4, 9).Background(bg).Children(func() {
 		ui.Box(c).Size(11, 11).Radius(3).Background(mark)
@@ -338,6 +373,19 @@ func hasQuality(card source.Card, want string) bool {
 	}
 	for _, tag := range card.Tags {
 		if strings.Contains(strings.ToUpper(tag), want) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasBrand reports whether the source states the title's print is Dolby Vision.
+// The mark is the brand's, so it is only shown on the source's own word: in the
+// remarks, or among one of the tags.
+func hasBrand(card source.Card) bool {
+	for _, candidate := range append([]string{card.Remarks}, card.Tags...) {
+		lower := strings.ToLower(candidate)
+		if strings.Contains(lower, "dolby vision") || strings.Contains(lower, "dolby-vision") {
 			return true
 		}
 	}
@@ -399,7 +447,11 @@ func (p *Page) heroActions(c *ui.Context, t *ui.Theme, m locales.Messages, card 
 			follow.TextColor(t.Accent)
 		}
 		follow.Children(func() {
-			ui.Icon(c, icons.Parse("bookmark-linear")).Size(17, 17)
+			name := "bookmark-linear"
+			if following {
+				name = "bookmark-bold"
+			}
+			ui.Icon(c, icons.Parse(name)).Size(17, 17)
 		})
 		if follow.Clicked() {
 			p.toggleFollow(card)
@@ -412,7 +464,8 @@ func (p *Page) heroActions(c *ui.Context, t *ui.Theme, m locales.Messages, card 
 // as the copy's own bottom so the slide's two clusters read together.
 func (p *Page) heroSlides(c *ui.Context, t *ui.Theme, width float32, inline bool, bottom float32) {
 	art := design.OnArtwork(t)
-	if len(p.featured) < 2 {
+	featured, hero := p.banner()
+	if len(featured) < 2 {
 		return
 	}
 	w, h := float32(slideWidth), float32(slideHeight)
@@ -424,14 +477,14 @@ func (p *Page) heroSlides(c *ui.Context, t *ui.Theme, width float32, inline bool
 		row.Absolute().Right(design.ContentMargin).Bottom(bottom)
 	}
 	row.Children(func() {
-		ui.Text(c, fmt.Sprintf("%02d / %02d", p.hero+1, len(p.featured))).FontSize(11).
+		ui.Text(c, fmt.Sprintf("%02d / %02d", hero+1, len(featured))).FontSize(11).
 			TextColor(art.Muted).MarginEnd(4)
-		for i, slide := range p.featured {
+		for i, slide := range featured {
 			index := i
 			ui.Column(c).Width(w).Gap(5).Children(func() {
 				thumb := ui.ButtonBase(c).Size(w, h).Radius(5).Clip().
 					Background(t.Surface).Label(slide.Title).Tooltip(slide.Title)
-				if index == p.hero {
+				if index == hero {
 					thumb.Border(1.5, art.Ink)
 				}
 				thumb.Children(func() {
@@ -449,7 +502,7 @@ func (p *Page) heroSlides(c *ui.Context, t *ui.Theme, width float32, inline bool
 					p.Show(index)
 				}
 				bar := ui.Box(c).FillWidth().Height(2).Radius(1).Background(art.Track)
-				if index == p.hero {
+				if index == hero {
 					bar.Background(t.Accent)
 				}
 			})
@@ -459,7 +512,7 @@ func (p *Page) heroSlides(c *ui.Context, t *ui.Theme, width float32, inline bool
 
 func (p *Page) sectionView(c *ui.Context, t *ui.Theme, m locales.Messages, snap library.Snapshot, width float32) {
 	inset := design.Inset(width)
-	ui.Column(c).FillWidth().Padding(24, inset, 64+design.BottomClearance(width), inset).
+	ui.Column(c).FillWidth().Padding(design.PageTop, inset, 64+design.BottomClearance(width), inset).
 		Gap(sectionGap).Children(func() {
 		p.continueSection(c, t, m, snap, width)
 		p.weekSection(c, t, m, snap, width)
@@ -535,11 +588,26 @@ func (p *Page) continueCard(c *ui.Context, t *ui.Theme, m locales.Messages, prog
 						ui.Image(c, bitmap).Fill().Fit(ui.Cover)
 					}
 				}
+				// A still can be almost white, so the track and the play mark
+				// get a foot of their own: the shading is the frame's height,
+				// so it holds on a wide card and a narrow one alike.
+				height := float32(continueScrimMin)
+				if share := w * 9 / 16 * continueScrimShare; share > height {
+					height = share
+				}
+				ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(height).LinearGradient(ui.LinearGradient{
+					Angle: 180,
+					Stops: []ui.GradientStop{
+						{Color: ui.Transparent, At: 0},
+						{Color: art.Foot.Mix(ui.Transparent, 0.35), At: 0.45},
+						{Color: art.Foot, At: 1},
+					},
+				})
 				if progress.Duration > 0 {
-					p.track(c, t, progress, w)
+					p.track(c, t, progress)
 				}
 				ui.Icon(c, icons.Parse("play-bold")).Absolute().Right(10).Bottom(14).Size(12, 12).
-					TextColor(art.Ink)
+					TextColor(art.Ink).Shadow(0, 1, 2, 0, design.PlayMarkShadow())
 			})
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
 				ui.Text(c, progress.Title).FontSize(13).Bold().TextColor(t.Text).MaxLines(1)
@@ -556,13 +624,15 @@ func (p *Page) continueCard(c *ui.Context, t *ui.Theme, m locales.Messages, prog
 	}
 }
 
-// track draws the watched part of an episode along the bottom of its frame.
-func (p *Page) track(c *ui.Context, t *ui.Theme, progress library.Progress, w float32) {
+// track draws the watched part of an episode along the bottom of its frame. The
+// filled part goes first and the unfilled one covers the rest of the line, so
+// the accent is what a viewer sees as progress.
+func (p *Page) track(c *ui.Context, t *ui.Theme, progress library.Progress) {
 	art := design.OnArtwork(t)
 	watched := float32(progress.Position.Seconds() / progress.Duration.Seconds() * 100)
 	ui.Row(c).Absolute().Left(10).Right(10).Bottom(10).Height(3).Radius(2).Children(func() {
-		ui.Box(c).Height(3).Radius(2).Background(t.Accent).WidthPercent(clamp(watched, 0, 100))
 		ui.Box(c).Height(3).Radius(2).Background(art.Track).FillWidth()
+		ui.Box(c).Height(3).Radius(2).Background(t.Accent).WidthPercent(clamp(watched, 0, 100))
 	})
 }
 
@@ -634,8 +704,8 @@ func (p *Page) weekSection(c *ui.Context, t *ui.Theme, m locales.Messages, snap 
 			}
 			posterW := clamp((available-(columns-1)*posterGap)/columns, 120, 220)
 			ui.Row(c).FillWidth().Gap(posterGap).AlignItems(ui.Start).Wrap().Children(func() {
-				for _, follow := range updates {
-					p.posterCard(c, t, m, follow, posterW)
+				for i, follow := range updates {
+					p.posterCard(c, t, m, follow, posterW, i)
 				}
 			})
 		}
@@ -661,26 +731,30 @@ func (p *Page) dayPosters(c *ui.Context, t *ui.Theme, m locales.Messages, schedu
 	posterW := clamp((available-(columns-1)*posterGap)/columns, 96, 220)
 	ui.Row(c).FillWidth().Gap(posterGap).AlignItems(ui.Start).Wrap().Children(func() {
 		for i := 0; i < limit; i++ {
-			p.updateCard(c, t, m, scheduled[i], posterW)
+			p.updateCard(c, t, m, scheduled[i], posterW, i)
 		}
 	})
 }
 
+// dayCell is one day of the week strip. The day the viewer picked is the cell's
+// focus: it takes the accent ring and an accent wash. Today is only a quiet
+// marker on top of that, a small accent dot beside its weekday, so the two
+// states never fight for the same cell and picking another day stays visible.
+// A narrow cell drops its count for a dot, so a day with news still says so.
 func (p *Page) dayCell(c *ui.Context, t *ui.Theme, m locales.Messages, day time.Time, index, today int, w float32, snap library.Snapshot) {
 	count := len(updatesOn(snap.Follows, day))
 	if scheduled, ok := p.dayUpdates(index); ok && len(scheduled) > 0 {
 		count = len(scheduled)
 	}
+	selected := index == p.selected
 	cell := ui.ButtonBase(c).Width(w).Radius(14).Padding(10, 12).Label(m.Updates(count))
 	ink := t.TextMuted
 	switch {
-	case index == today:
-		cell.Background(t.Inverse)
-		ink = t.InverseText
-	case index == p.selected:
-		cell.Background(t.Surface)
+	case selected:
+		cell.Background(design.CategoryWash(t)).Border(1.5, t.Accent)
 		ink = t.Text
 	default:
+		cell.Background(t.Surface)
 		if cell.Hovered() {
 			cell.Background(t.SurfaceHover)
 			ink = t.Text
@@ -689,16 +763,25 @@ func (p *Page) dayCell(c *ui.Context, t *ui.Theme, m locales.Messages, day time.
 	cell.Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
-				weekday := strings.ToUpper(i18n.FormatDate(c.Locale(), day, i18n.DateOptions{Skeleton: "EEE"}))
-				if index == today {
-					weekday = m.Today()
-				}
-				ui.Text(c, weekday).FontSize(10).TextColor(ink)
+				ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
+					weekday := strings.ToUpper(i18n.FormatDate(c.Locale(), day, i18n.DateOptions{Skeleton: "EEE"}))
+					if index == today {
+						weekday = m.Today()
+					}
+					ui.Text(c, weekday).FontSize(10).TextColor(ink)
+					if index == today {
+						ui.Box(c).Size(4, 4).Radius(2).Background(t.Accent)
+					}
+				})
 				ui.Text(c, fmt.Sprintf("%02d", day.Day())).FontSize(19).Bold().TextColor(ink)
 			})
 			ui.Spacer(c)
-			if count > 0 && w >= 76 {
+			switch {
+			case count == 0:
+			case w >= dayCountWidth:
 				ui.Text(c, fmt.Sprint(count)).FontSize(12).TextColor(ink)
+			default:
+				ui.Box(c).Size(dayDot, dayDot).Radius(dayDot / 2).Background(t.Accent)
 			}
 		})
 	})
@@ -709,61 +792,30 @@ func (p *Page) dayCell(c *ui.Context, t *ui.Theme, m locales.Messages, day time.
 
 // updateCard is one title the source schedules for a day: its poster, its title
 // and the status line the source states, e.g. how far the episodes have come.
-func (p *Page) updateCard(c *ui.Context, t *ui.Theme, m locales.Messages, update source.Update, w float32) {
-	button := ui.ButtonBase(c).Width(w).Radius(12).Label(update.Title).Background(ui.Transparent)
-	button.Children(func() {
-		ui.Column(c).FillWidth().Gap(7).Children(func() {
-			p.updatedPoster(c, t, m, update.PosterURL, w)
-			ui.Text(c, update.Title).FontSize(13).Bold().TextColor(t.Text).MaxLines(1)
-			if update.Note != "" {
-				// The note is the source's own status line, data rather than
-				// interface copy, so it shows as reported, in whatever
-				// language the source states it.
-				ui.Text(c, update.Note).FontSize(12).TextColor(t.TextMuted).MaxLines(1)
-			}
-		})
-	})
-	if button.Clicked() {
-		p.detail(update.Card)
-	}
+func (p *Page) updateCard(c *ui.Context, t *ui.Theme, m locales.Messages, update source.Update, w float32, index int) {
+	bg, fg := design.PosterStatus(true)
+	p.poster.View(c, t, m, poster.Card{
+		Ref:       update.Card.Ref,
+		Title:     update.Title,
+		PosterURL: update.Card.PosterURL,
+		// These cards are the week's fresh updates, so they wear the updating
+		// status pill. The note is the source's own status line, data rather
+		// than interface copy, so it shows as reported.
+		Badges:   []poster.Badge{{Label: m.StatusUpdating(), Background: bg, Ink: fg}},
+		Subtitle: update.Note,
+	}, w, index, poster.Actions{Open: func() { p.detail(update.Card) }})
 }
 
-// updatedPoster paints a followed title's artwork, or a quiet surface while it
-// downloads and after it fails.
-func (p *Page) updatedPoster(c *ui.Context, t *ui.Theme, m locales.Messages, posterURL string, w float32) {
-	frame := ui.Box(c).FillWidth().Height(w * 1.5).Radius(12).Clip().Background(t.Surface)
-	frame.Children(func() {
-		if p.deps.Images != nil {
-			if bitmap := p.deps.Images.Bitmap(posterURL); bitmap != nil {
-				ui.Image(c, bitmap).Fill().Fit(ui.Cover)
-			}
-		}
-		// These cards are the week's fresh updates, so they wear the
-		// updating status pill.
-		bg, fg := design.PosterStatus(true)
-		ui.Row(c).Absolute().Left(8).Top(8).Radius(5).Padding(2, 7).Background(bg).Children(func() {
-			ui.Text(c, m.StatusUpdating()).FontSize(10).Bold().TextColor(fg)
-		})
-	})
-}
-
-func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, follow library.Follow, w float32) {
+func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, follow library.Follow, w float32, index int) {
 	card := source.Card{Ref: follow.Media, Title: follow.Title, PosterURL: follow.PosterURL}
-	button := ui.ButtonBase(c).Width(w).Radius(12).Label(follow.Title).Background(ui.Transparent)
-	button.Children(func() {
-		ui.Column(c).FillWidth().Gap(7).Children(func() {
-			// The update date follows under the title, the one fact the
-			// library keeps about a follow besides its artwork.
-			p.updatedPoster(c, t, m, follow.PosterURL, w)
-			ui.Text(c, follow.Title).FontSize(13).Bold().TextColor(t.Text).MaxLines(1)
-			if meta := p.followMeta(c, follow); meta != "" {
-				ui.Text(c, meta).FontSize(11).TextColor(t.TextMuted).MaxLines(1)
-			}
-		})
-	})
-	if button.Clicked() {
-		p.detail(card)
-	}
+	p.poster.View(c, t, m, poster.Card{
+		Ref:       follow.Media,
+		Title:     follow.Title,
+		PosterURL: follow.PosterURL,
+		// The update date under the title, the one fact the library keeps
+		// about a follow besides its artwork.
+		Subtitle: p.followMeta(c, follow),
+	}, w, index, poster.Actions{Open: func() { p.detail(card) }})
 }
 
 // followMeta writes the day a followed series last updated, the one fact the
@@ -776,27 +828,32 @@ func (p *Page) followMeta(c *ui.Context, follow library.Follow) string {
 }
 
 func (p *Page) emptyPanel(c *ui.Context, t *ui.Theme, title, hint string) {
-	ui.Column(c).FillWidth().Radius(14).Background(t.Surface).Padding(18, 20).Gap(4).Children(func() {
+	ui.Column(c).FillWidth().Radius(14).Background(t.Surface).Border(1, t.Border).
+		Padding(18, 20).Gap(4).Children(func() {
 		ui.Text(c, title).FontSize(13).Bold().TextColor(t.Text)
 		ui.Text(c, hint).FontSize(12).TextColor(t.TextMuted)
 	})
 }
 
-func (p *Page) errorView(c *ui.Context, t *ui.Theme, m locales.Messages) {
+// errorView is the page's failure: the text stays clear of the floating
+// navigation, and the failure itself is passed in rather than read from the
+// page, so one frame draws one answer.
+func (p *Page) errorView(c *ui.Context, t *ui.Theme, m locales.Messages, err error) {
 	// The inset keeps the text clear of the floating navigation, and the
 	// retry button is sized to its label rather than the page: a failure to
 	// load is a short message, and a full-width button reads as the point of
 	// the page.
 	width, _ := c.Size()
-	ui.Column(c).FillWidth().Padding(80, design.Inset(width)).Gap(12).Children(func() {
+	ui.Column(c).FillWidth().Padding(design.PageTopInset(c.TitleBar().Bottom), design.Inset(width)).
+		Gap(12).Children(func() {
 		ui.Text(c, m.HomeError()).FontSize(18).Bold().TextColor(t.Text)
-		if p.err != nil {
-			ui.Text(c, p.err.Error()).FontSize(12).TextColor(t.TextMuted).MaxLines(3)
+		if err != nil {
+			ui.Text(c, err.Error()).FontSize(12).TextColor(t.TextMuted).MaxLines(3)
 		}
 		// A signed source fails this way for one fixable reason: the machine
 		// has no value for the variable the rule names. Saying so here saves
 		// a reader from reading a signature error that looks like a bug.
-		if kind, ok := source.KindOf(p.err); ok && kind == source.ErrUnauthorized {
+		if kind, ok := source.KindOf(err); ok && kind == source.ErrUnauthorized {
 			ui.Text(c, m.AccessKeyNeeded()).FontSize(12).TextColor(t.TextMuted)
 		}
 		ui.Row(c).Children(func() {
@@ -842,8 +899,6 @@ func (p *Page) timeLeft(m locales.Messages, d time.Duration) string {
 	}
 	return m.TimeLeft(strings.Join(parts, " "))
 }
-
-func cardWidth(heroHeight float32) float32 { return heroHeight * 1.1 }
 
 func clamp(value, low, high float32) float32 {
 	if value < low {

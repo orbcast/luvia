@@ -424,14 +424,14 @@ func TestBookmarkFollowsResult(t *testing.T) {
 	if page.isFollowing(ref) {
 		t.Fatal("result starts followed")
 	}
-	if err := tt.Click("Favorites"); err != nil {
+	if err := tt.Click("Follow"); err != nil {
 		t.Fatalf("click bookmark: %v", err)
 	}
 	tt.Frame()
 	if !page.isFollowing(ref) {
 		t.Fatal("bookmark did not follow the result")
 	}
-	if err := tt.Click("Favorites"); err != nil {
+	if err := tt.Click("Following"); err != nil {
 		t.Fatalf("click bookmark again: %v", err)
 	}
 	tt.Frame()

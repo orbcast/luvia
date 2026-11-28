@@ -9,12 +9,12 @@ import (
 
 	"luvia/apps/desktop/internal/design"
 	"luvia/apps/desktop/internal/icons"
+	"luvia/apps/desktop/internal/poster"
 	"luvia/apps/desktop/internal/source"
 	"luvia/apps/desktop/locales"
 )
 
 const (
-	posterRatio = 1.5 // height over width for a 2:3 poster
 	// posterGap separates a row's posters. Columns fill the content width:
 	// the count follows from the width, the posters take what is left, so a
 	// full row ends on the page's right edge instead of short of it.
@@ -37,25 +37,6 @@ const (
 	// accentRun is the length of the accent segment that ends the rule under
 	// the keyword.
 	accentRun = 28
-	// scrimHeight is how far the poster's foot darkens under the area and
-	// year.
-	scrimHeight = 80
-)
-
-// Overlay colors sit on artwork, so they keep their own values in both themes:
-// a dark veil over a bright poster, a light ring around it.
-var (
-	posterScrim   = ui.RGBA(0, 0, 0, 0.75)   // under the area and year
-	posterRing    = ui.RGBA(1, 1, 1, 0.06)   // hairline around the poster
-	posterRingLit = ui.RGBA(0, 0, 0, 0.06)   // the same on a light page
-	followVeil    = ui.RGBA(0, 0, 0, 0.45)   // an unfollowed bookmark's disc
-	followVeilOn  = ui.RGBA(0, 0, 0, 0.65)   // and while hovered
-	followInk     = ui.RGBA(1, 1, 1, 0.85)   // its icon
-	playDisc      = ui.RGBA(1, 1, 1, 0.92)   // the play disc of a hovered poster
-	playInk       = ui.RGBA(0, 0, 0, 0.72)   // its icon
-	posterCapInk  = ui.RGBA(1, 1, 1, 0.65)   // the area and year on the scrim
-	badgeInk      = ui.RGBA(1, 1, 1, 0.96)   // the quality badge's text
-	badgePlate    = ui.RGBA(10, 8, 14, 0.62) // and its plate
 )
 
 var (
@@ -74,11 +55,6 @@ var (
 	}
 )
 
-// hovered records that some poster of this frame has the pointer, so a hover
-// that moves between posters rebuilds the page in one frame rather than
-// lighting up a second one.
-var hovered bool
-
 // margins are the page's left and right gutters. The left one clears the
 // floating AppShell; the right one is a normal page gutter, so a wide window
 // does not leave a dead strip of empty space along its edge.
@@ -96,14 +72,14 @@ func (p *Page) View(c *ui.Context) ui.Element {
 	m := locales.In(c.Locale())
 	width, _ := c.Size()
 	left, right := margins(width)
-	hovered = false
 
 	// The page's top margin sits above the scrolling column, so a scrolled
 	// result slides under the keyword instead of through it.
 	scroll := ui.Scroll(c).Fill().Background(t.Background).ScrollbarAxes(false, true)
 	scroll.Children(func() {
-		ui.Column(c).FillWidth().Padding(0, right, 64+design.BottomClearance(width), left).
-			Gap(24).Children(func() {
+		ui.Column(c).FillWidth().
+			Padding(design.PageTopInset(c.TitleBar().Bottom), right, 64+design.BottomClearance(width), left).
+			Gap(20).Children(func() {
 			p.queryLine(c, t, m, width)
 			p.body(c, t, m, width)
 		})
@@ -117,7 +93,7 @@ func (p *Page) View(c *ui.Context) ui.Element {
 // settles into a search of its own after the debounce, so the page never
 // needs a separate action.
 func (p *Page) queryLine(c *ui.Context, t *ui.Theme, m locales.Messages, width float32) {
-	ui.Column(c).FillWidth().Padding(24, 0, 0, 0).Children(func() {
+	ui.Column(c).FillWidth().Children(func() {
 		ui.Column(c).FillWidth().Gap(10).Children(func() {
 			ui.Row(c).FillWidth().Wrap().AlignItems(ui.Center).Gap(16).Children(func() {
 				p.field(c, t, m, width)
@@ -371,207 +347,57 @@ func gridFor(content float32) (w, gap float32, columns int) {
 	return w - 0.5, gap, count
 }
 
-// posterCard is one 2:3 poster with its badges, title, bookmark and metadata.
-// The poster is the card: no plate, no frame, only the artwork and the lines
-// under it.
+// posterCard is one 2:3 poster from the shared card: the artwork, the source's
+// badge and the follow switch on it, and the two lines under it — the title with
+// the words the viewer typed in the accent, and the show's state or the title's
+// facts.
 func (p *Page) posterCard(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card, w float32, index int) {
-	ref := card.Ref.String()
-	ui.Column(c).Key("card:" + ref).Width(w).Gap(9).Transition(ui.ElementTransition{
-		// A poster slides up into its place once, as its row appears.
-		Duration: 260 * time.Millisecond,
-		Enter:    &ui.Motion{Y: 10},
-	}).Children(func() {
-		// A small per-index offset lifts the posters in one after another, so
-		// a new answer flows onto the page instead of all popping at once.
-		motion := ui.Snappy
-		motion.Delay = time.Duration(index%12) * 22 * time.Millisecond
-		lifted := false
-		frame := ui.ButtonBase(c).Key("poster:" + ref).Width(w).
-			Height(w * posterRatio).Radius(12).Clip().Background(t.Surface).
-			Label(card.Title)
-		if frame.Hovered() || frame.FocusWithin() {
-			lifted = true
-		}
-		frame.Children(func() {
-			p.artwork(c, t, card)
-			p.scrim(c, t)
-			p.quality(c, t, m, card)
-			p.follow(c, t, m, card)
-			p.caption(c, t, m, card)
-			if lifted {
-				p.playDisc(c)
-			}
-		})
-		frame.DrawOver(func(painter *ui.Painter, r ui.Rect) {
-			ring := posterRing
-			if !t.Dark {
-				ring = posterRingLit
-			}
-			// On the poster's own edge: the clip keeps the outer half, the
-			// inner half is the hairline the reference draws.
-			painter.Stroke(r, ring, 12, 1)
-		})
-		if lifted {
-			// A poster lifts under the pointer, and keeps the lifted place of
-			// pointer moves on, so a hover that passes lifts one poster and
-			// settles it, rather than moving the page under the cursor.
-			frame.AnimatePose(ui.Pose{Y: -3, Scale: 1.012}, motion)
-		}
-		if frame.Clicked() {
-			p.detail(card)
-		}
-		p.title(c, t, m, card)
-		p.meta(c, t, m, card)
-	})
-}
-
-// artwork is the poster image, or the placeholder while it loads or when the
-// source gave none.
-func (p *Page) artwork(c *ui.Context, t *ui.Theme, card source.Card) {
-	if card.PosterURL != "" {
-		if bitmap := p.deps.Images.Bitmap(card.PosterURL); bitmap != nil {
-			ui.Image(c, bitmap).Fill().Fit(ui.Cover).Transition(imageIn)
-			return
-		}
-	}
-	ui.Box(c).Fill().Background(t.Surface).Center().Children(func() {
-		ui.Icon(c, icons.Parse("clapperboard-linear")).Size(30, 30).
-			TextColor(t.TextMuted).Opacity(0.45)
-	})
-}
-
-// scrim darkens the poster's foot so the area and year stay readable over a
-// bright frame.
-func (p *Page) scrim(c *ui.Context, t *ui.Theme) {
-	ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(scrimHeight).
-		LinearGradient(ui.LinearGradient{
-			// 180, not 90: MyGo's angle is CSS's, 0 pointing up, so 180 runs
-			// from the box's top, the scrim's dark end, to its bottom.
-			From: posterScrim, To: ui.Transparent, Angle: 180,
-		})
-}
-
-// quality is the source's resolution, top left on the poster.
-func (p *Page) quality(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
-	label := m.QualityHd()
+	bg, fg := design.PosterBadge()
+	label := m.QualityHdShort()
 	if has4K(card) {
-		label = m.Quality4k()
+		label = m.Quality4kShort()
 	}
-	ui.Box(c).Absolute().Left(10).Top(10).Radius(5).Padding(2, 6).
-		Background(badgePlate).Center().Children(func() {
-		ui.Text(c, label).FontSize(10).FontWeight(600).TextColor(badgeInk)
-	})
-}
-
-// follow is the bookmark on the poster's top right: a solid accent disc when
-// the title is followed, a dark veil when it is not.
-func (p *Page) follow(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
 	following := p.isFollowing(card.Ref)
-	button := ui.ButtonBase(c).Key("mark:"+card.Ref.String()).Size(28, 28).
-		Radius(14).Label(m.FilterFavorites()).Tooltip(m.FilterFavorites()).
-		Absolute().Right(10).Top(10)
-	switch {
-	case following:
-		button.Background(t.Accent)
-	case button.Hovered():
-		button.Background(followVeilOn)
-	default:
-		button.Background(followVeil)
-	}
-	ink := followInk
+	followLabel := m.Follow()
 	if following {
-		ink = t.AccentText
+		followLabel = m.FollowingShow()
 	}
-	button.TextColor(ink)
-	button.Children(func() {
-		name := "bookmark-linear"
-		if following {
-			name = "bookmark-bold"
-		}
-		ui.Icon(c, icons.Parse(name)).Size(14, 14).TextColor(ink)
-	})
-	if button.Clicked() {
-		p.toggleFollow(card)
-	}
-}
-
-// caption is the area and year along the poster's foot.
-func (p *Page) caption(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
-	facts := captionParts(card)
-	if len(facts) == 0 {
-		return
-	}
-	ui.Row(c).Absolute().Left(10).Right(10).Bottom(9).AlignItems(ui.Center).
-		Children(func() {
-			ui.Text(c, strings.Join(facts, m.ListSeparator())).FontSize(10).
-				LetterSpacing(0.06).TextColor(posterCapInk).MaxLines(1)
-		})
-}
-
-// playDisc is the disc that appears on a hovered poster, saying the whole
-// poster opens the title.
-func (p *Page) playDisc(c *ui.Context) {
-	ui.Box(c).Fill().Center().Children(func() {
-		ui.Box(c).Size(40, 40).Radius(20).Background(playDisc).Center().
-			Children(func() {
-				ui.Icon(c, icons.Parse("play-bold")).Size(16, 16).TextColor(playInk)
-			})
+	p.poster.View(c, t, m, poster.Card{
+		Ref:       card.Ref,
+		Title:     card.Title,
+		Year:      card.Year,
+		Area:      card.Area,
+		PosterURL: card.PosterURL,
+		Badges:    []poster.Badge{{Label: label, Background: bg, Ink: fg}},
+		Keywords:  highlight(card.Title, p.submitted),
+		Subtitle:  p.subtitle(m, card),
+	}, w, index, poster.Actions{
+		Open: func() { p.detail(card) },
+		Follow: &poster.Follow{
+			Ref:    card.Ref,
+			Label:  followLabel,
+			On:     following,
+			Toggle: func() { p.toggleFollow(card) },
+		},
 	})
 }
 
-// title is the card's first line: the name, with the typed words in the
-// accent, one line long.
-func (p *Page) title(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
-	ui.Column(c).FillWidth().Height(21).Children(func() {
-		button := ui.ButtonBase(c).FillWidth().Height(21).Radius(4).
-			Label(card.Title).Background(ui.Transparent).Shrink(0)
-		if button.Hovered() {
-			button.Background(t.SurfaceHover)
-		}
-		if button.Clicked() {
-			p.detail(card)
-		}
-		button.Children(func() {
-			ui.Row(c).FillWidth().Children(func() {
-				for _, run := range highlight(card.Title, p.submitted) {
-					ink := t.Text
-					if run.match {
-						ink = t.Accent
-					}
-					ui.Text(c, run.text).FontSize(15).FontWeight(600).
-						TextColor(ink).MaxLines(1).Shrink(0)
-				}
-			})
-		})
-	})
-}
-
-// meta is the card's second line: for a show, the episodes it has reached or
-// holds, in the accent; otherwise the year and area.
-func (p *Page) meta(c *ui.Context, t *ui.Theme, m locales.Messages, card source.Card) {
-	if show := isShow(card); show {
-		// A show says where it stands, even when the source's remarks name no
-		// episode count, so the line under a season never goes missing.
-		status := m.StatusCompleted()
-		if isUpdating(card) {
-			status = m.StatusUpdating()
-		}
-		line := status
-		if episodes, ok := seasonLine(m, card); ok {
-			line = m.SearchStatus(status, episodes)
-		}
-		ui.Row(c).FillWidth().Height(18).AlignItems(ui.Center).Gap(5).Children(func() {
-			ui.Icon(c, icons.Parse("fire-linear")).Size(12, 12).TextColor(t.Accent)
-			ui.Text(c, line).FontSize(12).TextColor(t.Accent).MaxLines(1)
-		})
-		return
+// subtitle is the card's second line: for a show, the episodes it has reached
+// or holds, in the accent; otherwise the year and area.
+func (p *Page) subtitle(m locales.Messages, card source.Card) string {
+	if !isShow(card) {
+		return strings.Join(captionParts(card), m.ListSeparator())
 	}
-	facts := captionParts(card)
-	if len(facts) == 0 {
-		return
+	// A show says where it stands, even when the source's remarks name no
+	// episode count, so the line under a season never goes missing.
+	status := m.StatusCompleted()
+	if isUpdating(card) {
+		status = m.StatusUpdating()
 	}
-	ui.Text(c, strings.Join(facts, m.ListSeparator())).FontSize(12).
-		TextColor(t.TextMuted).MaxLines(1)
+	if episodes, ok := seasonLine(m, card); ok {
+		return m.SearchStatus(status, episodes)
+	}
+	return status
 }
 
 // idle is what the page says before a search: what the box searches, and the
@@ -749,32 +575,28 @@ func groupByKind(cards []source.Card) []group {
 }
 
 // run is a run of a title, matched when it is the keyword the user typed.
-type run struct {
-	text  string
-	match bool
-}
 
 // highlight splits title at every plain occurrence of keyword, so the words
 // the user typed show in the accent. An empty keyword matches nothing.
-func highlight(title, keyword string) []run {
+func highlight(title, keyword string) []poster.Run {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" || title == "" {
-		return []run{{text: title}}
+		return []poster.Run{{Text: title}}
 	}
-	var runs []run
+	var runs []poster.Run
 	rest := title
 	for {
 		at := strings.Index(rest, keyword)
 		if at < 0 {
 			if rest != "" {
-				runs = append(runs, run{text: rest})
+				runs = append(runs, poster.Run{Text: rest})
 			}
 			return runs
 		}
 		if at > 0 {
-			runs = append(runs, run{text: rest[:at]})
+			runs = append(runs, poster.Run{Text: rest[:at]})
 		}
-		runs = append(runs, run{text: keyword, match: true})
+		runs = append(runs, poster.Run{Text: keyword, Match: true})
 		rest = rest[at+len(keyword):]
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
+	"luvia/apps/desktop/internal/poster"
 	"luvia/apps/desktop/internal/source"
 )
 
@@ -60,7 +61,6 @@ const (
 // thread: the view, the carousel ticker and every callback run through Deps.Run.
 type Page struct {
 	deps      Deps
-	home      source.Home
 	featured  []source.Card
 	hero      int
 	hovering  bool
@@ -76,6 +76,18 @@ type Page struct {
 	// redraw is what a change asks the window to repaint, and mu guards it with
 	// the rest of the state below: a day answer asks for that frame.
 	redraw func()
+	// homeMu guards the banner's own state: the sections, the featured cards and
+	// the slide the banner shows. The source answers on its own goroutine and the
+	// frame that draws the banner may already be building, so the answer is
+	// stored under this lock and the builder copies it out under the same one.
+	homeMu sync.Mutex
+	// loadMu guards the loading flag and the first failure. The answer arrives
+	// on its own goroutine, and unlike the sections above these two decide what
+	// the frame draws before any section exists: the wait, or the failure.
+	loadMu sync.Mutex
+	// poster draws every wall of titles on the page, so a title looks the
+	// same here as in the library and in the search results.
+	poster poster.Deps
 
 	// mu guards what the week strip shares between the frames that read it and
 	// the answers that land while one builds. days caches what the source
@@ -100,7 +112,11 @@ func New(deps Deps) *Page {
 	p := &Page{
 		deps: deps, selected: weekdayIndex(deps.Now()),
 		days: map[int][]source.Update{}, dayErrors: map[int]error{}, asked: map[int]bool{},
+		poster: poster.Deps{Images: deps.Images},
 	}
+	// A poster that arrives asks for the frame that shows it, the same way the
+	// hero's own bitmap does.
+	p.poster.Invalidate = p.invalidate
 	if deps.Images != nil {
 		deps.Images.SetChanged(func() { p.invalidate() })
 	}
@@ -113,23 +129,28 @@ func New(deps Deps) *Page {
 // Start asks the source for its home sections once. Retry starts again.
 func (p *Page) Start() {
 	if p.deps.Source == nil {
+		p.loadMu.Lock()
 		p.err = errNoSource
+		p.loadMu.Unlock()
 		return
 	}
 	if p.requested {
 		return
 	}
-	p.requested, p.loading, p.err = true, true, nil
+	p.requested = true
+	p.loadMu.Lock()
+	p.loading, p.err = true, nil
+	p.loadMu.Unlock()
 	src := p.deps.Source
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		found, err := src.Home(ctx)
 		p.deps.Run(func() {
-			p.loading = false
-			if err != nil {
-				p.err = err
-			} else {
+			p.loadMu.Lock()
+			p.loading, p.err = false, err
+			p.loadMu.Unlock()
+			if err == nil {
 				p.accept(found)
 			}
 			p.invalidate()
@@ -142,14 +163,47 @@ func (p *Page) Start() {
 
 // Retry forgets the failed answer and asks the source again.
 func (p *Page) Retry() {
-	p.requested, p.err = false, nil
+	p.requested = false
+	p.loadMu.Lock()
+	p.err = nil
+	p.loadMu.Unlock()
 	p.Start()
 }
 
+// state reads what the frame draws before a banner exists: whether the page is
+// waiting and which failure it carries.
+func (p *Page) state() (loading bool, err error) {
+	p.loadMu.Lock()
+	defer p.loadMu.Unlock()
+	return p.loading, p.err
+}
+
 func (p *Page) accept(found source.Home) {
-	p.home = found
-	p.featured = featured(found)
+	featured := featured(found)
+	p.homeMu.Lock()
+	p.featured = featured
 	p.hero = 0
+	p.homeMu.Unlock()
+}
+
+// banner reads the hero's state once, so one frame draws one banner instead of
+// mixing a section that has landed with a slide index that has not.
+func (p *Page) banner() ([]source.Card, int) {
+	p.homeMu.Lock()
+	defer p.homeMu.Unlock()
+	return p.featured, p.hero
+}
+
+// showSlide moves the banner to another slide and reports whether the slide
+// changed, so a click on the slide already showing costs no frame.
+func (p *Page) showSlide(index int) bool {
+	p.homeMu.Lock()
+	defer p.homeMu.Unlock()
+	if index < 0 || index >= len(p.featured) || index == p.hero {
+		return false
+	}
+	p.hero = index
+	return true
 }
 
 // loadWeek asks the source for every day of the week in progress, one request
@@ -325,20 +379,22 @@ func (p *Page) rotate() {
 
 // advance moves to the next slide unless the viewer is looking at the hero.
 func (p *Page) advance() {
-	if p.hovering || len(p.featured) < 2 {
+	if p.hovering {
 		return
 	}
-	p.hero = (p.hero + 1) % len(p.featured)
+	featured, hero := p.banner()
+	if len(featured) < 2 {
+		return
+	}
+	p.showSlide((hero + 1) % len(featured))
 	p.invalidate()
 }
 
 // Show makes slide i the hero.
 func (p *Page) Show(i int) {
-	if i < 0 || i >= len(p.featured) || i == p.hero {
-		return
+	if p.showSlide(i) {
+		p.invalidate()
 	}
-	p.hero = i
-	p.invalidate()
 }
 
 // setRedraw remembers how to ask the window for a frame.

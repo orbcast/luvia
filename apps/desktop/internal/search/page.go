@@ -16,6 +16,7 @@ import (
 
 	"luvia/apps/desktop/internal/library"
 	"luvia/apps/desktop/internal/media"
+	"luvia/apps/desktop/internal/poster"
 	"luvia/apps/desktop/internal/source"
 )
 
@@ -72,6 +73,9 @@ type Page struct {
 	// mu guards the fields an answer writes: the request goroutine reads the
 	// generation and the view may build a frame while it lands.
 	mu sync.Mutex
+	// poster draws every wall of titles the page answers with: one card
+	// shared with Discover, the library and the Following page.
+	poster poster.Deps
 }
 
 // New prepares the page with an empty box and no history.
@@ -82,7 +86,8 @@ func New(deps Deps) *Page {
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
-	p := &Page{deps: deps}
+	p := &Page{deps: deps, poster: poster.Deps{Images: deps.Images}}
+	p.poster.Invalidate = p.invalidate
 	if deps.Images != nil {
 		deps.Images.SetChanged(func() { p.invalidate() })
 	}
